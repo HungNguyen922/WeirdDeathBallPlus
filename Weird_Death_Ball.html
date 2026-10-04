@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Weird Death Ball</title>
+<style>
+:root{--bg:#f4f4f2;--fg:#1c1f23;--mut:#5d6670;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101316;--fg:#e8e8e4;--mut:#98a2ad}}
+:root[data-theme="dark"]{--bg:#101316;--fg:#e8e8e4;--mut:#98a2ad}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:12px}
+canvas{width:100%;max-width:1352px;aspect-ratio:1352/644;background:#14181d;border-radius:8px;outline:none}
+.keys{max-width:1352px;width:100%;display:flex;gap:24px;flex-wrap:wrap;margin-top:10px;color:var(--mut)}
+b{color:var(--fg)}
+</style></head><body>
+<canvas id="c" width="1352" height="644" tabindex="0"></canvas>
+<div class="keys">
+<div><b style="color:#42a5f5">Blue</b>: ←/→ move, ↑ jump, ↓ drop, X grapple, C weight, Z dash</div>
+<div><b style="color:#ef5350">Red</b>: A/D move, W jump, S drop, F grapple, G weight, H dash</div>
+<div>R restart. Click the game first so it gets keyboard focus.</div>
+</div>
+<script>
+// Weird Death Ball - single-file prototype. Custom circle physics, fixed 120 Hz timestep.
+const W = 1000, H = 500, NETX = W / 2;
+const PL = 32; // one "player length" (diameter)
+const RANGE = 3 * PL; // grapple reach
+const RUN = 2 * PL, RISE = 0.75 * PL, PK = 5, NOTCH = 2; // slopes: 2 player lengths long, three quarters of a player tall; PK = half-gap between the middle peaks
+const GOAL_Y1 = H - RISE, GOAL_Y0 = GOAL_Y1 - 5 * PL; // goal opening sits just above the goal ramps and is 5 player lengths tall; the jut above it reaches down to GOAL_Y0
+// Calibrated against the reference video (tracked at 30 fps; sprite ~25 px = 1 PL = 32 u, so 1 video px = 1.28 u).
+const DT = 1 / 120, WIN = 9;
+const G = 410; // free-fall gravity (u/s^2): big arcs in the demo fall at ~320 px/s^2
+const G_FLOAT = 130; // gravity while UP is held in the air: plain jumps are long, symmetric, floaty arcs (~90-117 px/s^2)
+const JUMP_V = 150; // launch speed of a plain jump (u/s): ~88 u apex, ~2 s airtime with G_FLOAT
+const DASH_V = 420, DASH_CD = 0.35, DASH_FX = 0.25; // dash impulse (u/s), minimum gap between dashes while on the floor (s), streak lifetime (s)
+const DOWN_G = 2.2; // gravity multiplier while DOWN is held (drop / fast-fall)
+const RUN_ACC = 185; // ground acceleration (u/s^2): ~0 -> 270 u/s in ~1.5 s, roughly constant (no hard ramp)
+const BALL_G = 170; // ball gravity (u/s^2): ~140 px/s^2 in the demo
+const BALL_VMAX = 920; // ball speed cap (u/s): demo throws saturate at ~700-720 px/s
+const HOOK_R = 3, BALL_M = 0.25, DAMP = 0.8; // platform rope damping
+// Ball tether: the same elastic rope as on platforms (progressive spring, firmer with weight), just much stiffer so the stretch stays small and the length is
+// enforced. BALL_RIGID = share of the outward speed the rope cancels outright; the spring takes the rest. Closer than the tether length is allowed but
+// resisted by a soft push (KPB per unit of depth, capped), most of it felt by the light ball (PUSHB_SHARE of it reaches the player).
+const KB = 150, DB = 0.6, BALL_RIGID = 0.6, KPB = 6, DPB = 1.2, PUSHB_MAX = 160, PUSHB_SHARE = 0.35;
+const KS = 110; // surface-rope stiffness: firm, but stretches and recoils (elastic overshoot instead of a hard stop)
+const PUSH_MAX = 220; // cap on the pivot push (u/s^2): a light nudge back toward the tether length, well under gravity
+const LIFT_V = 280, WEIGHT_M = 1.4, WEIGHT_PUSH = 1.0, WEIGHT_KICK = 120, MIN_LEN = 16, KP = 10, DP = 2; // grapple-jump lift, weight multiplier (lift), weight multiplier (pivot push), min surface tether, proximity push (stiffness/damping); WEIGHT_KICK = impulse (u/s) away from the pivot each time weight is pressed while grappling
+const GROUND_DELAY = 0.1, HOOK_DELAY = 0.1; // the hook lands ~3 frames after the press, on the ground too (measured)
+const HEAVY_KS = 1.3, STRETCH_X0 = 60, HOP_AIM = 0.6; // weight = a firmer rope; the rope stiffens as it stretches (x0 = stretch that doubles it); HOP_AIM = horizontal share of the grapple-jump kick // airborne surface grapples take ~3 video frames to land (measured), then kick away from the pivot
+const BALL_R = 14, BALL_I = 6 * BALL_M * BALL_R * BALL_R; // spin inertia: high, so spin takes a whippy throw
+const noKeys = () => ({ l: false, r: false, up: false, z: false, x: false, sp: false, dn: false }); // sp = special (dash), dn = down
+// Floor slopes: a ramp up to each goal and a middle peak made of two overlapping triangles (a notch the ball starts in).
+const RAMP_L = [[0, GOAL_Y1], [RUN, H], [0, H]];
+const RAMP_R = [[W, GOAL_Y1], [W - RUN, H], [W, H]];
+const PEAK = [[NETX - PK - RUN, H], [NETX - PK, H - RISE], [NETX, H - RISE + NOTCH], [NETX + PK, H - RISE], [NETX + PK + RUN, H]];
+const SEGS = [[0, GOAL_Y1, RUN, H], [W, GOAL_Y1, W - RUN, H]];
+for (let i = 0; i < PEAK.length - 1; i++)
+    SEGS.push([...PEAK[i], ...PEAK[i + 1]]);
+// The wall above each goal juts out one player-width from the ceiling down to the goal opening, so each goal sits in a little alcove. It is part of
+// the wall, so it never moves with the floor. Two faces per jut: the underside (over the goal) and the inner side.
+const LEDGE_T = 3, LEDGES = [[0, GOAL_Y0, PL, GOAL_Y0], [PL, 0, PL, GOAL_Y0], [W, GOAL_Y0, W - PL, GOAL_Y0], [W - PL, 0, W - PL, GOAL_Y0]];
+// ---- Out-of-bounds tunnels. Past each goal opening the ball enters a tunnel (the jut's underside carries on as its ceiling). The floor starts at the goal lip
+// and slopes DOWN toward the threshold line, so any ball that falls out there is guided to it. The ball scores only when it crosses the threshold, OUT_D (5 player
+// lengths) outside the goal. The HATCHET is a bounce pad on that slope, just outside the goal, facing up and out toward the threshold. ----
+const OUT_D = 5 * PL, OUT_DROP = 56; // threshold distance; how far the tunnel floor drops over that distance (steeper = the ball gets there faster); the hatchet's steep section adds a bit more
+const PAD_LEN = 48, PAD_ANG = Math.PI / 4, PAD_LIFT = 6, PAD_D0 = 14; // hatchet: plate length, tilt from horizontal (45 degrees), drawn thickness, distance of its inner end from the goal
+const PAD_D1 = PAD_D0 + PAD_LEN * Math.cos(PAD_ANG); // distance of its outer end
+const PAD_E = 5, PAD_KICK = 900, PAD_MAX = 1800, PAD_MIN_HIT = 35, PAD_BOOST_T = 1.2; // bounce gain, minimum / maximum launch speed, softest triggering hit; the ball may exceed its normal speed cap right after a hatchet hit, easing back over PAD_BOOST_T seconds // bounce gain (>1 = adds energy), minimum launch speed, cap, and the softest hit that still triggers it (u/s)
+const OX = 176, PIT = 64, CW = W + 2 * OX; // side margin drawn around the arena, pit under the tunnels, full canvas width
+const FK = OUT_DROP / OUT_D; // gentle base slope of the tunnel floor
+// Tunnel floor d units outside the goal: gentle slope from the lip, then the hatchet's 45-degree section, then the gentle slope again. It only ever descends outward,
+// so nothing can get stuck in a pocket.
+const slopeY = d => GOAL_Y1 + FK * Math.min(d, PAD_D0) + Math.tan(PAD_ANG) * Math.max(0, Math.min(d, PAD_D1) - PAD_D0) + FK * Math.max(0, d - PAD_D1);
+const outX = (side, d) => (side === 0 ? -d : W + d);
+const OUTSEGS = [], PADS = [], OUTCEIL = [];
+const padA = side => ({ x: outX(side, PAD_D0), y: slopeY(PAD_D0) }); // top (inner) end of the hatchet
+const padB = side => ({ x: outX(side, PAD_D1), y: slopeY(PAD_D1) }); // bottom (outer) end
+for (const side of [0, 1]) {
+    const A = padA(side), B = padB(side);
+    OUTSEGS.push([outX(side, 0), slopeY(0), A.x, A.y], [B.x, B.y, outX(side, OUT_D), slopeY(OUT_D)]);
+    PADS.push([A.x, A.y, B.x, B.y]);
+    OUTCEIL.push([outX(side, 0), GOAL_Y0, outX(side, OUT_D), GOAL_Y0]);
+}
+// Hatchet: a ball that hits it harder than PAD_MIN_HIT leaves along the pad's normal (up and out) with PAD_E x its speed (at least PAD_KICK, at most PAD_MAX).
+function padBounce(c) {
+    for (let i = 0; i < PADS.length; i++) {
+        const sg = PADS[i], q = nearestOnSeg(sg, c.x, c.y), dx = c.x - q.x, dy = c.y - q.y, d = Math.hypot(dx, dy);
+        if (d >= c.r || d === 0)
+            continue;
+        const nx = dx / d, ny = dy / d;
+        c.x = q.x + nx * c.r;
+        c.y = q.y + ny * c.r;
+        const vn = c.vx * nx + c.vy * ny;
+        if (vn >= 0)
+            continue;
+        if (-vn > PAD_MIN_HIT) {
+            const out = Math.min(PAD_MAX, Math.max(PAD_KICK, -vn * PAD_E));
+            c.vx += (out - vn) * nx;
+            c.vy += (out - vn) * ny;
+            hud.pad[i] = 1;
+            c.boost = 1;
+        } else {
+            c.vx -= vn * nx;
+            c.vy -= vn * ny;
+            roll(c, nx, ny);
+        }
+    }
+}
+// Seesaw floor ("swing saw"): the floor is pivoted at the net line. It is static almost all the time, but a hard landing on a side's far half (the half
+// by the goal) can pop the opposite far half up a little, kicking whatever is standing there. Nothing happens near the net.
+// One signed tilt carries every hit's momentum, so hits from the two sides cancel: a slam on the side that is popping pushes it back down.
+const SAW_HALF = NETX / 2; // half of a side's floor: only the half by the goal takes part
+const SAW_MIN = 480; // impact momentum (mass x speed into the floor, u/s) a hit needs to move the seesaw: only real slams (a weighted drop after a grapple jump), not jumps or dribbling
+const SAW_GAIN = 1.2, SAW_VMAX = 240; // tilt speed (u/s) = (momentum - SAW_MIN) * SAW_GAIN, capped; this is also the kick given to things resting on the rising end
+const SAW_K = 100, SAW_C = 20; // floor spring (critically damped): it pops up fast and settles back down without bouncing
+const saw = { t: 0, v: 0 }; // seesaw tilt: t > 0 = the right far half is raised by t (u), t < 0 = the left one is; v = its speed
+const sawQ = side => Math.max(0, side === 1 ? saw.t : -saw.t); // pop height of a side's far half
+const sawQV = side => (sawQ(side) > 0 ? (side === 1 ? saw.v : -saw.v) : 0); // its speed (nothing moves on the end that rests on the ground)
+// How much of a side's pop applies at x: 0 on the half by the net, rising smoothly to full over the quarter by the goal.
+function sawW(x, side) {
+    const d = side === 0 ? x : W - x, t = Math.max(0, Math.min(1, (SAW_HALF - d) / (SAW_HALF / 2)));
+    return t * t * (3 - 2 * t);
+}
+const sawY = x => -(sawQ(0) * sawW(x, 0) + sawQ(1) * sawW(x, 1)); // floor offset at x (negative = raised)
+const sawV = x => -(sawQV(0) * sawW(x, 0) + sawQV(1) * sawW(x, 1)); // floor speed at x (negative = rising)
+function sawStep() {
+    saw.v += (-SAW_K * saw.t - SAW_C * saw.v) * DT;
+    saw.t += saw.v * DT;
+}
+// Something struck the floor at x with this much momentum: a hard enough hit tips the seesaw (left hit raises the right end, and vice versa).
+// A hit on the end that is already popping pushes it back down, so equal slams from both sides cancel.
+function sawHit(x, momentum) {
+    const side = x < NETX ? 0 : 1, kick = Math.min(SAW_VMAX, (momentum - SAW_MIN) * SAW_GAIN) * sawW(x, side);
+    if (kick > 0)
+        saw.v = Math.max(-SAW_VMAX, Math.min(SAW_VMAX, saw.v + (side === 0 ? kick : -kick)));
+}
+function nearestOnSeg(sg, x, y) {
+    const ex = sg[2] - sg[0], ey = sg[3] - sg[1];
+    const t = Math.max(0, Math.min(1, ((x - sg[0]) * ex + (y - sg[1]) * ey) / (ex * ex + ey * ey)));
+    return { x: sg[0] + ex * t, y: sg[1] + ey * t };
+}
+// Rolling contact: friction couples spin and velocity (topspin/backspin). Unit mass, disc inertia.
+function roll(c, nx, ny) {
+    const tx = ny, ty = -nx, slip = c.vx * tx + c.vy * ty + c.w * c.r;
+    const jt = -slip / 3 * 0.25;
+    c.vx += jt * tx;
+    c.vy += jt * ty;
+    c.w += 2 * jt / c.r;
+}
+// Push a circle out of the slopes (no bounce unless e > 0). Returns true if resting on an up-facing surface.
+// vo = speed of the floor frame the circle is in (0 for fixed geometry); c.hit records the real-world speed it struck an up-facing surface at.
+function collideTerrain(c, e, vo = 0, list = SEGS, t = 0) {
+    let onGround = false;
+    for (const sg of list) {
+        const p = nearestOnSeg(sg, c.x, c.y), dx = c.x - p.x, dy = c.y - p.y, d = Math.hypot(dx, dy), R = c.r + t;
+        if (d >= R || d === 0)
+            continue;
+        const nx = dx / d, ny = dy / d;
+        c.x = p.x + nx * R;
+        c.y = p.y + ny * R;
+        const vn = c.vx * nx + c.vy * ny;
+        if (vn < 0) {
+            if (ny < -0.5)
+                c.hit = Math.max(c.hit || 0, -(vn + vo * ny));
+            c.vx -= (1 + e) * vn * nx;
+            c.vy -= (1 + e) * vn * ny;
+        }
+        if (c.w !== undefined)
+            roll(c, nx, ny);
+        if (ny < -0.5)
+            onGround = true;
+    }
+    return onGround;
+}
+class Player {
+    constructor(team, sx, color) {
+        this.team = team;
+        this.sx = sx;
+        this.color = color;
+        this.x = 0;
+        this.y = 0;
+        this.vx = 0;
+        this.vy = 0;
+        this.r = 16;
+        this.ground = false;
+        this.alive = true;
+        this.rope = null;
+        this.pending = null;
+        this.onBall = false;
+        this.len = 0;
+        this.hookAng = 0;
+        this.ropeGround = false;
+        this.ropeShown = false;
+        this.prevUp = false;
+        this.prevZ = false;
+        this.prevX = false;
+        this.kickReq = false;
+        this.keys = noKeys();
+        this.special = 'dash'; // chosen special ability (see SPECIALS)
+        this.reset();
+    }
+    reset() {
+        this.x = this.sx;
+        this.y = H - this.r;
+        this.vx = this.vy = 0;
+        this.alive = true;
+        this.rope = null;
+        this.pending = null;
+        this.onBall = false;
+        this.ground = false;
+        this.ropeShown = false;
+        this.ropeBase = null;
+        this.dashReady = true; // one dash per trip off the floor
+        this.dashCd = 0;
+        this.dashT = 0;
+        this.dashDir = [0, 0];
+        this.prevSp = false;
+    }
+    get grounded() { return this.ground; }
+    // Everything grappleable within RANGE: surfaces (ground = floor/slopes) and the ball.
+    candidates(ball) {
+        const c = [];
+        const add = (p, ground) => {
+            const d = Math.hypot(p.x - this.x, p.y - this.y);
+            c.push({ p, d, len: Math.max(d, MIN_LEN), b: false, ground });
+        };
+        const o = sawY(this.x); // the floor can be raised by a quake: look it up in the floor's own frame, then lift the result
+        add({ x: this.x, y: H + o }, true);
+        for (const p of [{ x: this.x, y: 0 }, { x: 0, y: this.y }, { x: W, y: this.y }, { x: NETX, y: this.y }])
+            add(p, false);
+        for (const sg of SEGS) {
+            const q = nearestOnSeg(sg, this.x, this.y - o);
+            add({ x: q.x, y: q.y + sawY(q.x) }, true);
+        }
+        for (const sg of LEDGES)
+            add(nearestOnSeg(sg, this.x, this.y), false);
+        const ang = Math.atan2(this.y - ball.y, this.x - ball.x); // grapple point on the ball's edge, facing us
+        const hp = { x: ball.x + Math.cos(ang) * ball.r, y: ball.y + Math.sin(ang) * ball.r };
+        const hd = Math.hypot(hp.x - this.x, hp.y - this.y);
+        c.push({ p: hp, d: hd, len: Math.max(hd, 41), b: true, ground: false });
+        return c.filter(o => o.d <= RANGE);
+    }
+    inReach(ball) { return this.candidates(ball).length > 0; }
+    // Tether to the nearest thing in reach (no priorities). Rope length = distance at press.
+    attach(ball) {
+        const best = this.candidates(ball).reduce((m, o) => (!m || o.d < m.d ? o : m), null);
+        if (!best)
+            return;
+        if (best.b) { // ball: instant; the pivot sits on the ball's edge and spins with it
+            this.rope = best.p;
+            this.len = best.len;
+            this.onBall = true;
+            this.ropeGround = false;
+            this.ropeBase = null;
+            this.hookAng = Math.atan2(best.p.y - ball.y, best.p.x - ball.x) - ball.th;
+            return;
+        }
+        const delay = this.grounded ? GROUND_DELAY : HOOK_DELAY; // the hook takes a moment to land
+        if (delay > 0) {
+            this.pending = { p: best.p, t: delay, t0: delay, ground: best.ground };
+            return;
+        }
+        this.land(best.p, best.ground);
+    }
+    // The hook lands on a surface: tether length = distance right now. A grapple jump (rising on floor/slopes) kicks the player
+    // directly away from the pivot (weight multiplies it), with matching tether slack; a pivot behind you gives a diagonal hop.
+    land(p, ground) {
+        const dx = this.x - p.x, dy = this.y - p.y, d = Math.hypot(dx, dy);
+        this.rope = p;
+        this.onBall = false;
+        this.ropeGround = ground;
+        this.ropeBase = ground ? { x: p.x, y: p.y - sawY(p.x) } : null; // floor pivots ride the floor when it pops
+        this.ropeShown = false;
+        this.len = Math.max(d, MIN_LEN);
+        if (ground && this.vy < 0) {
+            const lift = LIFT_V * (this.keys.x ? WEIGHT_M : 1);
+            let ux = d > 1 ? dx / d : 0, uy = d > 1 ? dy / d : -1;
+            ux *= HOP_AIM;
+            const m = Math.hypot(ux, uy) || 1;
+            ux /= m;
+            uy /= m; // mostly up/away, less sideways
+            this.vx += ux * lift;
+            this.vy += uy * lift;
+            this.len += lift * 0.15;
+        }
+    }
+    step(ball) {
+        const k = this.keys, heavy = k.x;
+        const dir = (k.r ? 1 : 0) - (k.l ? 1 : 0);
+        // Constant acceleration toward the max speed (the demo shows a steady ramp, not a hard build-up curve).
+        const acc = RUN_ACC * (this.grounded ? 1 : 0.55) * (dir * this.vx < 0 ? 1.4 : 1);
+        if (dir && dir * this.vx < 330)
+            this.vx += dir * acc * DT;
+        else if (!dir && this.grounded && !this.rope)
+            this.vx *= 1 - 5 * DT; // no ground braking while tethered, so the rope bounce is not eaten
+        // Dash: the special key gives an impulse in the arrow direction(s) held. One use, refilled whenever the player is on the floor.
+        if (this.ground)
+            this.dashReady = true;
+        this.dashCd = Math.max(0, this.dashCd - DT);
+        this.dashT = Math.max(0, this.dashT - DT);
+        if (this.special === 'dash' && k.sp && !this.prevSp && this.dashReady && this.dashCd <= 0) {
+            const dx = (k.r ? 1 : 0) - (k.l ? 1 : 0), dy = (k.dn ? 1 : 0) - (k.up ? 1 : 0);
+            if ((dx || dy) && !(this.ground && !dx && dy > 0)) { // pushing straight down into the floor does not use it up
+                const m = Math.hypot(dx, dy), ux = dx / m, uy = dy / m;
+                if (ux && this.vx * ux < 0)
+                    this.vx = 0; // cancel what we were doing against the dash
+                if (uy && this.vy * uy < 0)
+                    this.vy = 0;
+                this.vx += ux * DASH_V;
+                this.vy += uy * DASH_V;
+                this.dashReady = false;
+                this.dashCd = DASH_CD;
+                this.dashT = DASH_FX;
+                this.dashDir = [ux, uy];
+            }
+        }
+        this.prevSp = k.sp;
+        // Jump: pressing UP on the ground launches at JUMP_V. While UP stays held in the air, gravity drops to G_FLOAT, which
+        // gives the long, symmetric float seen in the demo; releasing UP restores full gravity G. While tethered and
+        // holding UP, a floaty arc keeps swings and floats working.
+        if (k.up && this.grounded)
+            this.vy = -JUMP_V;
+        let g = (k.up ? G_FLOAT : G) * (heavy ? 1.35 : 1);
+        if (k.up && this.rope) {
+            g = (this.onBall ? G * 0.4 : G_FLOAT) * (heavy ? 1.35 : 1);
+            const cap = this.onBall ? 170 : 70;
+            if (this.onBall) {
+                if (this.vy > cap)
+                    this.vy = cap;
+            } else if (this.vy > cap)
+                g = 0; // surface tether: the float only stops gravity from adding fall speed. It never clips the rope's own recoil, so a held grapple can pull you back through the pivot
+        }
+        if (k.dn)
+            g = G * DOWN_G * (heavy ? 1.35 : 1); // DOWN: drop faster (also cancels the UP float), which keeps dribbles low
+        if (k.x && !this.prevX)
+            this.kickReq = true; // remembered until the hook lands, so a delayed hook still gets its kick
+        if (!k.z)
+            this.kickReq = false;
+        if (k.z && !this.rope && !this.pending)
+            this.attach(ball); // also latches on when you drift into reach while holding
+        if (this.pending && k.z) {
+            this.pending.t -= DT;
+            if (this.pending.t <= 0) {
+                const h = this.pending;
+                this.pending = null;
+                this.land(h.p, h.ground);
+            }
+        }
+        if (!k.z) {
+            this.rope = null;
+            this.pending = null;
+            this.onBall = false;
+        }
+        this.prevUp = k.up;
+        this.prevZ = k.z;
+        // Tether: fixed length. Stretched = spring + damping (hard limit on surfaces). Too close to a surface pivot = a push
+        // back out toward the tether length that grows the closer you get. The ball pivot sits on its edge and spins with it.
+        const a = this.rope;
+        if (a) {
+            if (this.ropeBase && !this.onBall)
+                a.y = this.ropeBase.y + sawY(a.x);
+            if (this.onBall) {
+                const ang = ball.th + this.hookAng;
+                a.x = ball.x + Math.cos(ang) * ball.r;
+                a.y = ball.y + Math.sin(ang) * ball.r;
+            }
+            const dx = a.x - this.x, dy = a.y - this.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
+            const rx = a.x - ball.x, ry = a.y - ball.y; // hook offset from the ball's center
+            const hvx = this.onBall ? ball.vx - ball.w * ry : 0, hvy = this.onBall ? ball.vy + ball.w * rx : 0;
+            const closing = (this.vx - hvx) * nx + (this.vy - hvy) * ny;
+            if (this.kickReq && !this.onBall) {
+                this.vx -= nx * WEIGHT_KICK;
+                this.vy -= ny * WEIGHT_KICK;
+                this.kickReq = false;
+            } // weight press: kick away from the pivot
+            if (d > this.len) {
+                if (this.onBall) {
+                    // Rope = distance constraint on the ball: cancel only the speed that would stretch it (mass-weighted, so the
+                    // light ball takes the correction). Tangential speed survives, so the ball keeps circling the player.
+                    const c = rx * ny - ry * nx, im = 1 + 1 / BALL_M + c * c / BALL_I;
+                    if (closing < 0) {
+                        const J = -closing * BALL_RIGID / im;
+                        this.vx += nx * J;
+                        this.vy += ny * J;
+                        ball.vx -= nx * J / BALL_M;
+                        ball.vy -= ny * J / BALL_M;
+                        ball.w -= J * c / BALL_I;
+                    }
+                }
+                const x = d - this.len; // the rope can deform past its length, but pulls back with a force that grows the further it goes
+                const f = Math.max(0, (this.onBall ? KB : KS) * (heavy ? HEAVY_KS : 1) * x * (1 + x / STRETCH_X0) - (this.onBall ? DB : DAMP) * Math.min(0, closing)); // damp only while the rope is being stretched; the recoil is undamped so the pull-back keeps its energy
+                this.vx += nx * f * DT;
+                this.vy += ny * f * DT;
+                if (this.onBall) {
+                    ball.vx -= nx * f * DT / BALL_M;
+                    ball.vy -= ny * f * DT / BALL_M;
+                    ball.w += (rx * (-ny * f) - ry * (-nx * f)) * DT / BALL_I; // torque from pulling on the edge
+                }
+                const lim = this.len * 3 + 200;
+                if (!this.onBall && d > lim) { // failsafe only; the progressive spring normally stops you long before this
+                    this.x = a.x - nx * lim;
+                    this.y = a.y - ny * lim;
+                    if (closing < 0) {
+                        this.vx -= closing * nx;
+                        this.vy -= closing * ny;
+                    }
+                }
+            }
+            else if (this.onBall) { // ball tether: it can come closer than the tether length, but is pushed back out the closer it gets
+                const depth = this.len - d, e = Math.min(1, depth / (this.len * 0.5)), ease = e * e * (3 - 2 * e);
+                const f = Math.max(0, Math.min(PUSHB_MAX, KPB * depth + DPB * Math.max(0, closing) * ease)) * (heavy ? WEIGHT_PUSH : 1);
+                this.vx -= nx * f * PUSHB_SHARE * DT;
+                this.vy -= ny * f * PUSHB_SHARE * DT;
+                ball.vx += nx * f * DT / BALL_M;
+                ball.vy += ny * f * DT / BALL_M;
+            }
+            else if (!this.onBall && this.ropeGround) { // walls/ceiling/net have no push-back: only floor and slope pivots do
+                // Soft spring back toward the tether length: zero push at the tether distance, building smoothly as you get closer.
+                // The damping term eases in with depth (smoothstep) so a fast whip-back is slowed gradually instead of jolted.
+                const depth = this.len - d, e = Math.min(1, depth / (this.len * 0.5)), ease = e * e * (3 - 2 * e);
+                const f = Math.max(0, Math.min(PUSH_MAX, KP * depth + DP * Math.max(0, closing) * ease)) * (heavy ? WEIGHT_PUSH : 1); // holding weight boosts the push away from the pivot
+                this.vx -= nx * f * DT;
+                this.vy -= ny * f * DT;
+            }
+        }
+        this.prevX = k.x;
+        this.vy += g * DT;
+        this.vx *= 1 - 0.1 * DT;
+        this.x += this.vx * DT;
+        this.y += this.vy * DT;
+        // The hook is a small solid circle that pushes the player aside.
+        if (a && !this.onBall)
+            collide(this, { x: a.x, y: a.y, vx: 0, vy: 0, r: HOOK_R }, 1, 1e6, 0);
+        // Floor + slopes are solved in the floor's own frame (it can be raised and moving), then everything moves back: the floor's
+        // speed is handed to whoever rests on it, which is how a pop kicks things up.
+        const o = sawY(this.x), vo = sawV(this.x);
+        this.y -= o;
+        this.vy -= vo;
+        this.hit = 0;
+        const tg = collideTerrain(this, 0, vo);
+        if (this.y + this.r > H) {
+            this.hit = Math.max(this.hit, this.vy + vo);
+            this.y = H - this.r;
+            if (this.vy > 0)
+                this.vy = 0;
+        }
+        const gf = tg || this.y + this.r >= H - 1.5;
+        this.y += o;
+        this.vy += vo;
+        sawHit(this.x, this.hit);
+        this.ground = collideTerrain(this, 0, 0, LEDGES, LEDGE_T) || gf;
+        if (this.y - this.r < 0) {
+            this.y = this.r;
+            if (this.vy < 0)
+                this.vy *= -0.05;
+        } // demo: ceiling hits barely rebound
+        const lo = this.team === 0 ? this.r : NETX + this.r;
+        const hi = this.team === 0 ? NETX - this.r : W - this.r;
+        if (this.x < lo) {
+            this.x = lo;
+            if (this.vx < 0)
+                this.vx *= -0.2;
+        }
+        if (this.x > hi) {
+            this.x = hi;
+            if (this.vx > 0)
+                this.vx *= -0.2;
+        }
+    }
+}
+class Ball {
+    constructor() {
+        this.x = NETX;
+        this.y = H - RISE - 13;
+        this.vx = 0;
+        this.vy = 0;
+        this.r = BALL_R;
+        this.th = 0;
+        this.w = 0;
+        this.boost = 0;
+    }
+    reset() { this.x = NETX; this.y = H - RISE - 13; this.vx = 0; this.vy = 0; this.th = 0; this.w = 0; this.boost = 0; } // rests in the notch of the middle peak
+    // Returns the team that scored if the ball entered a goal. No bounce; the net does not affect the ball.
+    step() {
+        this.vy += BALL_G * DT; // low gravity + light drag = long hang time
+        this.vx *= 1 - 0.05 * DT;
+        this.vy *= 1 - 0.05 * DT;
+        const s = Math.hypot(this.vx, this.vy), cap = BALL_VMAX + (PAD_MAX - BALL_VMAX) * this.boost; // a hatchet hit lifts the cap for a moment
+        this.boost = Math.max(0, this.boost - DT / PAD_BOOST_T);
+        if (s > cap) {
+            this.vx *= cap / s;
+            this.vy *= cap / s;
+        }
+        this.x += this.vx * DT;
+        this.y += this.vy * DT;
+        this.w = Math.max(-45, Math.min(45, this.w * (1 - 0.3 * DT)));
+        this.th += this.w * DT; // spin carries in the air
+        if (this.y - this.r < 0) {
+            this.y = this.r;
+            if (this.vy < 0)
+                this.vy = 0;
+        }
+        const o = sawY(this.x), vo = sawV(this.x); // floor frame, as for players
+        this.y -= o;
+        this.vy -= vo;
+        this.hit = 0;
+        if (this.x > 0 && this.x < W && this.y + this.r > H) {
+            this.hit = Math.max(0, this.vy + vo);
+            this.y = H - this.r;
+            if (this.vy > 0)
+                this.vy = 0;
+            this.vx *= 1 - 0.4 * DT;
+            roll(this, 0, -1);
+        }
+        collideTerrain(this, 0, vo);
+        collideTerrain(this, 0, vo, OUTSEGS);
+        padBounce(this);
+        this.y += o;
+        this.vy += vo;
+        sawHit(this.x, BALL_M * this.hit);
+        collideTerrain(this, 0, 0, LEDGES, LEDGE_T);
+        collideTerrain(this, 0, 0, OUTCEIL, LEDGE_T);
+        if (this.y > H + PIT + 40)
+            this.reset(); // failsafe
+        if (this.x < -OUT_D)
+            return 1; // ball crossed the left threshold line: right team scores
+        if (this.x > W + OUT_D)
+            return 0;
+        return null;
+    }
+}
+// Circle-circle collision with mass and restitution. Returns impact speed (0 if none).
+function collide(a, b, ma, mb, e) {
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.r + b.r;
+    if (d >= min || d === 0)
+        return 0;
+    const nx = dx / d, ny = dy / d, pen = min - d, tm = ma + mb;
+    a.x -= nx * pen * mb / tm;
+    a.y -= ny * pen * mb / tm;
+    b.x += nx * pen * ma / tm;
+    b.y += ny * pen * ma / tm;
+    const vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+    if (vn >= 0)
+        return 0;
+    const j = -(1 + e) * vn / (1 / ma + 1 / mb);
+    a.vx -= j * nx / ma;
+    a.vy -= j * ny / ma;
+    b.vx += j * nx / mb;
+    b.vy += j * ny / mb;
+    return -vn;
+}
+// ---- game state ----
+const p1 = new Player(0, 250, '#42a5f5'), p2 = new Player(1, 750, '#ef5350');
+const players = [p1, p2], ball = new Ball();
+let score = [0, 0], pause = 0, over = false, msg = '';
+function newRound() { players.forEach(p => p.reset()); ball.reset(); trail.length = 0; saw.t = 0; saw.v = 0; }
+function point(t, why) {
+    score[t]++;
+    hud.flash[t] = 1;
+    if (why === 'scores!')
+        hud.line[1 - t] = 1; // the threshold line that was crossed lights up
+    over = score[t] >= WIN;
+    msg = `${t === 0 ? 'Blue' : 'Red'} ${why}` + (over ? ' - wins the match!' : '');
+    pause = over ? 4 : 1.6;
+}
+function update() {
+    sawStep();
+    if (pause > 0) {
+        pause -= DT;
+        if (trail.length)
+            trail.shift(); // streaks melt away during the pause
+        if (pause <= 0) {
+            if (over) {
+                score = [0, 0];
+                over = false;
+            }
+            msg = '';
+            newRound();
+        }
+        return;
+    }
+    for (const p of players)
+        if (p.alive)
+            p.step(ball);
+    if (p1.alive && p2.alive)
+        collide(p1, p2, 1, 1, 0.4);
+    const scorer = ball.step();
+    trailPush();
+    if (scorer !== null)
+        return point(scorer, 'scores!');
+    for (const p of players) { // the Death Ball kills on any touch
+        if (p.alive && Math.hypot(p.x - ball.x, p.y - ball.y) < p.r + ball.r) {
+            p.alive = false;
+            p.rope = null;
+            p.onBall = false;
+        }
+    }
+    if (!p1.alive && !p2.alive) {
+        msg = 'Double KO';
+        pause = 1.6;
+    }
+    else if (!p1.alive)
+        point(1, 'wipes out the other team!');
+    else if (!p2.alive)
+        point(0, 'wipes out the other team!');
+}
+// ---- input ----
+const bindings = [
+    [p1.keys, { ArrowLeft: 'l', ArrowRight: 'r', ArrowUp: 'up', ArrowDown: 'dn', x: 'z', c: 'x', z: 'sp' }],
+    [p2.keys, { a: 'l', d: 'r', w: 'up', s: 'dn', f: 'z', g: 'x', h: 'sp' }],
+];
+function setKey(e, v) {
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    for (const [k, m] of bindings) {
+        const n = m[key];
+        if (n) {
+            k[n] = v;
+            e.preventDefault();
+        }
+    }
+    if (v && key === 'Escape')
+        ui.open = -1;
+    if (v && key === 'r') {
+        score = [0, 0];
+        over = false;
+        msg = '';
+        pause = 0;
+        newRound();
+    }
+}
+window.addEventListener('keydown', e => setKey(e, true));
+window.addEventListener('keyup', e => setKey(e, false));
+window.addEventListener('blur', () => bindings.forEach(([k]) => Object.assign(k, noKeys())));
+// ---- rendering ----
+const cv = document.getElementById('c');
+const cx = cv.getContext('2d');
+const line = (x1, y1, x2, y2) => { cx.moveTo(x1, y1); cx.lineTo(x2, y2); };
+// ---- HUD: fighting-game style strip across the top; the bars are progress toward WIN points (they fill from the outer edge toward the middle) ----
+const TERRAIN = '#2a1048', EDGE = '#9a63f0'; // platform fill and outline: dark purple to match the death ball
+const HUD = 80, TINT = 0.16; // HUD strip height; strength of each side's color tint
+const hud = { shown: [0, 0], flash: [0, 0], pad: [0, 0], line: [0, 0] }; // shown = smoothed fill (0..1); flash = brief glow after a point
+function barPath(x, y, w, h, side, sk) { // slanted inner end, like the health bars in a fighting game
+    cx.beginPath();
+    if (side === 0) { cx.moveTo(x, y); cx.lineTo(x + w, y); cx.lineTo(x + w - sk, y + h); cx.lineTo(x, y + h); }
+    else { cx.moveTo(x, y); cx.lineTo(x + w, y); cx.lineTo(x + w, y + h); cx.lineTo(x + sk, y + h); }
+    cx.closePath();
+}
+function drawBar(side, color, name, frac, flash) {
+    const bw = 480, bh = 28, by = 14, sk = 14, bx = side === 0 ? 24 : CW - 24 - bw;
+    cx.save();
+    barPath(bx, by, bw, bh, side, sk);
+    cx.fillStyle = '#0b0e12'; // empty track
+    cx.fill();
+    cx.globalAlpha = 0.14;
+    cx.fillStyle = color;
+    cx.fill();
+    cx.globalAlpha = 1;
+    cx.save();
+    cx.clip();
+    const fw = bw * frac, fx = side === 0 ? bx : bx + bw - fw;
+    if (fw > 0) {
+        const g = cx.createLinearGradient(0, by, 0, by + bh);
+        g.addColorStop(0, '#fff'); g.addColorStop(0.18, color); g.addColorStop(1, color);
+        cx.fillStyle = g;
+        cx.fillRect(fx, by, fw, bh);
+        cx.fillStyle = 'rgba(255,255,255,' + (0.5 * flash) + ')'; // point-scored flash
+        cx.fillRect(fx, by, fw, bh);
+        const ex = side === 0 ? fx + fw : fx; // glowing leading edge
+        cx.shadowColor = color; cx.shadowBlur = 12;
+        cx.fillStyle = '#fff';
+        cx.fillRect(ex - 1.5, by, 3, bh);
+        cx.shadowBlur = 0;
+    }
+    cx.fillStyle = 'rgba(255,255,255,.12)'; // gloss
+    cx.fillRect(bx, by, bw, bh / 2);
+    cx.strokeStyle = 'rgba(0,0,0,.6)'; // one notch per point
+    cx.lineWidth = 2;
+    cx.beginPath();
+    for (let i = 1; i < WIN; i++) line(bx + bw * i / WIN, by, bx + bw * i / WIN, by + bh);
+    cx.stroke();
+    // >>> extra bar effects (sparks, shimmer, particles...) can be drawn here: they are clipped to the bar, with fw/fx/frac available <<<
+    cx.restore();
+    barPath(bx, by, bw, bh, side, sk);
+    cx.strokeStyle = '#d5dbe1'; cx.lineWidth = 3;
+    cx.stroke();
+    cx.font = 'italic 800 22px system-ui, sans-serif'; // fighter name under the bar
+    cx.textAlign = side === 0 ? 'left' : 'right';
+    cx.lineWidth = 4; cx.strokeStyle = '#000'; cx.lineJoin = 'round';
+    cx.strokeText(name, side === 0 ? bx : bx + bw, 68);
+    cx.fillStyle = color;
+    cx.fillText(name, side === 0 ? bx : bx + bw, 68);
+    cx.restore();
+}
+function drawHud() {
+    const bg = cx.createLinearGradient(0, 0, 0, HUD);
+    bg.addColorStop(0, '#05070a'); bg.addColorStop(1, '#10151b');
+    cx.fillStyle = bg;
+    cx.fillRect(0, 0, CW, HUD);
+    for (const t of [0, 1]) {
+        hud.shown[t] += (Math.min(1, score[t] / WIN) - hud.shown[t]) * 0.08;
+        hud.flash[t] *= 0.94;
+        hud.pad[t] *= 0.9;
+        hud.line[t] *= 0.96;
+    }
+    drawBar(0, '#42a5f5', 'BLUE', hud.shown[0], hud.flash[0]);
+    drawBar(1, '#ef5350', 'RED', hud.shown[1], hud.flash[1]);
+    const cw = 128, ch = 50, x = CW / 2 - cw / 2, y = 8; // center plaque
+    cx.fillStyle = '#0b0e12'; cx.strokeStyle = '#d5dbe1'; cx.lineWidth = 3;
+    cx.beginPath(); cx.roundRect(x, y, cw, ch, 6); cx.fill(); cx.stroke();
+    cx.textAlign = 'center';
+    cx.font = 'bold 10px system-ui, sans-serif';
+    cx.fillStyle = '#98a2ad';
+    cx.fillText('FIRST TO ' + WIN, CW / 2, y + 15);
+    cx.font = 'bold 28px system-ui, sans-serif';
+    cx.fillStyle = '#42a5f5'; cx.fillText(String(score[0]), CW / 2 - 32, y + 43);
+    cx.fillStyle = '#e8e8e4'; cx.fillText('-', CW / 2, y + 41);
+    cx.fillStyle = '#ef5350'; cx.fillText(String(score[1]), CW / 2 + 32, y + 43);
+    cx.strokeStyle = '#8a94a0'; cx.lineWidth = 3; // seam between HUD and arena
+    cx.beginPath(); line(0, HUD, CW, HUD); cx.stroke();
+}
+// ---- Speed lines: the ball's recent positions (one per physics step) are drawn as streaks. Because they are the real path, a ball being swung
+// around a player leaves streaks that curve along the arc. Faster = longer (more path covered per unit time), brighter, whiter, and more lanes. ----
+const TRAIL_N = 48, TRAIL_V0 = 140, TRAIL_V1 = BALL_VMAX * 0.95; // history length (steps, ~0.4 s); speed where lines appear / are at full strength
+const trail = [];
+const clamp01 = v => Math.max(0, Math.min(1, v));
+function trailPush() {
+    trail.push({ x: ball.x, y: ball.y, k: clamp01((Math.hypot(ball.vx, ball.vy) - TRAIL_V0) / (TRAIL_V1 - TRAIL_V0)) });
+    if (trail.length > TRAIL_N)
+        trail.shift();
+}
+function drawTrail() {
+    const n = trail.length;
+    if (n < 4)
+        return;
+    const pts = [];
+    for (let i = n - 1; i >= 0; i -= 2) // head -> tail
+        pts.push(trail[i]);
+    const m = pts.length;
+    if (m < 3)
+        return;
+    for (let j = 0; j < m; j++) { // local direction and normal from the neighbouring samples
+        const a = pts[Math.max(0, j - 1)], b = pts[Math.min(m - 1, j + 1)];
+        let dx = a.x - b.x, dy = a.y - b.y;
+        const d = Math.hypot(dx, dy) || 1;
+        pts[j].nx = -dy / d;
+        pts[j].ny = dx / d;
+        pts[j].age = j / (m - 1);
+    }
+    const head = pts[0].k;
+    if (head <= 0 && pts[Math.min(m - 1, 4)].k <= 0)
+        return;
+    const lanes = head > 0.66 ? [0, -0.55, 0.55, -1, 1] : head > 0.33 ? [0, -0.6, 0.6] : [0];
+    cx.save();
+    cx.globalCompositeOperation = 'lighter';
+    cx.lineCap = 'round';
+    for (const off of lanes) {
+        for (let j = 0; j < m - 1; j++) {
+            const a = pts[j], b = pts[j + 1], k = (a.k + b.k) / 2, fade = Math.pow(1 - a.age, 1.3);
+            if (k <= 0)
+                continue;
+            const oa = off * ball.r * 0.9 * (1 - a.age * 0.6), ob = off * ball.r * 0.9 * (1 - b.age * 0.6); // lanes converge toward the tail
+            const x1 = a.x + a.nx * oa, y1 = a.y + a.ny * oa, x2 = b.x + b.nx * ob, y2 = b.y + b.ny * ob;
+            const r = 168 + 77 * k, g = 85 + 150 * k, bl = 247 + 8 * k; // violet -> white-hot as speed climbs
+            const core = off === 0;
+            if (core) { // soft wide glow under the main streak
+                cx.strokeStyle = `rgba(147,51,234,${0.28 * k * fade})`;
+                cx.lineWidth = (10 + 14 * k) * (1 - a.age * 0.8);
+                cx.beginPath(); line(x1, y1, x2, y2); cx.stroke();
+            }
+            cx.strokeStyle = `rgba(${r | 0},${g | 0},${bl | 0},${(core ? 0.9 : 0.6) * k * fade})`;
+            cx.lineWidth = (core ? 3 + 8 * k : 1.2 + 1.8 * k) * (1 - a.age * 0.85);
+            cx.beginPath(); line(x1, y1, x2, y2); cx.stroke();
+        }
+    }
+    cx.restore();
+}
+// ---- Control hints, drawn on the solid wall mass beside each goal. Keys light up in the player's color while held. ----
+function keyCap(x, y, size, col, on, dim) { // returns the y the cap's face is drawn at (pressed keys sink 2px)
+    const yy = y + (on ? 2 : 0);
+    cx.save();
+    cx.globalAlpha = dim ? 0.35 : 1;
+    cx.fillStyle = '#0d1115';
+    cx.beginPath(); cx.roundRect(x - size / 2, y - size / 2 + 3, size, size, 7); cx.fill();
+    cx.fillStyle = on ? col : '#2e2146';
+    cx.strokeStyle = on ? '#fff' : '#a893d4';
+    cx.lineWidth = 2;
+    cx.beginPath(); cx.roundRect(x - size / 2, yy - size / 2, size, size, 7); cx.fill(); cx.stroke();
+    cx.restore();
+    return yy;
+}
+function arrowGlyph(x, y, ang, color) {
+    cx.save();
+    cx.translate(x, y); cx.rotate(ang);
+    cx.strokeStyle = color; cx.lineWidth = 2.2; cx.lineCap = 'round'; cx.lineJoin = 'round';
+    cx.beginPath();
+    cx.moveTo(0, 7); cx.lineTo(0, -7);
+    cx.moveTo(-5, -2); cx.lineTo(0, -7); cx.lineTo(5, -2);
+    cx.stroke();
+    cx.restore();
+}
+function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebell weight, double chevron for dash
+    cx.save();
+    cx.translate(x, y);
+    cx.strokeStyle = color; cx.fillStyle = color; cx.lineWidth = 2.3; cx.lineCap = 'round'; cx.lineJoin = 'round';
+    cx.beginPath();
+    if (kind === 'grapple') {
+        cx.arc(0, -10, 2.2, 0, 7);
+        cx.moveTo(0, -8); cx.lineTo(0, 2);
+        cx.arc(5, 2, 5, Math.PI, Math.PI * 0.15, true);
+        cx.stroke();
+    } else if (kind === 'weight') {
+        cx.arc(0, 3, 7.5, 0, 7); cx.fill();
+        cx.beginPath(); cx.arc(0, -4, 5, Math.PI, 0); cx.stroke();
+    } else if (kind === 'locked') { // padlock
+        cx.fillRect(-6, -1, 12, 9);
+        cx.beginPath(); cx.arc(0, -2, 4.5, Math.PI, 0); cx.stroke();
+    } else { // dash: double chevron
+        cx.lineWidth = 2.8;
+        cx.moveTo(-9, -7); cx.lineTo(-2, 0); cx.lineTo(-9, 7);
+        cx.moveTo(1, -7); cx.lineTo(8, 0); cx.lineTo(1, 7);
+        cx.stroke();
+    }
+    cx.restore();
+}
+// ---- Special-ability dropdown: click the special keycap to open a list of ability icons, click one to equip it. Add new abilities to SPECIALS. ----
+const SPECIALS = [
+    { id: 'dash', name: 'DASH', icon: 'dash' },
+    { id: 'locked1', name: 'LOCKED', icon: 'locked', locked: true }, // placeholders for future abilities
+    { id: 'locked2', name: 'LOCKED', icon: 'locked', locked: true },
+];
+const ui = { open: -1, hover: null }; // open = index of the player whose menu is open (-1 = none)
+const hintX = i => (i === 0 ? -OX / 2 : W + OX / 2);
+const spKey = i => ({ x: hintX(i) + 26, y: 195, w: 40, h: 40 }); // the special keycap (third key of the action row)
+const spItem = (i, n) => ({ x: hintX(i) + 26, y: 240 + n * 32, w: 40, h: 32 }); // menu rows, directly under it
+const inRect = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+function uiHit(x, y) {
+    if (ui.open >= 0)
+        for (let n = 0; n < SPECIALS.length; n++)
+            if (inRect(spItem(ui.open, n), x, y))
+                return { type: 'item', i: ui.open, n };
+    for (const i of [0, 1])
+        if (inRect(spKey(i), x, y))
+            return { type: 'key', i };
+    return null;
+}
+function drawSpecialMenu() {
+    if (ui.open < 0)
+        return;
+    const i = ui.open, p = players[i], col = p.color, r0 = spItem(i, 0), hv = ui.hover;
+    cx.save();
+    cx.fillStyle = '#12081f'; cx.strokeStyle = col; cx.lineWidth = 2;
+    cx.beginPath(); cx.roundRect(r0.x - 3, r0.y - 2, r0.w + 6, SPECIALS.length * 32 + 4, 8); cx.fill(); cx.stroke();
+    SPECIALS.forEach((a, n) => {
+        const r = spItem(i, n), hot = hv && hv.type === 'item' && hv.i === i && hv.n === n, sel = p.special === a.id;
+        if (hot || sel) {
+            cx.fillStyle = sel ? col + '66' : 'rgba(255,255,255,.12)';
+            cx.beginPath(); cx.roundRect(r.x, r.y + 1, r.w, r.h - 2, 6); cx.fill();
+        }
+        cx.globalAlpha = a.locked ? 0.45 : 1;
+        iconGlyph(a.icon, r.x + r.w / 2, r.y + r.h / 2, '#e8e8e4');
+        cx.globalAlpha = 1;
+        if (hot) { // name of the hovered ability, beside the menu
+            cx.font = 'bold 9px system-ui, sans-serif'; cx.textAlign = 'right'; cx.fillStyle = '#e8e8e4';
+            cx.fillText(a.name, r0.x - 9, r.y + r.h / 2 + 3);
+        }
+    });
+    cx.restore();
+}
+function drawKeyHints() {
+    const cfg = [
+        { i: 0, p: p1, x: -OX / 2, col: '#42a5f5', name: 'BLUE', dirs: ['', '', '', ''], act: ['X', 'C', 'Z'] },
+        { i: 1, p: p2, x: W + OX / 2, col: '#ef5350', name: 'RED', dirs: ['W', 'A', 'S', 'D'], act: ['F', 'G', 'H'] },
+    ];
+    cx.textAlign = 'center';
+    for (const { i: pi, p, x, col, name, dirs, act } of cfg) {
+        const k = p.keys;
+        cx.font = 'italic 800 18px system-ui, sans-serif';
+        cx.fillStyle = col;
+        cx.fillText(name, x, 70);
+        const KS = 34, PT = 38; // arrow cluster: up on top, left / down / right below
+        const keys = [[0, 105 - 143, 0, k.up, false, dirs[0]], [-PT, 0, -Math.PI / 2, k.l, false, dirs[1]], [0, 0, Math.PI, k.dn, false, dirs[2]], [PT, 0, Math.PI / 2, k.r, false, dirs[3]]];
+        for (const [dx, dy, ang, on, dim, letter] of keys) {
+            const kx = x + dx, ky = 143 + dy, yy = keyCap(kx, ky, KS, col, on, dim);
+            cx.globalAlpha = dim ? 0.35 : 1;
+            arrowGlyph(kx, yy, ang, on ? '#0b0e12' : '#e8e8e4');
+            if (letter) {
+                cx.font = 'bold 8px system-ui, sans-serif';
+                cx.fillStyle = on ? '#0b0e12' : '#98a2ad';
+                cx.fillText(letter, kx + 11, yy + 13);
+            }
+            cx.globalAlpha = 1;
+        }
+        cx.font = 'bold 8px system-ui, sans-serif';
+        cx.fillStyle = '#98a2ad';
+        cx.fillText('MOVE / JUMP / DROP', x, 174);
+        const sp = SPECIALS.find(a => a.id === p.special) || SPECIALS[0];
+        const row = [['grapple', 'GRAPPLE', k.z], ['weight', 'WEIGHT', k.x], [sp.icon, sp.name, k.sp]]; // main inputs; the third is the equipped special
+        row.forEach(([kind, label, on], i) => {
+            const kx = x + (i - 1) * 46, yy = keyCap(kx, 215, 40, col, on, false);
+            cx.globalAlpha = i === 2 && sp.id === 'dash' && !p.dashReady ? 0.3 : 1; // the dash icon dims while it is used up
+            iconGlyph(kind, kx, yy - 2, on ? '#0b0e12' : '#e8e8e4');
+            cx.globalAlpha = 1;
+            cx.font = 'bold 8px system-ui, sans-serif';
+            cx.fillStyle = on ? '#0b0e12' : '#98a2ad';
+            cx.fillText(act[i], kx + 13, yy + 15);
+            cx.fillStyle = '#98a2ad';
+            if (!(i === 2 && ui.open === pi)) // the open menu covers the label
+                cx.fillText(label, kx, 251);
+            if (i === 2) { // dropdown caret
+                const hot = ui.open === pi || (ui.hover && ui.hover.type === 'key' && ui.hover.i === pi);
+                cx.fillStyle = hot ? '#fff' : on ? '#0b0e12' : '#98a2ad';
+                cx.beginPath(); cx.moveTo(kx + 8, yy - 15); cx.lineTo(kx + 16, yy - 15); cx.lineTo(kx + 12, yy - 10); cx.closePath(); cx.fill();
+            }
+        });
+    }
+}
+function drawOutside() { // tunnels, threshold lines and hatchets, mirrored on both sides
+    const tm = performance.now();
+    cx.lineWidth = 3;
+    cx.fillStyle = TERRAIN;
+    cx.fillRect(0, H, W, PIT); // base under the arena floor
+    for (const side of [0, 1]) {
+        const s = side === 0 ? -1 : 1, base = side === 0 ? 0 : W, X = d => base + s * d, lift = sawY(base);
+        const col = side === 0 ? '#42a5f5' : '#ef5350', far = slopeY(OUT_D) + lift, fp = [0, PAD_D0, PAD_D1, OUT_D].map(d => [X(d), slopeY(d) + lift]);
+        cx.fillStyle = TERRAIN; // solid mass over the tunnel...
+        cx.fillRect(side === 0 ? -OX : W, 0, OX, GOAL_Y0);
+        cx.beginPath(); // ...and under its sloped floor (it carries on past the threshold)
+        fp.forEach(([x, y], i) => (i ? cx.lineTo(x, y) : cx.moveTo(x, y))); cx.lineTo(X(OX), far); cx.lineTo(X(OX), H + PIT); cx.lineTo(X(0), H + PIT);
+        cx.closePath(); cx.fill();
+        cx.fillStyle = '#07090c'; // void past the threshold
+        cx.fillRect(Math.min(X(OUT_D), X(OX)), GOAL_Y0, OX - OUT_D, far - GOAL_Y0);
+        const tg = cx.createLinearGradient(X(0), 0, X(OUT_D), 0); // tunnel glows in the defending team's color, stronger toward the line
+        tg.addColorStop(0, col + '10'); tg.addColorStop(1, col + '38');
+        cx.fillStyle = tg;
+        cx.beginPath();
+        cx.moveTo(X(0), GOAL_Y0); cx.lineTo(X(OUT_D), GOAL_Y0);
+        for (let i = fp.length - 1; i >= 0; i--) cx.lineTo(fp[i][0], fp[i][1]);
+        cx.closePath(); cx.fill();
+        cx.strokeStyle = EDGE; cx.lineWidth = 3; // ceiling and floor outlines
+        cx.beginPath();
+        line(base, GOAL_Y0, X(OX), GOAL_Y0);
+        fp.forEach(([x, y], i) => (i ? cx.lineTo(x, y) : cx.moveTo(x, y))); cx.lineTo(X(OX), far);
+        cx.stroke();
+        // threshold line
+        const lf = hud.line[side];
+        cx.save();
+        cx.strokeStyle = col; cx.lineWidth = 4 + 6 * lf; cx.shadowColor = col; cx.shadowBlur = 14 + 26 * lf;
+        cx.setLineDash(lf > 0.05 ? [] : [14, 8]);
+        cx.beginPath(); line(X(OUT_D), GOAL_Y0, X(OUT_D), far); cx.stroke();
+        cx.restore();
+        // hatchet: the floor's 45-degree section, with a glowing plate on it facing up and out
+        const A = padA(side), B = padB(side), pf = hud.pad[side];
+        const Tx = s * Math.cos(PAD_ANG), Ty = Math.sin(PAD_ANG), Nx = s * Math.sin(PAD_ANG), Ny = -Math.cos(PAD_ANG); // along the plate (outward/down) and its up-and-out normal
+        cx.save();
+        cx.shadowColor = '#ffb020'; cx.shadowBlur = 10 + 24 * pf;
+        cx.fillStyle = '#ffb020';
+        cx.beginPath();
+        cx.moveTo(A.x, A.y + lift); cx.lineTo(B.x, B.y + lift); cx.lineTo(B.x - Nx * PAD_LIFT, B.y - Ny * PAD_LIFT + lift); cx.lineTo(A.x - Nx * PAD_LIFT, A.y - Ny * PAD_LIFT + lift);
+        cx.closePath(); cx.fill();
+        cx.fillStyle = 'rgba(255,255,255,' + 0.85 * pf + ')';
+        cx.fill();
+        cx.restore();
+        for (let i = 0; i < 3; i++) { // chevrons pointing the way the hatchet launches
+            const u = 0.2 + 0.3 * i, px = A.x + (B.x - A.x) * u + Nx * 13, py = A.y + (B.y - A.y) * u + lift + Ny * 13;
+            cx.strokeStyle = 'rgba(255,205,90,' + (0.35 + 0.65 * (0.5 + 0.5 * Math.sin(tm / 140 - i * 1.1))) + ')';
+            cx.lineWidth = 2.5;
+            cx.beginPath();
+            cx.moveTo(px - Tx * 6 - Nx * 4, py - Ty * 6 - Ny * 4);
+            cx.lineTo(px + Nx * 4, py + Ny * 4);
+            cx.lineTo(px + Tx * 6 - Nx * 4, py + Ty * 6 - Ny * 4);
+            cx.stroke();
+        }
+    }
+}
+function draw() {
+    drawHud();
+    cx.save();
+    cx.translate(OX, HUD); // arena coordinates stay 0..W, 0..H; the margins are negative x / x > W
+    cx.beginPath(); cx.rect(-OX, 0, CW, H + PIT); cx.clip();
+    cx.fillStyle = '#0b0e12'; // out of bounds
+    cx.fillRect(-OX, 0, CW, H + PIT);
+    cx.fillStyle = '#14181d';
+    cx.fillRect(0, 0, W, H);
+    cx.fillStyle = 'rgba(66,165,245,' + TINT + ')'; // each side is lightly tinted in its team color
+    cx.fillRect(0, 0, NETX, H);
+    cx.fillStyle = 'rgba(239,83,80,' + TINT + ')';
+    cx.fillRect(NETX, 0, NETX, H);
+    drawOutside();
+    cx.fillStyle = TERRAIN;
+    cx.strokeStyle = EDGE;
+    cx.lineWidth = 3;
+    const sl = sawY(0), sr = sawY(W); // each ramp lifts as one block (its pop weight is 1 over the whole ramp)
+    for (const pts of [[[0, GOAL_Y1 + sl], [RUN, H + sl], [RUN, H], [0, H]], [[W, GOAL_Y1 + sr], [W - RUN, H + sr], [W - RUN, H], [W, H]], PEAK]) {
+        cx.beginPath();
+        pts.forEach(([x, y], i) => (i ? cx.lineTo(x, y) : cx.moveTo(x, y)));
+        cx.closePath();
+        cx.fill();
+        if (pts === PEAK)
+            cx.stroke();
+        else {
+            cx.beginPath();
+            cx.moveTo(pts[0][0], pts[0][1]);
+            cx.lineTo(pts[1][0], pts[1][1]);
+            cx.stroke();
+        }
+    }
+    cx.beginPath(); // the floor between the ramps follows the quake
+    for (let x = RUN; x <= W - RUN; x += 8)
+        x === RUN ? cx.moveTo(x, H + sawY(x)) : cx.lineTo(x, H + sawY(x));
+    cx.lineTo(W - RUN, H);
+    cx.lineTo(RUN, H);
+    cx.closePath();
+    cx.fill();
+    cx.beginPath();
+    for (let x = RUN; x <= W - RUN; x += 8)
+        x === RUN ? cx.moveTo(x, H + sawY(x)) : cx.lineTo(x, H + sawY(x));
+    cx.stroke();
+    cx.fillStyle = TERRAIN; // the juts over the goals
+    cx.fillRect(0, 0, PL, GOAL_Y0);
+    cx.fillRect(W - PL, 0, PL, GOAL_Y0);
+    drawKeyHints();
+    cx.fillStyle = 'rgba(66,165,245,.35)';
+    cx.fillRect(0, GOAL_Y0, 10, GOAL_Y1 - GOAL_Y0);
+    cx.fillStyle = 'rgba(239,83,80,.35)';
+    cx.fillRect(W - 10, GOAL_Y0, 10, GOAL_Y1 - GOAL_Y0);
+    cx.strokeStyle = EDGE;
+    cx.lineWidth = 6;
+    cx.beginPath();
+    line(0, 0, W, 0);
+    line(0, H, W, H);
+    line(0, GOAL_Y0, PL, GOAL_Y0); // goal juts
+    line(PL, 0, PL, GOAL_Y0);
+    line(W, GOAL_Y0, W - PL, GOAL_Y0);
+    line(W - PL, 0, W - PL, GOAL_Y0);
+    cx.stroke();
+    cx.strokeStyle = 'rgba(255,255,255,.35)';
+    cx.lineWidth = 3;
+    cx.setLineDash([6, 6]);
+    cx.beginPath();
+    line(NETX, 0, NETX, H);
+    cx.stroke();
+    cx.setLineDash([]);
+    for (const p of players) { // range indicator when nothing is in reach
+        if (p.alive && p.keys.z && !p.rope && !p.inReach(ball)) {
+            cx.strokeStyle = p.keys.z ? 'rgba(255,255,255,.7)' : 'rgba(255,255,255,.22)';
+            cx.lineWidth = 2;
+            cx.setLineDash([8, 8]);
+            cx.beginPath();
+            cx.arc(p.x, p.y, RANGE, 0, 7);
+            cx.stroke();
+            cx.setLineDash([]);
+        }
+    }
+    for (const p of players) { // hook in flight: the rope reaches out to the target during the landing delay
+        if (p.alive && p.pending && p.keys.z) {
+            const f = Math.min(1, 1 - p.pending.t / p.pending.t0);
+            cx.strokeStyle = 'rgba(232,232,228,.8)';
+            cx.lineWidth = 2;
+            cx.beginPath();
+            line(p.x, p.y, p.x + (p.pending.p.x - p.x) * f, p.y + (p.pending.p.y - p.y) * f);
+            cx.stroke();
+        }
+    }
+    for (const p of players) {
+        if (p.alive && p.rope) {
+            const dd = Math.hypot(p.rope.x - p.x, p.rope.y - p.y);
+            // Always draw the tether while it exists (it used to hide while slack, which read as "the grapple didn't draw").
+            // A slack floor/slope rope is just drawn fainter than a taut one.
+            p.ropeShown = true;
+            {
+                const slack = !p.onBall && p.ropeGround && dd < p.len - 1;
+                cx.strokeStyle = slack ? 'rgba(232,232,228,.45)' : '#e8e8e4';
+                cx.lineWidth = 2;
+                cx.beginPath();
+                line(p.x, p.y, p.rope.x, p.rope.y);
+                cx.stroke();
+            }
+            {
+                cx.fillStyle = '#e8e8e4';
+                cx.beginPath();
+                cx.arc(p.rope.x, p.rope.y, p.onBall ? 4 : HOOK_R, 0, 7);
+                cx.fill();
+            }
+        }
+    }
+    for (const p of players) { // dash streaks
+        if (p.alive && p.dashT > 0) {
+            const f = p.dashT / DASH_FX, ux = p.dashDir[0], uy = p.dashDir[1], nx = -uy, ny = ux;
+            cx.save();
+            cx.globalCompositeOperation = 'lighter';
+            cx.lineCap = 'round';
+            cx.strokeStyle = p.color; cx.shadowColor = p.color; cx.shadowBlur = 12;
+            for (const o of [-0.7, 0, 0.7]) {
+                const len = (22 + 70 * f) * (o ? 0.8 : 1);
+                cx.globalAlpha = 0.8 * f * (o ? 0.7 : 1);
+                cx.lineWidth = o ? 2 : 6;
+                cx.beginPath();
+                line(p.x + nx * o * p.r, p.y + ny * o * p.r, p.x + nx * o * p.r - ux * len, p.y + ny * o * p.r - uy * len);
+                cx.stroke();
+            }
+            cx.restore();
+        }
+    }
+    for (const p of players) {
+        cx.globalAlpha = p.alive ? 1 : 0.2;
+        cx.fillStyle = p.color;
+        cx.strokeStyle = '#fff';
+        cx.lineWidth = p.keys.x ? 6 : 2;
+        cx.beginPath();
+        cx.arc(p.x, p.y, p.r, 0, 7);
+        cx.fill();
+        cx.stroke();
+        cx.globalAlpha = 1;
+    }
+    drawTrail();
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 260); // slow glow pulse
+    const bgr = cx.createRadialGradient(ball.x - 4, ball.y - 4, 1, ball.x, ball.y, ball.r);
+    bgr.addColorStop(0, '#5a2a98');
+    bgr.addColorStop(1, '#1b0837');
+    cx.fillStyle = bgr;
+    cx.strokeStyle = '#b36bff';
+    cx.lineWidth = 3;
+    cx.shadowColor = '#9333ea';
+    cx.shadowBlur = 16 + 12 * pulse;
+    cx.beginPath();
+    cx.arc(ball.x, ball.y, ball.r, 0, 7);
+    cx.fill();
+    cx.stroke();
+    cx.shadowBlur = 0;
+    cx.strokeStyle = 'rgba(235,215,255,.9)';
+    cx.lineWidth = 2;
+    cx.beginPath(); // spin marker
+    line(ball.x, ball.y, ball.x + Math.cos(ball.th) * ball.r, ball.y + Math.sin(ball.th) * ball.r);
+    cx.stroke();
+    cx.textAlign = 'center';
+    cx.font = 'bold 30px system-ui, sans-serif';
+    if (msg) {
+        cx.fillStyle = '#fff';
+        cx.font = 'bold 34px system-ui, sans-serif';
+        cx.fillText(msg, W / 2, H / 2 - 40);
+    }
+    drawSpecialMenu();
+    cx.restore();
+}
+let last = performance.now(), acc = 0;
+function frame(t) {
+    acc += Math.min(0.05, (t - last) / 1000);
+    last = t;
+    while (acc >= DT) {
+        update();
+        acc -= DT;
+    }
+    draw();
+    requestAnimationFrame(frame);
+}
+const arenaPos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width - OX, (e.clientY - r.top) * cv.height / r.height - HUD]; };
+cv.addEventListener('mousemove', e => { ui.hover = uiHit(...arenaPos(e)); cv.style.cursor = ui.hover ? 'pointer' : ''; });
+cv.addEventListener('mouseleave', () => { ui.hover = null; cv.style.cursor = ''; });
+cv.addEventListener('click', e => {
+    const h = uiHit(...arenaPos(e));
+    if (!h)
+        ui.open = -1;
+    else if (h.type === 'key')
+        ui.open = ui.open === h.i ? -1 : h.i;
+    else if (!SPECIALS[h.n].locked) {
+        players[h.i].special = SPECIALS[h.n].id;
+        ui.open = -1;
+    }
+});
+newRound();
+requestAnimationFrame(frame);
+
+
+document.getElementById('c').addEventListener('click',function(){this.focus()});
+</script></body></html>

@@ -1,7 +1,9 @@
 // PHYSICS - arrows: the ARROW special's aim / charge logic and its projectiles. Never draws.
 // Load order: after bodies.js (it reads players, ball and decoys at runtime) and before game/rules.js (which calls stepArrows()).
 // Tuning numbers live in constants.js (ARROW_*).
-const arrows = []; // in flight or stuck in the terrain: { x, y, vx, vy, ang, team, owner, stuck, life }
+const arrows = []; // in flight or stuck in the terrain: { x, y, vx, vy, ang, team, owner, stuck, spent, life }
+const stuckSegs = []; // centre lines [x1, y1, x2, y2] of the arrows stuck in the terrain: solid for players, the death ball and decoys (thickness ARROW_HALF_W)
+function clearArrows() { arrows.length = 0; stuckSegs.length = 0; }
 const ARROW_SNAP = { l: Math.PI, r: 0, u: -Math.PI / 2, d: Math.PI / 2 }; // angles are screen angles: 0 = right, -PI/2 = up, PI/2 = down, PI = left
 const wrapAng = a => Math.atan2(Math.sin(a), Math.cos(a));
 // Everything an arrow sticks into. [segment list, extra thickness]: the juts / tunnel ceilings are drawn thick, so they count as thick.
@@ -89,12 +91,13 @@ function stepArrows() {
             continue;
         a.vy += ARROW_G * DT;
         const n = Math.max(1, Math.ceil(Math.hypot(a.vx, a.vy) * DT / ARROW_R)); // sub-steps of at most one arrow radius, so a fast arrow cannot skip through a thin wall
-        let used = false;
         for (let s = 0; s < n; s++) {
             a.x += a.vx * DT / n;
             a.y += a.vy * DT / n;
-            if (arrowStrike(a)) {
-                used = true;
+            if (!a.spent && arrowStrike(a)) { // it has done its one hit: it bounces off limp and keeps falling, still a solid thing that can stick in the terrain
+                a.spent = true;
+                a.vx *= -ARROW_SPENT_K;
+                a.vy *= -ARROW_SPENT_K;
                 break;
             }
             if (arrowHitsTerrain(a)) {
@@ -104,9 +107,11 @@ function stepArrows() {
                 break;
             }
         }
-        if (used)
-            arrows.splice(i, 1);
-        else if (!a.stuck)
+        if (!a.stuck && !a.spent)
             a.ang = Math.atan2(a.vy, a.vx); // the arrow nose-dives as gravity bends the flight
     }
+    stuckSegs.length = 0; // rebuild the solid ones, tail to tip
+    for (const a of arrows)
+        if (a.stuck)
+            stuckSegs.push([a.x - Math.cos(a.ang) * ARROW_LEN, a.y - Math.sin(a.ang) * ARROW_LEN, a.x, a.y]);
 }

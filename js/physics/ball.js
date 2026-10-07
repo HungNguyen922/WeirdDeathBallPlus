@@ -57,6 +57,7 @@ class Ball {
         sawHit(this.x, BALL_M * this.hit);
         collideTerrain(this, 0, 0, LEDGES, LEDGE_T);
         collideTerrain(this, 0, 0, OUTCEIL, LEDGE_T);
+        collideTerrain(this, 0, 0, stuckSegs, ARROW_HALF_W);
         if (this.y > H + PIT + 40) { // failsafe
             if (this.decoy)
                 this.dead = true; // a decoy that falls out of the world is just removed

@@ -26,12 +26,12 @@ function arrowShape(x, y, ang, len, col, alpha) { // a plain rectangle: its lead
     cx.globalAlpha = alpha;
     cx.translate(x, y); cx.rotate(ang);
     cx.fillStyle = col; cx.strokeStyle = '#e8e8e4'; cx.lineWidth = 1.5;
-    cx.beginPath(); cx.rect(-len, -2.5, len, 5); cx.fill(); cx.stroke();
+    cx.beginPath(); cx.rect(-len, -ARROW_HALF_W, len, 2 * ARROW_HALF_W); cx.fill(); cx.stroke();
     cx.restore();
 }
 function drawArrows() {
     for (const a of arrows)
-        arrowShape(a.x, a.y, a.ang, 22, a.team === 0 ? '#42a5f5' : '#ef5350', a.stuck ? Math.min(1, a.life / 0.5) : 1);
+        arrowShape(a.x, a.y, a.ang, ARROW_LEN, a.team === 0 ? '#42a5f5' : '#ef5350', a.stuck ? Math.min(1, a.life / 0.5) : 1);
 }
 function drawAITags() { // "AI" tag over a computer-controlled player
     for (const p of players) { // "AI" tag over a computer-controlled player

@@ -13,7 +13,7 @@ const events = {
 function newRound() { 
     pegs.length = 0; 
     decoys.length = 0; 
-    arrows.length = 0;
+    clearArrows();
     ai.forEach(a => { 
         a.plan = null; a.t = 0; 
     }); 

@@ -354,6 +354,8 @@ class Player {
         this.vy += vo;
         sawHit(this.x, this.hit);
         this.ground = collideTerrain(this, 0, 0, LEDGES, LEDGE_T) || gf;
+        if (collideTerrain(this, 0, 0, stuckSegs, ARROW_HALF_W))
+            this.ground = true; // standing on a stuck arrow counts as ground
         if (this.rope && !this.onBall && this.ropeGround && this.hit > PIVOT_MIN_HIT && Math.hypot(this.rope.x - this.x, this.rope.y - this.y) < PIVOT_ZONE) {
             // Hit the pivot: the speed the floor just absorbed goes sideways instead. Direction = the way you steer, else the way you were already
             // travelling, else out the side opposite to the one you came in on.

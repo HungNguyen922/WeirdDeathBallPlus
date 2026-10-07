@@ -51,6 +51,12 @@ function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebel
     } else if (kind === 'decoy') { // a solid ball and a dashed copy of it
         cx.arc(-3, 4, 5.5, 0, 7); cx.fill();
         cx.beginPath(); cx.lineWidth = 2; cx.setLineDash([2.4, 2.4]); cx.arc(4, -3, 6, 0, 7); cx.stroke();
+    } else if (kind === 'arrow') { // an arrow pointing up-right
+        cx.lineWidth = 2.2;
+        cx.moveTo(-7, 7); cx.lineTo(7, -7);
+        cx.moveTo(0, -7); cx.lineTo(7, -7); cx.lineTo(7, 0);
+        cx.moveTo(-7, 1); cx.lineTo(-7, 7); cx.lineTo(-1, 7);
+        cx.stroke();
     } else if (kind === 'locked') { // padlock
         cx.fillRect(-6, -1, 12, 9);
         cx.beginPath(); cx.arc(0, -2, 4.5, Math.PI, 0); cx.stroke();

@@ -21,6 +21,22 @@ function drawPegs() { // plinko pegs
         cx.globalAlpha = 1;
     }
 }
+function arrowShape(x, y, ang, len, col, alpha) { // tip at (x, y), pointing along ang
+    const ux = Math.cos(ang), uy = Math.sin(ang), nx = -uy, ny = ux, tx = x - ux * len, ty = y - uy * len;
+    cx.save();
+    cx.globalAlpha = alpha; cx.lineCap = 'round'; cx.lineJoin = 'round';
+    cx.strokeStyle = '#e8e8e4'; cx.lineWidth = 2;
+    cx.beginPath(); line(tx, ty, x, y); cx.stroke();
+    cx.fillStyle = col;
+    cx.beginPath(); cx.moveTo(x + ux * 3, y + uy * 3); cx.lineTo(x - ux * 7 + nx * 4.5, y - uy * 7 + ny * 4.5); cx.lineTo(x - ux * 7 - nx * 4.5, y - uy * 7 - ny * 4.5); cx.closePath(); cx.fill();
+    cx.strokeStyle = col; cx.lineWidth = 1.6;
+    for (const s of [-1, 1]) { cx.beginPath(); line(tx + ux * 6, ty + uy * 6, tx - ux * 2 + nx * 4 * s, ty - uy * 2 + ny * 4 * s); cx.stroke(); }
+    cx.restore();
+}
+function drawArrows() {
+    for (const a of arrows)
+        arrowShape(a.x, a.y, a.ang, 22, a.team === 0 ? '#42a5f5' : '#ef5350', a.stuck ? Math.min(1, a.life / 0.5) : 1);
+}
 function drawAITags() { // "AI" tag over a computer-controlled player
     for (const p of players) { // "AI" tag over a computer-controlled player
         if (p.alive && ai[p.id].on) {
@@ -48,6 +64,10 @@ function drawCasts() { // abilities being cast: ghost pegs / decoys, marionette 
             cx.setLineDash([]);
             cx.globalAlpha = 1;
             drawTimer(p.cast.x, p.cast.y, BALL_R + 5, prog, col);
+        } else if (p.cast.type === 'arrow') { // charge ring (white and pulsing at full) and the arrow held out along the aim
+            const c = p.cast, full = c.charge >= 1, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 70);
+            drawTimer(p.x, p.y, p.r + 6, c.charge, full ? '#ffffff' : col);
+            arrowShape(p.x + Math.cos(c.ang) * (p.r + 40), p.y + Math.sin(c.ang) * (p.r + 40), c.ang, 12 + 26 * c.charge, col, full ? 0.7 + 0.3 * pulse : 1);
         } else {
             if (p.cast.type === 'marionette') { // aiming: a string from the caster to the ball, and an arrow on the ball showing where the shove will go
                 const c = p.cast, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 110), dirOn = c.hx || c.hy;

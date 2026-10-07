@@ -7,7 +7,7 @@ function clearArrows() { arrows.length = 0; stuckSegs.length = 0; }
 const ARROW_SNAP = { l: Math.PI, r: 0, u: -Math.PI / 2, d: Math.PI / 2 }; // angles are screen angles: 0 = right, -PI/2 = up, PI/2 = down, PI = left
 const wrapAng = a => Math.atan2(Math.sin(a), Math.cos(a));
 // Everything an arrow sticks into. [segment list, extra thickness]: the juts / tunnel ceilings are drawn thick, so they count as thick.
-const ARROW_SOLIDS = [[SEGS, 0], [OUTSEGS, 0], [LEDGES, LEDGE_T], [OUTCEIL, LEDGE_T]];
+const ARROW_SOLIDS = [[SEGS, 0], [OUTSEGS, 0], [PADS, 0], [LEDGES, LEDGE_T], [OUTCEIL, LEDGE_T]];
 
 // One physics step of an arrow cast, called from Player.step while the special key is held. c = the cast, k = the player's keys.
 // Charge: fills over ARROW_CHARGE_T and then just stays full (that is the cap). Aim: starts pointing up; holding RIGHT turns it clockwise and LEFT

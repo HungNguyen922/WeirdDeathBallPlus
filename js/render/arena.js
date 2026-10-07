@@ -6,7 +6,7 @@ function drawOutside() { // tunnels, threshold lines and hatchets, mirrored on b
     cx.fillRect(0, H, W, PIT); // base under the arena floor
     for (const side of [0, 1]) {
         const s = side === 0 ? -1 : 1, base = side === 0 ? 0 : W, X = d => base + s * d, lift = sawY(base);
-        const col = side === 0 ? '#42a5f5' : '#ef5350', far = slopeY(OUT_D) + lift, fp = [0, PAD_D0, PAD_D1, OUT_D].map(d => [X(d), slopeY(d) + lift]);
+        const col = side === 0 ? '#42a5f5' : '#ef5350', far = slopeY(OUT_D) + lift, fp = [0, PAD_D0, OUT_D].map(d => [X(d), slopeY(d) + lift]);
         cx.fillStyle = TERRAIN; // solid mass over the tunnel...
         cx.fillRect(side === 0 ? -OX : W, 0, OX, GOAL_Y0);
         cx.beginPath(); // ...and under its sloped floor (it carries on past the threshold)
@@ -45,8 +45,9 @@ function drawOutside() { // tunnels, threshold lines and hatchets, mirrored on b
         cx.fillStyle = 'rgba(255,255,255,' + 0.85 * pf + ')';
         cx.fill();
         cx.restore();
-        for (let i = 0; i < 3; i++) { // chevrons pointing the way the hatchet launches
-            const u = 0.2 + 0.3 * i, px = A.x + (B.x - A.x) * u + Nx * 13, py = A.y + (B.y - A.y) * u + lift + Ny * 13;
+        const nch = Math.max(3, Math.round(PAD_LEN / 40)); // one chevron per ~40 u of plate
+        for (let i = 0; i < nch; i++) { // chevrons pointing the way the hatchet launches
+            const u = (i + 0.5) / nch, px = A.x + (B.x - A.x) * u + Nx * 13, py = A.y + (B.y - A.y) * u + lift + Ny * 13;
             cx.strokeStyle = 'rgba(255,205,90,' + (0.35 + 0.65 * (0.5 + 0.5 * Math.sin(tm / 140 - i * 1.1))) + ')';
             cx.lineWidth = 2.5;
             cx.beginPath();
@@ -116,9 +117,18 @@ function drawArena() { // background, terrain, goals, net line
     cx.stroke();
     cx.strokeStyle = 'rgba(255,255,255,.35)';
     cx.lineWidth = 3;
+    cx.fillStyle = 'rgba(255,255,255,.07)'; // the gap at the top of the net: a faint lit doorway
+    cx.fillRect(NETX - 5, 0, 10, NET_GAP);
     cx.setLineDash([6, 6]);
     cx.beginPath();
-    line(NETX, 0, NETX, H);
+    line(NETX, NET_GAP, NETX, H); // the net only exists below its gap
     cx.stroke();
     cx.setLineDash([]);
+    cx.strokeStyle = 'rgba(255,255,255,.75)'; // cap on the cut end, so the edge of the gap reads clearly
+    cx.lineWidth = 4;
+    cx.lineCap = 'round';
+    cx.beginPath();
+    line(NETX - 7, NET_GAP, NETX + 7, NET_GAP);
+    cx.stroke();
+    cx.lineCap = 'butt';
 }

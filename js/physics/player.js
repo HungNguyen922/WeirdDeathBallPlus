@@ -40,6 +40,7 @@ class Player {
         this.onBall = false;
         this.ground = false;
         this.ropeBase = null;
+        this.netSide = undefined; // which side of the net we were last on (0 left, 1 right); set after the first step
         this.gjN = 0; this.gjT = 99;               // grapple-jump chain: jumps so far, seconds since the last one
         this.liftX = this.liftY = 0; this.liftT = 1e9; // the kick still being delivered (see LIFT_RAMP)
         this.dashReady = true; // one dash per trip off the floor
@@ -60,8 +61,9 @@ class Player {
         };
         const o = sawY(this.x); // the floor can be raised by a quake: look it up in the floor's own frame, then lift the result
         add({ x: this.x, y: H + o }, true);
-        for (const p of [{ x: this.x, y: 0 }, { x: 0, y: this.y }, { x: W, y: this.y }, { x: NETX, y: this.y }])
+        for (const p of [{ x: this.x, y: 0 }, { x: 0, y: this.y }, { x: W, y: this.y }])
             add(p, false);
+        add(nearestOnSeg(NETSEGS[0], this.x, this.y), false); // the net only exists below its gap
         for (const sg of SEGS) {
             const q = nearestOnSeg(sg, this.x, this.y - o);
             add({ x: q.x, y: q.y + sawY(q.x) }, true);
@@ -372,6 +374,8 @@ class Player {
         this.vy += vo;
         sawHit(this.x, this.hit);
         this.ground = collideTerrain(this, 0, 0, LEDGES, LEDGE_T) || gf;
+        if (collideTerrain(this, 0.2, 0, NETSEGS, NET_T))
+            this.ground = true; // landing on top of the net's cut end counts as ground
         if (collideTerrain(this, 0, 0, stuckSegs, ARROW_HALF_W))
             this.ground = true; // standing on a stuck arrow counts as ground
         if (this.rope && !this.onBall && this.ropeGround && this.hit > PIVOT_MIN_HIT && Math.hypot(this.rope.x - this.x, this.rope.y - this.y) < PIVOT_ZONE) {
@@ -386,8 +390,8 @@ class Player {
             if (this.vy < 0)
                 this.vy *= -0.05;
         } // demo: ceiling hits barely rebound
-        const lo = this.team === 0 ? this.r : NETX + this.r;
-        const hi = this.team === 0 ? NETX - this.r : W - this.r;
+        const lo = this.r; // players may now cross the net through its gap, so only the outer walls limit them
+        const hi = W - this.r;
         if (this.x < lo) {
             this.x = lo;
             if (this.vx < 0)
@@ -398,5 +402,14 @@ class Player {
             if (this.vx > 0)
                 this.vx *= -0.2;
         }
+        // Net guard: the net is a thin wall, so a very fast player could jump clean through it in one step. If we ended up on the other side of the net
+        // while below its gap, put us back against the face we came from. (Crossing through the gap is fine: we are above NET_GAP then.)
+        const side = this.x < NETX ? 0 : 1;
+        if (this.netSide !== undefined && side !== this.netSide && this.y + this.r > NET_GAP + 0.5) {
+            this.x = NETX + (this.netSide ? this.r : -this.r);
+            if (this.vx * (this.netSide ? 1 : -1) < 0)
+                this.vx *= -0.2;
+        } else
+            this.netSide = side;
     }
 }

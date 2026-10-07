@@ -108,7 +108,7 @@ class Player {
         this.ropeGround = ground;
         this.ropeBase = ground ? { x: p.x, y: p.y - sawY(p.x) } : null; // floor pivots ride the floor when it pops
         this.len = Math.max(d, MIN_LEN);
-        if (ground) {
+        if (ground && this.vy < 0) {
             const chain = Math.min(GJ_MAX, GJ_START * Math.pow(GJ_GROWTH, this.gjN)); // exponential ramp over a spammed chain
             const lift = LIFT_V * chain * (this.keys.x ? WEIGHT_M : 1);
             this.gjN++;

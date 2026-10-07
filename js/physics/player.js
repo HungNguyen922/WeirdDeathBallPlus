@@ -40,7 +40,7 @@ class Player {
         this.ropeBase = null;
         this.dashReady = true; // one dash per trip off the floor
         this.tball = null;
-        this.cd = { dash: 0, plinko: 0, marionette: 0, decoy: 0 }; // per-ability cooldown remaining (s)
+        this.cd = { dash: 0, plinko: 0, marionette: 0, decoy: 0, arrow: 0  }; // per-ability cooldown remaining (s)
         this.cast = null; // ability being cast: { type, t, t0, hx, hy, x, y }
         this.dashT = 0;
         this.dashDir = [0, 0];
@@ -134,7 +134,7 @@ class Player {
     }
     step(ball) {
         const k = this.keys, heavy = k.x;
-        const dir = (k.r ? 1 : 0) - (k.l ? 1 : 0);
+        const dir = this.cast && this.cast.type === 'arrow' ? 0 : (k.r ? 1 : 0) - (k.l ? 1 : 0);
         // Constant acceleration toward the max speed (the demo shows a steady ramp, not a hard build-up curve).
         const acc = RUN_ACC * (this.grounded ? 1 : 0.55) * (dir * this.vx < 0 ? 1.4 : 1);
         if (dir && dir * this.vx < 330)
@@ -158,10 +158,17 @@ class Player {
                 this.cast = { type: 'marionette', aim: true, t: 1, t0: 1, hx, hy, grace: hx || hy ? MARIONETTE_GRACE : 0 };
             else if (this.special === 'decoy' && this.cd.decoy <= 0)
                 this.cast = { type: 'decoy', t: DECOY_CAST, t0: DECOY_CAST, hx, hy, x: this.x, y: this.y }; // remembers the spot (and the arrows) at the press, like plinko
+            else if (this.special === 'arrow' && this.cd.arrow <= 0)
+                this.cast = { type: 'arrow', t: 1, t0: 1, charge: 0, ang: -Math.PI / 2, noTilt: false, tap: { l: 0, r: 0, u: 0, d: 0 }, prev: { l: k.l, r: k.r, u: k.up, d: k.dn } };
+
         }
         if (this.cast) {
             const c = this.cast;
-            if (c.aim) { // marionette: follow the arrows while the key is held; letting go fires (or cancels if there is no direction)
+            if (c.type === 'arrow') {
+                arrowAimStep(c, k);
+                if (!k.sp)
+                    c.t = 0; // released: fire (below)
+            } else if (c.aim) { // marionette: follow the arrows while the key is held; letting go fires (or cancels if there is no direction)
                 const ax = (k.r ? 1 : 0) - (k.l ? 1 : 0), ay = (k.dn ? 1 : 0) - (k.up ? 1 : 0);
                 if (ax || ay) {
                     c.hx = ax;
@@ -220,6 +227,10 @@ class Player {
                         spawnDecoy(this, c.x, c.y);
                     this.pushOutOf(c.x, c.y, BALL_R, c);
                     this.cd.decoy = DECOY_COOLDOWN;
+                } else if (c.type === 'arrow') {
+                    if (!this.sim)
+                        fireArrow(this, c);
+                    this.cd.arrow = ARROW_COOLDOWN;
                 }
             }
         }

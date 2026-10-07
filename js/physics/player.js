@@ -22,6 +22,8 @@ class Player {
         this.ropeGround = false;
         this.prevX = false;
         this.kickReq = false;
+        this.gjN = 0; this.gjT = 99;               // grapple-jump chain: jumps so far, seconds since the last one
+        this.liftX = this.liftY = 0; this.liftT = 1e9; // the kick still being delivered (see LIFT_RAMP)
         this.tball = null; // the ball (the death ball or a decoy) we are tethered to while onBall
         this.sim = false; // true on the AI planner's throwaway copies: they must not touch the real game (spawn decoys / pegs)
         this.keys = noKeys();
@@ -38,6 +40,8 @@ class Player {
         this.onBall = false;
         this.ground = false;
         this.ropeBase = null;
+        this.gjN = 0; this.gjT = 99;               // grapple-jump chain: jumps so far, seconds since the last one
+        this.liftX = this.liftY = 0; this.liftT = 1e9; // the kick still being delivered (see LIFT_RAMP)
         this.dashReady = true; // one dash per trip off the floor
         this.tball = null;
         this.cd = { dash: 0, plinko: 0, marionette: 0, decoy: 0, arrow: 0  }; // per-ability cooldown remaining (s)
@@ -105,14 +109,18 @@ class Player {
         this.ropeBase = ground ? { x: p.x, y: p.y - sawY(p.x) } : null; // floor pivots ride the floor when it pops
         this.len = Math.max(d, MIN_LEN);
         if (ground && this.vy < 0) {
-            const lift = LIFT_V * (this.keys.x ? WEIGHT_M : 1);
+            const chain = Math.min(GJ_MAX, GJ_START * Math.pow(GJ_GROWTH, this.gjN)); // exponential ramp over a spammed chain
+            const lift = LIFT_V * chain * (this.keys.x ? WEIGHT_M : 1);
+            this.gjN++;
+            this.gjT = 0;
             let ux = d > 1 ? dx / d : 0, uy = d > 1 ? dy / d : -1;
             ux *= HOP_AIM;
             const m = Math.hypot(ux, uy) || 1;
             ux /= m;
             uy /= m; // mostly up/away, less sideways
-            this.vx += ux * lift;
-            this.vy += uy * lift;
+            this.liftX = ux * lift; // delivered over LIFT_RAMP by step(), not added all at once
+            this.liftY = uy * lift;
+            this.liftT = 0;
             this.len += lift * 0.15;
         }
     }
@@ -134,6 +142,16 @@ class Player {
     }
     step(ball) {
         const k = this.keys, heavy = k.x;
+        this.gjT += DT;
+        if (this.gjT > GJ_CHAIN_T)
+            this.gjN = 0; // chain broken
+        const ramp = Math.max(LIFT_RAMP, DT);
+        if (this.liftT < ramp) { // ease the grapple-jump kick in
+            const s = u => u * u * (3 - 2 * u), f = s(Math.min(1, (this.liftT + DT) / ramp)) - s(this.liftT / ramp);
+            this.vx += this.liftX * f;
+            this.vy += this.liftY * f;
+            this.liftT += DT;
+        }
         const dir = this.cast && this.cast.type === 'arrow' ? 0 : (k.r ? 1 : 0) - (k.l ? 1 : 0);
         // Constant acceleration toward the max speed (the demo shows a steady ramp, not a hard build-up curve).
         const acc = RUN_ACC * (this.grounded ? 1 : 0.55) * (dir * this.vx < 0 ? 1.4 : 1);

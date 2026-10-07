@@ -14,6 +14,7 @@ function draw() {
     drawPlayerTrails();
     drawPlayers();
     drawBalls();
+    drawArrows();
     drawMessage();
     drawSpecialMenu();
     cx.restore();

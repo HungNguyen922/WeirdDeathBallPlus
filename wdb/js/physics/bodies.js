@@ -8,7 +8,7 @@ const p3 = new Player(0, 0, BLUE, 2), p4 = new Player(1, 0, RED, 3);
 const allPlayers = [p1, p2, p3, p4];
 const players = [p1, p2], ball = new Ball(); // `players` = who is in the current match (edited in place by layoutTeams)
 // 2v2 spawns: one player this far from the ball (center to center), the other this far from the goal scoop (measured from where the ramp meets the floor).
-const SPAWN_BALL_D = 3 * PL, SPAWN_SCOOP_D = 2 * PL;
+const SPAWN_BALL_D = 4 * PL, SPAWN_SCOOP_D = 2 * PL;
 function layoutTeams(size) { // size 1 = 1v1, 2 = 2v2; takes effect on the next newRound()
     players.length = 0;
     players.push(p1, p2);

@@ -54,7 +54,7 @@ const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: 
 const PLAYER_M = 1, CRASH_E = 1;
 // Ground friction (per second, as a share of speed lost): GROUND_BRAKE slows a player on the floor who is not steering (not applied while tethered); BALL_ROLL_DRAG slows the ball rolling on the floor.
 // Original values were 5 and 0.4; lower = more slippery.
-const GROUND_BRAKE = 2, BALL_ROLL_DRAG = 0.15;
+const GROUND_BRAKE = 0.15, BALL_ROLL_DRAG = 0.15;
 const BALL_R = 14, BALL_I = 6 * BALL_M * BALL_R * BALL_R; // spin inertia: high, so spin takes a whippy throw
 
 // Floor slopes: a ramp up to each goal and a middle peak made of two overlapping triangles (a notch the ball starts in).

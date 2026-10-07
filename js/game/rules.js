@@ -10,7 +10,18 @@ const events = {
     onPauseTick() {}, // one step of the between-rounds pause
     onNewRound() {}, // the round was reset
 };
-function newRound() { pegs.length = 0; decoys.length = 0; ai.forEach(a => { a.plan = null; a.t = 0; }); players.forEach(p => p.reset()); ball.reset(); sawReset(); events.onNewRound(); }
+function newRound() { 
+    pegs.length = 0; 
+    decoys.length = 0; 
+    arrows.length = 0;
+    ai.forEach(a => { 
+        a.plan = null; a.t = 0; 
+    }); 
+    players.forEach(p => p.reset()); 
+    ball.reset(); 
+    sawReset(); 
+    events.onNewRound(); 
+}
 function point(t, why) {
     score[t]++;
     events.onPoint(t, why);
@@ -64,6 +75,7 @@ function update() {
         for (let j = i + 1; j < players.length; j++)
             if (players[i].alive && players[j].alive)
                 collide(players[i], players[j], 1, 1, 0.4);
+    stepArrows();
     const scorer = ball.step();
     events.onBodyStep(ball);
     if (ball.pull)

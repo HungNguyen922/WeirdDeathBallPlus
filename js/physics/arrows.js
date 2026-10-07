@@ -8,8 +8,8 @@ const wrapAng = a => Math.atan2(Math.sin(a), Math.cos(a));
 const ARROW_SOLIDS = [[SEGS, 0], [OUTSEGS, 0], [LEDGES, LEDGE_T], [OUTCEIL, LEDGE_T]];
 
 // One physics step of an arrow cast, called from Player.step while the special key is held. c = the cast, k = the player's keys.
-// Charge: fills over ARROW_CHARGE_T and then just stays full (that is the cap). Aim: starts pointing up; holding LEFT / RIGHT turns it toward that side
-// (the short way round, so it never spins past the sideways direction); tapping any arrow key twice within ARROW_DBL_T snaps it that way at once.
+// Charge: fills over ARROW_CHARGE_T and then just stays full (that is the cap). Aim: starts pointing up; holding RIGHT turns it clockwise and LEFT
+// counter-clockwise, all the way round (so it can point below the player too); tapping any arrow key twice within ARROW_DBL_T snaps it that way at once.
 function arrowAimStep(c, k) {
     c.charge = Math.min(1, c.charge + DT / ARROW_CHARGE_T);
     const now = { l: !!k.l, r: !!k.r, u: !!k.up, d: !!k.dn };
@@ -27,13 +27,8 @@ function arrowAimStep(c, k) {
     }
     if (!now.l && !now.r)
         c.noTilt = false;
-    if (now.l !== now.r && !c.noTilt) { // exactly one of LEFT / RIGHT is held: turn toward that side
-        const want = now.l ? Math.PI : 0;
-        let diff = wrapAng(want - c.ang);
-        if (Math.abs(diff) > Math.PI - 1e-3)
-            diff = Math.cos(c.ang) < 0 ? Math.PI : -Math.PI; // pointing exactly the opposite way: go over the top
-        c.ang = wrapAng(c.ang + Math.sign(diff) * Math.min(Math.abs(diff), ARROW_TURN * DT));
-    }
+    if (now.l !== now.r && !c.noTilt) // exactly one of LEFT / RIGHT is held: RIGHT turns the aim clockwise, LEFT counter-clockwise, all the way round (screen y points down, so +angle is clockwise)
+        c.ang = wrapAng(c.ang + (now.r ? 1 : -1) * ARROW_TURN * DT);
 }
 
 // The key was released: loose the arrow along the aim, at a speed that grows with the charge.

@@ -21,16 +21,12 @@ function drawPegs() { // plinko pegs
         cx.globalAlpha = 1;
     }
 }
-function arrowShape(x, y, ang, len, col, alpha) { // tip at (x, y), pointing along ang
-    const ux = Math.cos(ang), uy = Math.sin(ang), nx = -uy, ny = ux, tx = x - ux * len, ty = y - uy * len;
+function arrowShape(x, y, ang, len, col, alpha) { // a plain rectangle: its leading end at (x, y), trailing back along ang
     cx.save();
-    cx.globalAlpha = alpha; cx.lineCap = 'round'; cx.lineJoin = 'round';
-    cx.strokeStyle = '#e8e8e4'; cx.lineWidth = 2;
-    cx.beginPath(); line(tx, ty, x, y); cx.stroke();
-    cx.fillStyle = col;
-    cx.beginPath(); cx.moveTo(x + ux * 3, y + uy * 3); cx.lineTo(x - ux * 7 + nx * 4.5, y - uy * 7 + ny * 4.5); cx.lineTo(x - ux * 7 - nx * 4.5, y - uy * 7 - ny * 4.5); cx.closePath(); cx.fill();
-    cx.strokeStyle = col; cx.lineWidth = 1.6;
-    for (const s of [-1, 1]) { cx.beginPath(); line(tx + ux * 6, ty + uy * 6, tx - ux * 2 + nx * 4 * s, ty - uy * 2 + ny * 4 * s); cx.stroke(); }
+    cx.globalAlpha = alpha;
+    cx.translate(x, y); cx.rotate(ang);
+    cx.fillStyle = col; cx.strokeStyle = '#e8e8e4'; cx.lineWidth = 1.5;
+    cx.beginPath(); cx.rect(-len, -2.5, len, 5); cx.fill(); cx.stroke();
     cx.restore();
 }
 function drawArrows() {

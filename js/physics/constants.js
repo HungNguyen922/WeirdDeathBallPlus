@@ -8,7 +8,7 @@ const GOAL_Y1 = H - RISE, GOAL_Y0 = GOAL_Y1 - 6 * PL; // goal opening sits just 
 // Calibrated against the reference video (tracked at 30 fps; sprite ~25 px = 1 PL = 32 u, so 1 video px = 1.28 u).
 const DT = 1 / 120; // fixed physics timestep (120 Hz)
 const G = 410; // free-fall gravity (u/s^2): big arcs in the demo fall at ~320 px/s^2
-const G_FLOAT = 105; // gravity while UP is held in the air: plain jumps are long, symmetric, floaty arcs
+const G_FLOAT = 90; // gravity while UP is held in the air: plain jumps are long, symmetric, floaty arcs
 const JUMP_V = 150; // launch speed of a plain jump (u/s): ~88 u apex, ~2 s airtime with G_FLOAT
 const DASH_V = 420, DASH_FX = 0.25; // dash impulse (u/s), streak lifetime (s)
 const DOWN_G = 2.2; // gravity multiplier while DOWN is held (drop / fast-fall)

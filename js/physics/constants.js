@@ -40,6 +40,11 @@ const DASH_CAST = 0.12, DASH_COOLDOWN = 5, PLINKO_CAST = DASH_CAST, PLINKO_COOLD
 // one at the new spot. The cooldown starts when the decoy appears.
 const MARIONETTE_GRACE = 0.1, MARIONETTE_COOLDOWN = 20, MARIONETTE_V = 500, MARIONETTE_FX = 0.3; // shove speed (u/s) added to the ball, length (s) of its streak effect
 const DECOY_CAST = 1, DECOY_COOLDOWN = 30, DECOY_BOUNCE_PLAYER = 0.5, DECOY_BOUNCE_BALL = 0.8, DECOY_TELL = true; // DECOY_TELL: draw a dashed ring in the caster's color around the decoy (false = a perfect lookalike)
+// Arrow: hold the special key to charge (ARROW_CHARGE_T s to full), release to fire along the aim. LEFT / RIGHT turn it at ARROW_TURN rad/s; a double tap within ARROW_DBL_T s snaps it.
+// The death ball / decoys gain ARROW_BALL_K x the arrow's velocity; an enemy is knocked back by ARROW_KNOCK x it (ARROW_KILLS = true kills instead).
+const ARROW_CHARGE_T = 1.2, ARROW_V_MIN = 380, ARROW_V_MAX = 1150, ARROW_G = 40, ARROW_TURN = 2.2, ARROW_DBL_T = 0.25, ARROW_COOLDOWN = 3;
+const ARROW_R = 3, ARROW_BALL_K = 0.6, ARROW_KNOCK = 0.5, ARROW_KILLS = false, ARROW_LIFE = 4, ARROW_STICK_T = 1.5;
+const ABILITY = { /* ...existing... */, arrow: { cd: ARROW_COOLDOWN } };
 const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN } };
 // Crash shot: a player who touches the death ball dies, but first collides with it like two pool balls: an elastic collision along the line between their centers,
 // momentum conserved with the player's mass PLAYER_M against the ball's BALL_M. CRASH_E is the restitution (1 = perfectly elastic, no energy lost).

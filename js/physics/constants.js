@@ -33,7 +33,7 @@ const KS = 110; // surface-rope stiffness: firm, but stretches and recoils (elas
 // Pivot transfer: when you come back down onto the floor right at a floor/slope pivot (within PIVOT_ZONE of it), the speed the floor would absorb is turned
 // into sideways speed along the surface instead (PIVOT_TRANSFER = share of it; a rotation, so your speed is kept) and sends you out the other side.
 const PIVOT_ZONE = 2 * PL, PIVOT_MIN_HIT = 60, PIVOT_TRANSFER = 0.85;
-const LIFT_V = 280, WEIGHT_M = 1.4, WEIGHT_KICK = 350, MIN_LEN = 16; // grapple-jump lift, weight multiplier (lift), min surface tether; WEIGHT_KICK = impulse (u/s) away from the pivot each time weight is pressed while grappling
+const LIFT_V = 280, WEIGHT_M = 1.4, WEIGHT_KICK = 270, MIN_LEN = 16; // grapple-jump lift, weight multiplier (lift), min surface tether; WEIGHT_KICK = impulse (u/s) away from the pivot each time weight is pressed while grappling
 // Grapple-jump ramp. Chain: each grapple jump within GJ_CHAIN_T s of the last extends a chain; the kick is LIFT_V x min(GJ_MAX, GJ_START * GJ_GROWTH^n), n = jumps already in
 // the chain, so spamming ramps it up exponentially. Ease: each kick is delivered over LIFT_RAMP s (smoothstep) instead of in one tick.
 const GJ_START = 0.4, GJ_GROWTH = 1.1, GJ_MAX = 1, GJ_CHAIN_T = 1.5, LIFT_RAMP = 0.005;
@@ -70,6 +70,9 @@ const ARROW_LEN = 22, ARROW_HALF_W = 2.5, ARROW_SPENT_K = 0.15; // drawn length,
 const BAT_T = 0.2, BAT_COOLDOWN = 1.5, BAT_REACH = 90, BAT_HIT_HALF = 0.55, BAT_CONE = 1.0; // swing time (s), cooldown (s), bat tip distance from the player's centre, half-width of the hit sector (rad), half-angle of the cone round the aim where hits count (rad)
 const BAT_WIND = 0.35, BAT_FOLLOW = 0.6, BAT_CHARGE_T = 0.6, BAT_CHARGE_BONUS = 0.5; // extra pull-back at full charge (rad), follow-through past the aim (rad), time to full charge (s), power added at full charge (0.5 = +50%)
 const BAT_V = 700, BAT_KEEP = 1.15, BAT_CARRY = 0.6, BAT_VMAX = 1500, BAT_VMAX_CHARGE = 300, BAT_AIM_W = 0.6, BAT_FX = 0.3; // ball: flat speed added, share of its own speed kept, share of the batter's velocity added, speed cap (+ extra at full charge), aim vs away blend, streak length (s)
+// Impact effects (sparks etc., see render/impact.js) when a player slams into something (terrain, pegs, other players, balls): nothing below IMPACT_V0 (u/s of speed change in a
+// collision), growing to full size at IMPACT_V1.
+const IMPACT_V0 = 260, IMPACT_V1 = 1000;
 const BAT_PLAYER_V = 550, BAT_PLAYER_KEEP = 0.5, BAT_PLAYER_VMAX = 1100, BAT_HITS_TEAMMATES = true;
 const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN } };
 // Crash shot: a player who touches the death ball dies, but first collides with it like two pool balls: an elastic collision along the line between their centers,

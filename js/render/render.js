@@ -14,6 +14,7 @@ function draw() {
     drawPlayerTrails();
     drawPlayers();
     drawBalls();
+    drawImpacts();
     drawArrows();
     drawMessage();
     drawSpecialMenu();

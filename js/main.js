@@ -7,7 +7,9 @@ events.onPoint = (team, why) => {
 };
 events.onBodyStep = trailPush;
 events.onPauseTick = trailMelt;
-events.onNewRound = trailClear;
+events.onNewRound = () => { trailClear(); impactsClear(); };
+events.onBatHit = spawnBatImpact;
+events.onImpact = spawnImpact;
 
 let last = performance.now(), acc = 0;
 function frame(t) {

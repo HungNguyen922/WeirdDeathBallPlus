@@ -52,6 +52,10 @@ function batStep(p, c, ball) {
         }
         if (b === ball)
             b.pull = { t: BAT_FX, ux, uy, col: p.color }; // streak (only the death ball's timer is stepped in rules.js, so decoys get none)
+        if (!p.sim) { // impact effects for the renderer (the AI's planning copies must stay silent): the contact point is on the target's near edge
+            const cd = Math.max(p.r, d - b.r);
+            events.onBatHit(p, b, p.x + (d > 1 ? dx / d : ax) * cd, p.y + (d > 1 ? dy / d : ay) * cd, ux, uy, Math.min(1, Math.hypot(b.vx, b.vy) / BAT_VMAX));
+        }
     }
 }
 class Player {
@@ -114,6 +118,18 @@ class Player {
         this.gBurst = 0;
     }
     get grounded() { return this.ground; }
+    // Overcharge: the meter is emptied, the grapple is locked out for GRAPPLE_COOLDOWN and the grip is torn away (purple ripple). Happens when the meter runs out, or when a
+    // player with their grapple active (rope out, or hook in flight) touches an enemy (see update() in rules.js).
+    overcharge() {
+        this.gCharge = 0;
+        this.gCool = GRAPPLE_COOLDOWN;
+        this.gBurst = GRAPPLE_BURST_T;
+        this.kickReq = false;
+        this.rope = null;
+        this.pending = null;
+        this.onBall = false;
+        this.tball = null;
+    }
     // Everything grappleable within RANGE: surfaces (ground = floor/slopes) and the ball.
     candidates(ball) {
         const c = [];
@@ -396,16 +412,8 @@ class Player {
         }
         if (this.rope || this.pending) {
             this.gCharge -= DT;
-            if (this.gCharge <= 0) { // spent: the grip is torn away
-                this.gCharge = 0;
-                this.gCool = GRAPPLE_COOLDOWN;
-                this.gBurst = GRAPPLE_BURST_T;
-                this.kickReq = false;
-                this.rope = null;
-                this.pending = null;
-                this.onBall = false;
-                this.tball = null;
-            }
+            if (this.gCharge <= 0) // spent: the grip is torn away
+                this.overcharge();
         } else if (this.gCool <= 0)
             this.gCharge = Math.min(GRAPPLE_MAX, this.gCharge + GRAPPLE_REGEN * DT);
         if (!z) {
@@ -501,6 +509,7 @@ class Player {
         this.vx *= 1 - 0.1 * DT;
         this.x += this.vx * DT;
         this.y += this.vy * DT;
+        const pvx = this.vx, pvy = this.vy; // velocity going into this step's collisions: how much they change it is how hard we hit
         // The hook is just the rope's anchor point: nothing blocks you from reaching it, so you can swing straight through the pivot and out the other side.
         for (const q of pegs)
             pegBounce(this, q);
@@ -559,5 +568,10 @@ class Player {
                 this.vx *= -0.2;
         } else
             this.netSide = side;
+        if (!this.sim) { // impact effects: whatever we hit (floor, slope, ledge, wall, ceiling, net, peg, arrow) pushed us by dv, so it is on the opposite side to dv
+            const dvx = this.vx - pvx, dvy = this.vy - pvy, dv = Math.hypot(dvx, dvy);
+            if (dv > IMPACT_V0)
+                events.onImpact(this, this.x - dvx / dv * this.r, this.y - dvy / dv * this.r, dvx / dv, dvy / dv, dv);
+        }
     }
 }

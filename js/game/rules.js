@@ -9,6 +9,8 @@ const events = {
     onBodyStep(b) {}, // a body (player, death ball or decoy) just advanced one step
     onPauseTick() {}, // one step of the between-rounds pause
     onNewRound() {}, // the round was reset
+    onImpact(p, x, y, ux, uy, speed) {}, // player p hit something at (x, y) hard enough to show it; (ux, uy) points away from what it hit, speed = how hard (u/s)
+    onBatHit(p, target, x, y, ux, uy, power) {}, // p's bat hit a ball / decoy / player at (x, y), launching it along (ux, uy); power 0..1
 };
 function newRound() { 
     pegs.length = 0; 
@@ -71,8 +73,21 @@ function update() {
         }
     for (let i = 0; i < players.length; i++) // players are solid: everyone bumps everyone (teammates too)
         for (let j = i + 1; j < players.length; j++)
-            if (players[i].alive && players[j].alive)
-                collide(players[i], players[j], PLAYER_M, PLAYER_M, PLAYER_BOUNCE);
+            if (players[i].alive && players[j].alive) {
+                const a = players[i], b = players[j];
+                if (a.team !== b.team && Math.hypot(a.x - b.x, a.y - b.y) <= a.r + b.r + 0.5) { // touching an enemy with the grapple out (rope, or hook in flight) overcharges you: no body-blocking on a rope
+                    if (a.rope || a.pending)
+                        a.overcharge();
+                    if (b.rope || b.pending)
+                        b.overcharge();
+                }
+                const hit = collide(a, b, PLAYER_M, PLAYER_M, PLAYER_BOUNCE);
+                if (hit > IMPACT_V0) { // each player's sparks fly off on their own side of the contact
+                    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
+                    events.onImpact(a, a.x + nx * a.r, a.y + ny * a.r, -nx, -ny, hit);
+                    events.onImpact(b, b.x - nx * b.r, b.y - ny * b.r, nx, ny, hit);
+                }
+            }
     stepArrows();
     const scorer = ball.step();
     events.onBodyStep(ball);
@@ -91,15 +106,24 @@ function update() {
     for (let i = 0; i < decoys.length; i++) { // decoys are solid: they bump into players, the death ball and each other (the death ball itself still just kills)
         const d = decoys[i];
         for (const p of players)
-            if (p.alive)
-                collide(p, d, 1, BALL_M, DECOY_BOUNCE_PLAYER);
+            if (p.alive) {
+                const hit = collide(p, d, 1, BALL_M, DECOY_BOUNCE_PLAYER);
+                if (hit > IMPACT_V0) {
+                    const dx = d.x - p.x, dy = d.y - p.y, m = Math.hypot(dx, dy) || 1;
+                    events.onImpact(p, p.x + dx / m * p.r, p.y + dy / m * p.r, dx / m, dy / m, hit); // sparks fly the way the decoy is pushed
+                }
+            }
         collide(ball, d, BALL_M, BALL_M, DECOY_BOUNCE_BALL);
         for (let j = i + 1; j < decoys.length; j++)
             collide(d, decoys[j], BALL_M, BALL_M, DECOY_BOUNCE_BALL);
     }
     for (const p of players) { // the Death Ball kills on any touch, but the player's momentum goes into it first (crash shot)
         if (p.alive && Math.hypot(p.x - ball.x, p.y - ball.y) < p.r + ball.r) {
-            crashShot(p, ball);
+            const hit = crashShot(p, ball);
+            if (hit > IMPACT_V0) {
+                const dx = ball.x - p.x, dy = ball.y - p.y, m = Math.hypot(dx, dy) || 1;
+                events.onImpact(p, p.x + dx / m * p.r, p.y + dy / m * p.r, dx / m, dy / m, hit);
+            }
             p.alive = false;
             p.rope = null;
             p.onBall = false;

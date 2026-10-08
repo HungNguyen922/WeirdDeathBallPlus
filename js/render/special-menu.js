@@ -6,6 +6,7 @@ const SPECIALS = [
     { id: 'marionette', name: 'MARIONETTE', icon: 'marionette' },
     { id: 'decoy', name: 'DECOY', icon: 'decoy' },
     { id: 'arrow', name: 'ARROW', icon: 'arrow' },
+    { id: 'bat', name: 'BAT', icon: 'bat' },
 ];
 const ui = { open: -1, hover: null }; // open = index of the player whose menu is open (-1 = none)
 const hintX = i => (i === 0 ? -OX / 2 : W + OX / 2);

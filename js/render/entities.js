@@ -60,6 +60,19 @@ function drawCasts() { // abilities being cast: ghost pegs / decoys, marionette 
             cx.setLineDash([]);
             cx.globalAlpha = 1;
             drawTimer(p.cast.x, p.cast.y, BALL_R + 5, prog, col);
+        } else if (p.cast.type === 'bat') { // the bat: a purely cosmetic club sweeping round the player (physics only checks a hit sector, nothing drawn here is solid)
+            const c = p.cast, th = batAngle(c), s = Math.cos(c.ang) >= 0 ? 1 : -1, a0 = c.ang - s * BAT_ARC / 2;
+            const ux = Math.cos(th), uy = Math.sin(th), r0 = p.r + 3, r1 = r0 + (BAT_REACH - r0) * 0.4;
+            cx.save();
+            cx.lineCap = 'round';
+            cx.globalAlpha = 0.35 * (1 - 0.5 * prog); cx.strokeStyle = col; cx.lineWidth = 5; // swoosh along the part of the arc already swept
+            cx.beginPath(); cx.arc(p.x, p.y, BAT_REACH - 8, a0, th, s < 0); cx.stroke();
+            cx.globalAlpha = 1;
+            cx.strokeStyle = col; cx.lineWidth = 3; // grip, in the team colour
+            cx.beginPath(); line(p.x + ux * r0, p.y + uy * r0, p.x + ux * r1, p.y + uy * r1); cx.stroke();
+            cx.strokeStyle = '#d9a066'; cx.lineWidth = 7; // barrel
+            cx.beginPath(); line(p.x + ux * r1, p.y + uy * r1, p.x + ux * BAT_REACH, p.y + uy * BAT_REACH); cx.stroke();
+            cx.restore();
         } else if (p.cast.type === 'arrow') { // charge ring (white and pulsing at full) and the arrow held out along the aim
             const c = p.cast, full = c.charge >= 1, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 70);
             drawTimer(p.x, p.y, p.r + 6, c.charge, full ? '#ffffff' : col);

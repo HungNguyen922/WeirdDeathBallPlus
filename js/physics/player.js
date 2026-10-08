@@ -1,6 +1,44 @@
 // PHYSICS - Player: movement, grapple rope, and special abilities (dash / plinko / marionette / decoy).
 // step(ball) advances one fixed timestep. Reads this.keys; never draws.
 const noKeys = () => ({ l: false, r: false, up: false, z: false, x: false, sp: false, dn: false }); // sp = special ability, dn = down, z = grapple, x = weight
+// Bat special. The bat's current angle: starts raised BAT_ARC/2 to one side of the aim and sweeps through it (smoothstep), overhead: clockwise when aiming right, anticlockwise when aiming left.
+// The renderer draws the bat at this angle; the physics only uses it to place the hit sector. Nothing about the drawn bat is solid.
+function batAngle(c) {
+    const f = Math.max(0, Math.min(1, 1 - c.t / c.t0)), e = f * f * (3 - 2 * f), s = Math.cos(c.ang) >= 0 ? 1 : -1;
+    return c.ang + s * BAT_ARC * (e - 0.5);
+}
+// One physics step of a bat swing, called from Player.step while the cast runs. p = the batter, c = the cast, ball = the death ball. c.hits is a bit mask (bit 0 = the death ball,
+// bit n = decoy n-1) of what this swing has already hit: a number, not an array, so the AI's shallow cast copies cannot share it.
+function batStep(p, c, ball) {
+    const th = batAngle(c), targets = p.sim ? [ball] : [ball, ...decoys];
+    for (let i = 0; i < targets.length; i++) {
+        const b = targets[i], bit = 1 << i;
+        if (c.hits & bit)
+            continue;
+        const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy);
+        if (d > BAT_REACH + b.r)
+            continue; // out of reach
+        let da = Math.atan2(dy, dx) - th;
+        da = Math.atan2(Math.sin(da), Math.cos(da)); // wrapped to -PI..PI
+        if (Math.abs(da) > BAT_HIT_HALF + Math.asin(Math.min(1, b.r / Math.max(d, 1e-6))))
+            continue; // not where the bat is right now
+        c.hits |= bit;
+        const ax = Math.cos(c.ang), ay = Math.sin(c.ang); // the way the bat was aimed
+        const ox = d > 1 ? dx / d : ax, oy = d > 1 ? dy / d : ay; // straight away from the batter
+        let ux = ax * BAT_AIM_W + ox * (1 - BAT_AIM_W), uy = ay * BAT_AIM_W + oy * (1 - BAT_AIM_W);
+        const m = Math.hypot(ux, uy) || 1;
+        ux /= m;
+        uy /= m;
+        const out = Math.min(BAT_VMAX, BAT_V + BAT_KEEP * Math.hypot(b.vx, b.vy)); // what it had, plus some; a still ball still gets BAT_V
+        b.vx = ux * out + p.vx * BAT_CARRY;
+        b.vy = uy * out + p.vy * BAT_CARRY;
+        const s = Math.hypot(b.vx, b.vy);
+        if (s > BALL_VMAX) // big hits raise the ball's speed cap briefly, like a hatchet hit
+            b.boost = Math.max(b.boost, Math.min(1, (s - BALL_VMAX) / (PAD_MAX - BALL_VMAX)));
+        if (b === ball)
+            b.pull = { t: BAT_FX, ux, uy, col: p.color }; // streak (only the death ball's timer is stepped in rules.js, so decoys get none)
+    }
+}
 class Player {
     constructor(team, sx, color, id) {
         this.id = id; // 0 Blue, 1 Red, 2 Blue's teammate, 3 Red's teammate (indexes the AI state and key bindings)
@@ -43,7 +81,7 @@ class Player {
         this.rope = null;
         this.pending = null;
         this.gCharge = GRAPPLE_MAX; // grapple meter: seconds of grip left
-        this.gCool = 0;             // > 0: the meter was spent; no grappling at all until this runs out (then it is full again)
+        this.gCool = 0;             // > 0: the meter was spent; no grappling at all until this runs out (then the meter restarts from 0 and refills passively)
         this.onBall = false;
         this.ground = false;
         this.ropeBase = null;
@@ -52,7 +90,7 @@ class Player {
         this.liftX = this.liftY = 0; this.liftT = 1e9; // the kick still being delivered (see LIFT_RAMP)
         this.dashReady = true; // one dash per trip off the floor
         this.tball = null;
-        this.cd = { dash: 0, plinko: 0, marionette: 0, decoy: 0, arrow: 0  }; // per-ability cooldown remaining (s)
+        this.cd = { dash: 0, plinko: 0, marionette: 0, decoy: 0, arrow: 0, bat: 0 }; // per-ability cooldown remaining (s)
         this.cast = null; // ability being cast: { type, t, t0, hx, hy, x, y }
         this.dashT = 0;
         this.dashDir = [0, 0];
@@ -133,7 +171,7 @@ class Player {
             this.liftX = ux * lift; // delivered over LIFT_RAMP by step(), not added all at once
             this.liftY = uy * lift;
             this.liftT = 0;
-            this.len += lift * 0.15;
+            this.len += lift * (this.keys.x ? LIFT_SLACK_W : LIFT_SLACK); // extra rope from the kick (less when weighted)
             this.taut = false;
         }
     }
@@ -196,6 +234,8 @@ class Player {
                 this.cast = { type: 'marionette', aim: true, t: 1, t0: 1, hx, hy, grace: hx || hy ? MARIONETTE_GRACE : 0 };
             else if (this.special === 'decoy' && this.cd.decoy <= 0)
                 this.cast = { type: 'decoy', t: DECOY_CAST, t0: DECOY_CAST, hx, hy, x: this.x, y: this.y }; // remembers the spot (and the arrows) at the press, like plinko
+            else if (this.special === 'bat' && this.cd.bat <= 0) // swings toward the arrow(s) held, or at the death ball if none
+                this.cast = { type: 'bat', t: BAT_T, t0: BAT_T, ang: hx || hy ? Math.atan2(hy, hx) : Math.atan2(ball.y - this.y, ball.x - this.x), hits: 0 };
             else if (this.special === 'arrow' && this.cd.arrow <= 0)
                 this.cast = { type: 'arrow', t: 1, t0: 1, charge: 0, ang: this.arrowAng, noTilt: false, tap: { l: 0, r: 0, u: 0, d: 0 }, prev: { l: k.l, r: k.r, u: k.up, d: k.dn } };
 
@@ -221,6 +261,9 @@ class Player {
                     else
                         this.cast = null; // released with none: cancelled, nothing spent
                 }
+            } else if (c.type === 'bat') {
+                batStep(this, c, ball);
+                c.t -= DT;
             } else
                 c.t -= DT;
             if (this.cast && c.t <= 0) {
@@ -270,6 +313,8 @@ class Player {
                     if (!this.sim)
                         fireArrow(this, c);
                     this.cd.arrow = ARROW_COOLDOWN;
+                } else if (c.type === 'bat') {
+                    this.cd.bat = BAT_COOLDOWN; // the cooldown starts when the swing ends
                 }
             }
         }
@@ -305,7 +350,7 @@ class Player {
         if (this.gCool > 0) {
             this.gCool = Math.max(0, this.gCool - DT);
             if (this.gCool === 0)
-                this.gCharge = GRAPPLE_MAX;
+                this.gCharge = 0; // lockout over: the meter does NOT jump to full, it restarts from 0 (grapple again right away and it just overcharges again)
         }
         const z = k.z && this.gCool <= 0;
         if (!z && !primed)

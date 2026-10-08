@@ -28,15 +28,16 @@ const TAUT_K = 110, TAUT_DAMP = 12, TAUT_MIN_NY = 0.5, TAUT_CENTER = 6, TAUT_DRA
 // the float spring is only BOB_SOFT x as stiff, so a kick can sink you a little before the float catches you.
 const DRIB_T = 0.45, FLOAT_OFF_RATE = 25, FLOAT_ON_RATE = 3;
 const PRIME_T = 0.4; // how long (s) a weight press stays primed after release: grapple within this window and the kick fires on landing (held = always primed)
-const BOB_DEPTH = 4, BOB_KICK_BONUS = 6, BOB_SOFT = 0.25;
+const BOB_DEPTH = 6, BOB_KICK_BONUS = 6, BOB_SOFT = 0.25;
 const KS = 110; // surface-rope stiffness: firm, but stretches and recoils (elastic overshoot instead of a hard stop)
 // Pivot transfer: when you come back down onto the floor right at a floor/slope pivot (within PIVOT_ZONE of it), the speed the floor would absorb is turned
 // into sideways speed along the surface instead (PIVOT_TRANSFER = share of it; a rotation, so your speed is kept) and sends you out the other side.
 const PIVOT_ZONE = 2 * PL, PIVOT_MIN_HIT = 60, PIVOT_TRANSFER = 0.85;
-const LIFT_V = 280, WEIGHT_M = 1.4, WEIGHT_KICK = 300, MIN_LEN = 16; // grapple-jump lift, weight multiplier (lift), min surface tether; WEIGHT_KICK = impulse (u/s) away from the pivot each time weight is pressed while grappling
+const LIFT_V = 280, WEIGHT_M = 1.4, WEIGHT_KICK = 350, MIN_LEN = 16; // grapple-jump lift, weight multiplier (lift), min surface tether; WEIGHT_KICK = impulse (u/s) away from the pivot each time weight is pressed while grappling
 // Grapple-jump ramp. Chain: each grapple jump within GJ_CHAIN_T s of the last extends a chain; the kick is LIFT_V x min(GJ_MAX, GJ_START * GJ_GROWTH^n), n = jumps already in
 // the chain, so spamming ramps it up exponentially. Ease: each kick is delivered over LIFT_RAMP s (smoothstep) instead of in one tick.
 const GJ_START = 0.4, GJ_GROWTH = 1.1, GJ_MAX = 1, GJ_CHAIN_T = 1.5, LIFT_RAMP = 0.005;
+const LIFT_SLACK = 0.15, LIFT_SLACK_W = 0.07; // extra tether length per unit of grapple-jump lift (normal / weighted)
 const GRAPPLE_BURST_T = 0.7; // length (s) of the purple ripple when the grapple meter is overcharged
 const GRAPPLE_MAX = 4, GRAPPLE_COOLDOWN = 6, GRAPPLE_REGEN = 1; // grapple meter: seconds of use before it is spent, the lockout (s) once it is, and refill speed (charge-seconds per second) while not gripping
 const GROUND_DELAY = 0.1, HOOK_DELAY = 0.1; // the hook lands ~3 frames after the press, on the ground too (measured)
@@ -59,7 +60,13 @@ const DECOY_CAST = 1, DECOY_COOLDOWN = 30, DECOY_BOUNCE_PLAYER = 0.5, DECOY_BOUN
 const ARROW_CHARGE_T = 1.2, ARROW_V_MIN = 300, ARROW_V_MAX = 1200, ARROW_G = G, ARROW_TURN = 2.2, ARROW_DBL_T = 0.25, ARROW_COOLDOWN = 2;
 const ARROW_R = 3, ARROW_BALL_K = 0.6, ARROW_KNOCK = 0.75, ARROW_KILLS = false, ARROW_LIFE = 10, ARROW_STICK_T = 5;
 const ARROW_LEN = 22, ARROW_HALF_W = 2.5, ARROW_SPENT_K = 0.15; // drawn length, half the drawn width (= collision thickness), share of speed a spent arrow keeps
-const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN } };
+// Bat: press the special key to swing it toward the arrow(s) held (none held = toward the death ball). The bat is only drawn, it is not a body: during the swing (BAT_T s) the
+// death ball and decoys inside a sector in front of the player (BAT_HIT_HALF rad either side of the bat's current angle, out to BAT_REACH) are hit once each. A hit launches the
+// object at BAT_V + BAT_KEEP x the speed it had (so a still ball still flies, a fast one flies faster), mostly along the swing (BAT_AIM_W: 1 = exactly the aimed direction,
+// 0 = straight away from the batter), plus BAT_CARRY x the batter's own velocity, capped at BAT_VMAX. Big hits raise the ball's speed cap briefly, like a hatchet hit.
+const BAT_T = 0.22, BAT_COOLDOWN = 1.5, BAT_ARC = 2.2, BAT_REACH = 58, BAT_HIT_HALF = 0.55; // swing time (s), cooldown (s), swept angle (rad), bat tip distance from the player's centre, half-width of the hit sector (rad)
+const BAT_V = 520, BAT_KEEP = 1, BAT_CARRY = 0.6, BAT_VMAX = 1300, BAT_AIM_W = 0.6, BAT_FX = 0.3; // flat speed added, share of the object's own speed kept, share of the batter's velocity added, hit speed cap, aim vs away blend, streak length (s)
+const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN } };
 // Crash shot: a player who touches the death ball dies, but first collides with it like two pool balls: an elastic collision along the line between their centers,
 // momentum conserved with the player's mass PLAYER_M against the ball's BALL_M. CRASH_E is the restitution (1 = perfectly elastic, no energy lost).
 const PLAYER_M = 1, CRASH_E = 1;

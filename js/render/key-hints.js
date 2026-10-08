@@ -57,6 +57,10 @@ function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebel
         cx.moveTo(0, -7); cx.lineTo(7, -7); cx.lineTo(7, 0);
         cx.moveTo(-7, 1); cx.lineTo(-7, 7); cx.lineTo(-1, 7);
         cx.stroke();
+    } else if (kind === 'bat') { // a bat: knob bottom-left, barrel top-right
+        cx.lineWidth = 2.2; cx.moveTo(-8, 8); cx.lineTo(-2.5, 2.5); cx.stroke();
+        cx.beginPath(); cx.lineWidth = 6; cx.moveTo(-1, 1); cx.lineTo(7, -7); cx.stroke();
+        cx.beginPath(); cx.arc(-8.5, 8.5, 1.7, 0, 7); cx.fill();
     } else if (kind === 'locked') { // padlock
         cx.fillRect(-6, -1, 12, 9);
         cx.beginPath(); cx.arc(0, -2, 4.5, Math.PI, 0); cx.stroke();

@@ -60,29 +60,55 @@ function drawCasts() { // abilities being cast: ghost pegs / decoys, marionette 
             cx.setLineDash([]);
             cx.globalAlpha = 1;
             drawTimer(p.cast.x, p.cast.y, BALL_R + 5, prog, col);
-        } else if (p.cast.type === 'bat') { // the bat: purely cosmetic. Held back opposite the aim while charging, then over the top and down through the aim with a motion blur, and a follow-through
-            const c = p.cast, f = c.charging ? 0 : prog, s = Math.cos(c.ang) >= 0 ? 1 : -1, r0 = p.r + 3, r1 = r0 + (BAT_REACH - r0) * 0.4, rm = (r1 + BAT_REACH) / 2;
-            const fade = f > 0.8 ? (1 - f) / 0.2 : 1;
-            const bat = (th, a) => { // grip in the team colour, wooden barrel
-                const ux = Math.cos(th), uy = Math.sin(th);
-                cx.globalAlpha = a;
-                cx.strokeStyle = col; cx.lineWidth = 3;
-                cx.beginPath(); line(p.x + ux * r0, p.y + uy * r0, p.x + ux * r1, p.y + uy * r1); cx.stroke();
-                cx.strokeStyle = '#d9a066'; cx.lineWidth = 7;
-                cx.beginPath(); line(p.x + ux * r1, p.y + uy * r1, p.x + ux * BAT_REACH, p.y + uy * BAT_REACH); cx.stroke();
-            };
+        } else if (p.cast.type === 'bat') { // the bat: purely cosmetic. Held back opposite the aim while charging, then over the top and down through the aim, leaving streaks like the player trails
+            const c = p.cast, f = c.charging ? 0 : prog, fade = f > 0.8 ? (1 - f) / 0.2 : 1, r0 = p.r + 3, len = BAT_REACH - r0;
             if (c.charging)
                 drawTimer(p.x, p.y, p.r + 6, c.charge, c.charge >= 1 ? '#ffffff' : col);
             cx.save();
-            cx.lineCap = 'round';
-            if (f > 0) { // motion blur: a smear over the arc just swept, strongest mid-swing, and fading ghosts of the bat behind it
-                const speed = Math.sin(Math.PI * f), th0 = batAngleAt(c, f - 0.22), th1 = batAngleAt(c, f);
-                cx.globalAlpha = 0.3 * speed * fade; cx.strokeStyle = col; cx.lineWidth = BAT_REACH - r1;
-                cx.beginPath(); cx.arc(p.x, p.y, rm, th0, th1, s < 0); cx.stroke();
-                for (let n = 5; n >= 1; n--)
-                    bat(batAngleAt(c, f - n * 0.035), 0.4 * (1 - n / 6) * (0.4 + 0.6 * speed) * fade);
+            if (f > 0) { // streaks: the bat's recent path, drawn the way trail.js draws a player's (glow under a core line, thinner lanes beside it, all tapering and fading toward the tail)
+                const tint = trailTint(p), speed = Math.sin(Math.PI * f), k = clamp01((0.3 + 0.7 * speed) * (0.75 + 0.25 * c.pow)); // brightest mid-swing, a bit more when charged
+                const N = 16, span = 0.55, ths = [];
+                for (let n = 0; n <= N; n++) { // angles of the bat from now back into the swing
+                    const fi = f - span * n / N;
+                    if (fi < 0)
+                        break;
+                    ths.push(batAngleAt(c, fi));
+                }
+                const lanes = [[0.78, 1], [1, 0], [0.62, 0], [0.9, 0], [0.5, 0], [0.7, 0], [0.38, 0]].slice(0, c.pow > 0.66 ? 7 : c.pow > 0.33 ? 5 : 3); // [share of the reach, is the core lane]
+                cx.globalCompositeOperation = 'lighter';
+                cx.lineCap = 'round';
+                for (const [rf, core] of lanes) {
+                    const R = r0 + len * (rf === 1 ? 1 : rf);
+                    for (let n = 0; n < ths.length - 1; n++) {
+                        const age = n / (ths.length - 1), a = 1 - age, t = Math.pow(a, 1.3) * k * fade;
+                        const x1 = p.x + Math.cos(ths[n]) * R, y1 = p.y + Math.sin(ths[n]) * R, x2 = p.x + Math.cos(ths[n + 1]) * R, y2 = p.y + Math.sin(ths[n + 1]) * R;
+                        if (core) { // soft wide glow under the main streak
+                            cx.strokeStyle = `rgba(${tint.glow},${0.3 * t})`;
+                            cx.lineWidth = (10 + 14 * k) * (1 - age * 0.8);
+                            cx.beginPath(); line(x1, y1, x2, y2); cx.stroke();
+                        }
+                        const r = tint.from[0] + (tint.to[0] - tint.from[0]) * k, g = tint.from[1] + (tint.to[1] - tint.from[1]) * k, bl = tint.from[2] + (tint.to[2] - tint.from[2]) * k; // team colour -> white-hot
+                        cx.strokeStyle = `rgba(${r | 0},${g | 0},${bl | 0},${(core ? 0.9 : 0.6) * t})`;
+                        cx.lineWidth = (core ? 2.5 + 6 * k : 1.2 + 1.6 * k) * (1 - age * 0.85);
+                        cx.beginPath(); line(x1, y1, x2, y2); cx.stroke();
+                    }
+                }
+                cx.globalCompositeOperation = 'source-over';
             }
-            bat(batAngleAt(c, f), fade);
+            // The bat itself, from the player's edge out to BAT_REACH: a knob, a thin grip wrapped in the team colour, then a barrel that thickens toward a rounded tip.
+            const th = batAngleAt(c, f), ux = Math.cos(th), uy = Math.sin(th), nx = -uy, ny = ux, at = t => r0 + len * t;
+            const hw = t => t < 0.34 ? 1.8 : 1.8 + 3.9 * Math.pow(Math.min(1, (t - 0.34) / 0.52), 0.8); // half-width along the bat
+            cx.globalAlpha = fade;
+            cx.fillStyle = '#d9a066'; cx.strokeStyle = '#7a4d22'; cx.lineWidth = 1.2; cx.lineJoin = 'round';
+            cx.beginPath();
+            for (let n = 0; n <= 12; n++) { const t = n / 12, w = hw(t); cx.lineTo(p.x + ux * at(t) + nx * w, p.y + uy * at(t) + ny * w); }
+            cx.arc(p.x + ux * at(1), p.y + uy * at(1), hw(1), th - Math.PI / 2, th + Math.PI / 2); // rounded tip
+            for (let n = 12; n >= 0; n--) { const t = n / 12, w = hw(t); cx.lineTo(p.x + ux * at(t) - nx * w, p.y + uy * at(t) - ny * w); }
+            cx.closePath(); cx.fill(); cx.stroke();
+            cx.strokeStyle = col; cx.lineWidth = 3.4; cx.lineCap = 'butt'; // grip tape
+            cx.beginPath(); line(p.x + ux * at(0.04), p.y + uy * at(0.04), p.x + ux * at(0.3), p.y + uy * at(0.3)); cx.stroke();
+            cx.fillStyle = col; // knob
+            cx.beginPath(); cx.arc(p.x + ux * (at(0) - 1), p.y + uy * (at(0) - 1), 3.4, 0, 7); cx.fill();
             cx.restore();
         } else if (p.cast.type === 'arrow') { // charge ring (white and pulsing at full) and the arrow held out along the aim
             const c = p.cast, full = c.charge >= 1, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 70);

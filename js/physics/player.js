@@ -21,9 +21,6 @@ function batStep(p, c, ball) {
                 targets.push(q);
     }
     const ax = Math.cos(c.ang), ay = Math.sin(c.ang); // the way the bat was aimed
-    // How far along the swing the bat is, for steering the shot: q = 0 with the bat at the start of its swing (behind the batter), rising to 1 as it reaches the aim (and staying 1 after).
-    const sgn = Math.cos(c.ang) >= 0 ? 1 : -1, o = sgn * (th - c.ang), q = o >= 0 ? 1 : 1 - Math.min(1, -o / (Math.PI + BAT_WIND * c.charge)); // o: signed angle from the aim, negative until the bat gets there
-    const aimW = BAT_AIM_W_EARLY + (BAT_AIM_W_LATE - BAT_AIM_W_EARLY) * Math.pow(q, BAT_Q_POW); // early = wide (away from the batter), late = along the aim
     for (let i = 0; i < targets.length; i++) {
         const b = targets[i], bit = 1 << i;
         if (c.hits & bit)
@@ -36,9 +33,11 @@ function batStep(p, c, ball) {
         const ang = Math.atan2(dy, dx);
         if (Math.abs(wrap(ang - th)) > BAT_HIT_HALF + slack)
             continue; // not where the bat is right now
+        if (Math.abs(wrap(ang - c.ang)) > BAT_CONE + slack)
+            continue; // not on the side being swung at (the bat passes over the top on its way round)
         c.hits |= bit;
         const isPlayer = b instanceof Player, ox = d > 1 ? dx / d : ax, oy = d > 1 ? dy / d : ay; // ox, oy: straight away from the batter
-        let ux = ax * aimW + ox * (1 - aimW), uy = ay * aimW + oy * (1 - aimW);
+        let ux = ax * BAT_AIM_W + ox * (1 - BAT_AIM_W), uy = ay * BAT_AIM_W + oy * (1 - BAT_AIM_W);
         const m = Math.hypot(ux, uy) || 1;
         ux /= m;
         uy /= m;

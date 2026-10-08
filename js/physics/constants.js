@@ -15,6 +15,7 @@ const DOWN_G = 2.2; // gravity multiplier while DOWN is held (drop / fast-fall)
 const RUN_ACC = 185; // ground acceleration (u/s^2): ~0 -> 270 u/s in ~1.5 s, roughly constant (no hard ramp)
 const BALL_G = 170; // ball gravity (u/s^2): ~140 px/s^2 in the demo
 const BALL_VMAX = 920; // ball speed cap (u/s): demo throws saturate at ~700-720 px/s
+const BALL_PULL = 0.1; // share of the tether's pull the player feels (1 = original, 0 = weightless ball)
 const HOOK_R = 3, BALL_M = 0.25, DAMP = 0.8; // platform rope damping
 // Ball tether: a leash, the same elastic rope as on platforms (progressive spring, firmer with weight) but much stiffer, so the stretch stays small and the
 // maximum length is enforced. BALL_RIGID = share of the outward speed the rope cancels outright; the spring takes the rest. Inside that length the rope is

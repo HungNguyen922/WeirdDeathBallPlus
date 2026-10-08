@@ -344,8 +344,8 @@ class Player {
                     const c = rx * ny - ry * nx, im = 1 + 1 / BALL_M + c * c / BALL_I;
                     if (closing < 0) {
                         const J = -closing * BALL_RIGID / im;
-                        this.vx += nx * J;
-                        this.vy += ny * J;
+                        this.vx += nx * J * BALL_PULL;
+                        this.vy += ny * J * BALL_PULL;
                         tb.vx -= nx * J / BALL_M;
                         tb.vy -= ny * J / BALL_M;
                         tb.w -= J * c / BALL_I;
@@ -353,8 +353,9 @@ class Player {
                 }
                 const x = d - this.len; // the rope can deform past its length, but pulls back with a force that grows the further it goes
                 const f = Math.max(0, (this.onBall ? KB : KS) * (heavy ? HEAVY_KS : 1) * x * (1 + x / STRETCH_X0) - (this.onBall ? DB : DAMP) * Math.min(0, closing)); // damp only while the rope is being stretched; the recoil is undamped so the pull-back keeps its energy
-                this.vx += nx * f * DT;
-                this.vy += ny * f * DT;
+                const pf = this.onBall ? BALL_PULL : 1; // platform ropes stay as they were
+                this.vx += nx * f * DT * pf;
+                this.vy += ny * f * DT * pf;
                 if (this.onBall) {
                     tb.vx -= nx * f * DT / BALL_M;
                     tb.vy -= ny * f * DT / BALL_M;

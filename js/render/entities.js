@@ -165,7 +165,7 @@ function drawPlayerTrails() { // speed lines behind living players (same effect 
             drawTrail(p);
 }
 function drawGrappleRing(p) {
-    const R = p.r + 12;
+    const R = p.r + 2;
     if (p.gCool > 0 || p.gCharge < GRAPPLE_MAX - 0.01) {
         const f = p.gCool > 0 ? 1 - p.gCool / GRAPPLE_COOLDOWN : p.gCharge / GRAPPLE_MAX;
         drawTimer(p.x, p.y, R, f, p.gCool > 0 ? '#d25b5b' : f < 0.25 ? '#f0a43c' : '#e8e8e4');

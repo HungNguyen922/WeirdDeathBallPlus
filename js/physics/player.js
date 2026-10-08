@@ -341,13 +341,13 @@ class Player {
                 if (this.onBall) {
                     // Rope = distance constraint on the ball: cancel only the speed that would stretch it (mass-weighted, so the
                     // light ball takes the correction). Tangential speed survives, so the ball keeps circling the player.
-                    const c = rx * ny - ry * nx, im = 1 + 1 / BALL_M + c * c / BALL_I;
+                    const c = rx * ny - ry * nx, im = 1 + 1 / BALL_TM + c * c / BALL_I;
                     if (closing < 0) {
                         const J = -closing * BALL_RIGID / im;
                         this.vx += nx * J * BALL_PULL;
                         this.vy += ny * J * BALL_PULL;
-                        tb.vx -= nx * J / BALL_M;
-                        tb.vy -= ny * J / BALL_M;
+                        tb.vx -= nx * J / BALL_TM;
+                        tb.vy -= ny * J / BALL_TM;
                         tb.w -= J * c / BALL_I;
                     }
                 }
@@ -357,8 +357,8 @@ class Player {
                 this.vx += nx * f * DT * pf;
                 this.vy += ny * f * DT * pf;
                 if (this.onBall) {
-                    tb.vx -= nx * f * DT / BALL_M;
-                    tb.vy -= ny * f * DT / BALL_M;
+                    tb.vx -= nx * f * DT / BALL_TM;
+                    tb.vy -= ny * f * DT / BALL_TM;
                     tb.w += (rx * (-ny * f) - ry * (-nx * f)) * DT / BALL_I; // torque from pulling on the edge
                 }
                 const lim = this.len * 3 + 200;

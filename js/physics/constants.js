@@ -23,8 +23,12 @@ const HOOK_R = 3, BALL_M = 0.25, DAMP = 0.8; // platform rope damping
 // slack and does nothing: the ball and the player can move toward each other freely.
 const KB = 150, DB = 0.6, BALL_RIGID = 0.6;
 const TAUT_K = 110, TAUT_DAMP = 12, TAUT_MIN_NY = 0.5, TAUT_CENTER = 6, TAUT_DRAG = 3;
+// Float vs dribble: a weighted kick on a floor pivot opens a DRIB_T s dribbling window that fades the float out (FLOAT_OFF_RATE, per s) so the rope can pull you in;
+// afterwards it fades back in slowly (FLOAT_ON_RATE). Below the neutral float point there is a bob zone BOB_DEPTH u deep (+ BOB_KICK_BONUS right after a kick) where
+// the float spring is only BOB_SOFT x as stiff, so a kick can sink you a little before the float catches you.
 const DRIB_T = 0.45, FLOAT_OFF_RATE = 25, FLOAT_ON_RATE = 3;
-const BOB_DEPTH = 6, BOB_KICK_BONUS = 6, BOB_SOFT = 0.25;
+const PRIME_T = 0.4; // how long (s) a weight press stays primed after release: grapple within this window and the kick fires on landing (held = always primed)
+const BOB_DEPTH = 4, BOB_KICK_BONUS = 6, BOB_SOFT = 0.25;
 const KS = 110; // surface-rope stiffness: firm, but stretches and recoils (elastic overshoot instead of a hard stop)
 // Pivot transfer: when you come back down onto the floor right at a floor/slope pivot (within PIVOT_ZONE of it), the speed the floor would absorb is turned
 // into sideways speed along the surface instead (PIVOT_TRANSFER = share of it; a rotation, so your speed is kept) and sends you out the other side.

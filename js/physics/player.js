@@ -22,6 +22,7 @@ class Player {
         this.ropeGround = false;
         this.prevX = false;
         this.kickReq = false;
+        this.primeT = 0; // seconds of 'primed' left after weight is released (weight held = primed)
         this.gjN = 0; this.gjT = 99;               // grapple-jump chain: jumps so far, seconds since the last one
         this.liftX = this.liftY = 0; this.liftT = 1e9; // the kick still being delivered (see LIFT_RAMP)
         this.tball = null; // the ball (the death ball or a decoy) we are tethered to while onBall
@@ -290,7 +291,14 @@ class Player {
         }
         if (k.dn)
             g = G * DOWN_G * (heavy ? 1.35 : 1); // DOWN: drop faster (also cancels the UP float), which keeps dribbles low
-        if (k.x && !this.prevX)
+        // Weight primes the kick: while it is held (and for PRIME_T s after it is released) any grapple that lands applies the kick at once,
+        // and the kick is re-armed whenever there is no rope, so a primed player can grapple, kick, let go and grapple again.
+        if (k.x)
+            this.primeT = PRIME_T;
+        else
+            this.primeT = Math.max(0, this.primeT - DT);
+        const primed = k.x || this.primeT > 0;
+        if ((k.x && !this.prevX) || (primed && !this.rope && !this.pending))
             this.kickReq = true; // remembered until the hook lands, so a delayed hook still gets its kick
         // Grapple meter: GRAPPLE_MAX seconds of use (rope out, or hook in flight). Spend it all and the grapple is locked out for GRAPPLE_COOLDOWN seconds,
         // then comes back full. Letting go at any point refills it over time instead.
@@ -300,8 +308,8 @@ class Player {
                 this.gCharge = GRAPPLE_MAX;
         }
         const z = k.z && this.gCool <= 0;
-        if (!z)
-            this.kickReq = false;
+        if (!z && !primed)
+            this.kickReq = false; // a primed kick survives the grapple being up
         if (z && !this.rope && !this.pending)
             this.attach(ball); // also latches on when you drift into reach while holding
         if (this.pending && z) {

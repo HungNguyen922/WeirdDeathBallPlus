@@ -19,6 +19,7 @@ const PAD_ANG = Math.PI / 4, PAD_LIFT = 6, PAD_D0 = 14; // hatchet: tilt from ho
 const PAD_D1 = OUT_D; // the hatchet runs all the way down to the threshold line: there is no separate guide ramp after it, so anything that lands in the tunnel is bounced out
 const PAD_LEN = (PAD_D1 - PAD_D0) / Math.cos(PAD_ANG); // plate length (follows from the two distances above)
 const PAD_E = 5, PAD_KICK = 500, PAD_MAX = 1800, PAD_BOOST_T = 2; // bounce gain, minimum / maximum launch speed; the ball may exceed its normal speed cap right after a hatchet hit, easing back over PAD_BOOST_T seconds // bounce gain (>1 = adds energy), minimum launch speed, cap, and the softest hit that still triggers it (u/s)
+const PAD_TETHER_K = 0.1, PAD_TETHER_SLACK = 12; // share of the ball's hatchet velocity change that tugs a tethered player, and how slack (u) the rope may have and still count as taut
 const PIT = 140; // depth of the pit under the arena (the ball is removed if it falls well below it). The 45-degree hatchet drops ~146 u over the tunnel, so the pit has to be deep enough to show it down to the threshold line; canvas height = HUD + H + PIT
 const FK = OUT_DROP / OUT_D; // gentle base slope of the tunnel floor
 // Tunnel floor d units outside the goal: a short gentle lip, then the hatchet's 45-degree section all the way to the threshold. It only ever descends outward,

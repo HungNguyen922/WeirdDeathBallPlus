@@ -16,7 +16,7 @@ const RUN_ACC = 185; // ground acceleration (u/s^2): ~0 -> 270 u/s in ~1.5 s, ro
 const BALL_G = 170; // ball gravity (u/s^2): ~140 px/s^2 in the demo
 const BALL_VMAX = 920; // ball speed cap (u/s): demo throws saturate at ~700-720 px/s
 const BALL_PULL = 0.1; // share of the tether's pull the player feels (1 = original, 0 = weightless ball)
-const BALL_TM = 1;  // ball mass as the tether sees it (higher = rope moves the ball less)
+const BALL_TM = 0.7;  // ball mass as the tether sees it (higher = rope moves the ball less)
 const HOOK_R = 3, BALL_M = 0.25, DAMP = 0.8; // platform rope damping
 // Ball tether: a leash, the same elastic rope as on platforms (progressive spring, firmer with weight) but much stiffer, so the stretch stays small and the
 // maximum length is enforced. BALL_RIGID = share of the outward speed the rope cancels outright; the spring takes the rest. Inside that length the rope is
@@ -29,7 +29,7 @@ const PIVOT_ZONE = 2 * PL, PIVOT_MIN_HIT = 60, PIVOT_TRANSFER = 0.85;
 const LIFT_V = 280, WEIGHT_M = 1.4, WEIGHT_KICK = 120, MIN_LEN = 16; // grapple-jump lift, weight multiplier (lift), min surface tether; WEIGHT_KICK = impulse (u/s) away from the pivot each time weight is pressed while grappling
 // Grapple-jump ramp. Chain: each grapple jump within GJ_CHAIN_T s of the last extends a chain; the kick is LIFT_V x min(GJ_MAX, GJ_START * GJ_GROWTH^n), n = jumps already in
 // the chain, so spamming ramps it up exponentially. Ease: each kick is delivered over LIFT_RAMP s (smoothstep) instead of in one tick.
-const GJ_START = 0.75, GJ_GROWTH = 0.75, GJ_MAX = 1, GJ_CHAIN_T = 1.5, LIFT_RAMP = 0.005;
+const GJ_START = 0.4, GJ_GROWTH = 1.1, GJ_MAX = 1, GJ_CHAIN_T = 1.5, LIFT_RAMP = 0.005;
 const GRAPPLE_BURST_T = 0.7; // length (s) of the purple ripple when the grapple meter is overcharged
 const GRAPPLE_MAX = 4, GRAPPLE_COOLDOWN = 6, GRAPPLE_REGEN = 1; // grapple meter: seconds of use before it is spent, the lockout (s) once it is, and refill speed (charge-seconds per second) while not gripping
 const GROUND_DELAY = 0.1, HOOK_DELAY = 0.1; // the hook lands ~3 frames after the press, on the ground too (measured)

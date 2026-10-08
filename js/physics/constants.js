@@ -60,12 +60,17 @@ const DECOY_CAST = 1, DECOY_COOLDOWN = 30, DECOY_BOUNCE_PLAYER = 0.5, DECOY_BOUN
 const ARROW_CHARGE_T = 1.2, ARROW_V_MIN = 300, ARROW_V_MAX = 1200, ARROW_G = G, ARROW_TURN = 2.2, ARROW_DBL_T = 0.25, ARROW_COOLDOWN = 2;
 const ARROW_R = 3, ARROW_BALL_K = 0.6, ARROW_KNOCK = 0.75, ARROW_KILLS = false, ARROW_LIFE = 10, ARROW_STICK_T = 5;
 const ARROW_LEN = 22, ARROW_HALF_W = 2.5, ARROW_SPENT_K = 0.15; // drawn length, half the drawn width (= collision thickness), share of speed a spent arrow keeps
-// Bat: press the special key to swing it toward the arrow(s) held (none held = toward the death ball). The bat is only drawn, it is not a body: during the swing (BAT_T s) the
-// death ball and decoys inside a sector in front of the player (BAT_HIT_HALF rad either side of the bat's current angle, out to BAT_REACH) are hit once each. A hit launches the
-// object at BAT_V + BAT_KEEP x the speed it had (so a still ball still flies, a fast one flies faster), mostly along the swing (BAT_AIM_W: 1 = exactly the aimed direction,
-// 0 = straight away from the batter), plus BAT_CARRY x the batter's own velocity, capped at BAT_VMAX. Big hits raise the ball's speed cap briefly, like a hatchet hit.
-const BAT_T = 0.22, BAT_COOLDOWN = 1.5, BAT_ARC = 2.2, BAT_REACH = 58, BAT_HIT_HALF = 0.55; // swing time (s), cooldown (s), swept angle (rad), bat tip distance from the player's centre, half-width of the hit sector (rad)
-const BAT_V = 520, BAT_KEEP = 1, BAT_CARRY = 0.6, BAT_VMAX = 1300, BAT_AIM_W = 0.6, BAT_FX = 0.3; // flat speed added, share of the object's own speed kept, share of the batter's velocity added, hit speed cap, aim vs away blend, streak length (s)
+// Bat: hold the special key to charge (BAT_CHARGE_T s to full; a tap is a weak swing), release to swing it toward the arrow(s) (read live while charging, the last one held counts;
+// none ever held = toward the death ball). The bat is only drawn, it is not a body: it starts behind you (opposite the aim), swings over the top and down through the aim, and
+// follows through BAT_FOLLOW rad past it (BAT_T s in all). While it sweeps, the death ball, decoys and other players (BAT_HITS_TEAMMATES: teammates too) inside a sector at the bat's
+// current angle (BAT_HIT_HALF rad either side, out to BAT_REACH) AND within BAT_CONE rad of the aim are hit once each.
+// Ball / decoy hit: speed = (BAT_V + BAT_KEEP x the speed it had) x (1 + BAT_CHARGE_BONUS x charge), capped at BAT_VMAX (+ BAT_VMAX_CHARGE x charge), mostly along the aim
+// (BAT_AIM_W: 1 = exactly the aimed direction, 0 = straight away from the batter), plus BAT_CARRY x the batter's velocity. Big hits raise the ball's speed cap like a hatchet hit.
+// Player hit: the same with BAT_PLAYER_V / BAT_PLAYER_KEEP / BAT_PLAYER_VMAX (players are heavier than the ball, so they get their own numbers).
+const BAT_T = 0.2, BAT_COOLDOWN = 1.5, BAT_REACH = 90, BAT_HIT_HALF = 0.55, BAT_CONE = 1.0; // swing time (s), cooldown (s), bat tip distance from the player's centre, half-width of the hit sector (rad), half-angle of the cone round the aim where hits count (rad)
+const BAT_WIND = 0.35, BAT_FOLLOW = 0.6, BAT_CHARGE_T = 0.6, BAT_CHARGE_BONUS = 0.5; // extra pull-back at full charge (rad), follow-through past the aim (rad), time to full charge (s), power added at full charge (0.5 = +50%)
+const BAT_V = 700, BAT_KEEP = 1.15, BAT_CARRY = 0.6, BAT_VMAX = 1500, BAT_VMAX_CHARGE = 300, BAT_AIM_W = 0.6, BAT_FX = 0.3; // ball: flat speed added, share of its own speed kept, share of the batter's velocity added, speed cap (+ extra at full charge), aim vs away blend, streak length (s)
+const BAT_PLAYER_V = 550, BAT_PLAYER_KEEP = 0.5, BAT_PLAYER_VMAX = 1100, BAT_HITS_TEAMMATES = true;
 const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN } };
 // Crash shot: a player who touches the death ball dies, but first collides with it like two pool balls: an elastic collision along the line between their centers,
 // momentum conserved with the player's mass PLAYER_M against the ball's BALL_M. CRASH_E is the restitution (1 = perfectly elastic, no energy lost).

@@ -1,16 +1,26 @@
 // PHYSICS - Player: movement, grapple rope, and special abilities (dash / plinko / marionette / decoy).
 // step(ball) advances one fixed timestep. Reads this.keys; never draws.
 const noKeys = () => ({ l: false, r: false, up: false, z: false, x: false, sp: false, dn: false }); // sp = special ability, dn = down, z = grapple, x = weight
-// Bat special. The bat's current angle: starts raised BAT_ARC/2 to one side of the aim and sweeps through it (smoothstep), overhead: clockwise when aiming right, anticlockwise when aiming left.
-// The renderer draws the bat at this angle; the physics only uses it to place the hit sector. Nothing about the drawn bat is solid.
-function batAngle(c) {
-    const f = Math.max(0, Math.min(1, 1 - c.t / c.t0)), e = f * f * (3 - 2 * f), s = Math.cos(c.ang) >= 0 ? 1 : -1;
-    return c.ang + s * BAT_ARC * (e - 0.5);
+// Bat special. Angle of the bat at swing progress f (0..1): it starts behind the player (opposite the aim, pulled back a little further the more it is charged), sweeps over the top
+// and down through the aim, and follows through BAT_FOLLOW past it, easing in and out (smoothstep). Clockwise when aiming right, anticlockwise when aiming left. The renderer draws
+// the bat at this angle (and earlier ones for the motion blur); the physics only uses it to place the hit sector. Nothing about the drawn bat is solid.
+function batAngleAt(c, f) {
+    f = Math.max(0, Math.min(1, f));
+    const e = f * f * (3 - 2 * f), s = Math.cos(c.ang) >= 0 ? 1 : -1, back = Math.PI + BAT_WIND * c.charge;
+    return c.ang - s * back + s * (back + BAT_FOLLOW) * e;
 }
-// One physics step of a bat swing, called from Player.step while the cast runs. p = the batter, c = the cast, ball = the death ball. c.hits is a bit mask (bit 0 = the death ball,
-// bit n = decoy n-1) of what this swing has already hit: a number, not an array, so the AI's shallow cast copies cannot share it.
+const batAngle = c => batAngleAt(c, c.charging ? 0 : 1 - c.t / c.t0);
+// One physics step of a bat swing, called from Player.step while the cast runs. p = the batter, c = the cast, ball = the death ball. c.hits is a bit mask (one bit per target, in
+// the order of the list below) of what this swing has already hit: a number, not an array, so the AI's shallow cast copies cannot share it.
 function batStep(p, c, ball) {
-    const th = batAngle(c), targets = p.sim ? [ball] : [ball, ...decoys];
+    const th = batAngle(c), targets = [ball];
+    if (!p.sim) { // the AI's planning copies only know the death ball
+        targets.push(...decoys);
+        for (const q of players)
+            if (q !== p && q.alive && (BAT_HITS_TEAMMATES || q.team !== p.team))
+                targets.push(q);
+    }
+    const ax = Math.cos(c.ang), ay = Math.sin(c.ang); // the way the bat was aimed
     for (let i = 0; i < targets.length; i++) {
         const b = targets[i], bit = 1 << i;
         if (c.hits & bit)
@@ -18,23 +28,28 @@ function batStep(p, c, ball) {
         const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy);
         if (d > BAT_REACH + b.r)
             continue; // out of reach
-        let da = Math.atan2(dy, dx) - th;
-        da = Math.atan2(Math.sin(da), Math.cos(da)); // wrapped to -PI..PI
-        if (Math.abs(da) > BAT_HIT_HALF + Math.asin(Math.min(1, b.r / Math.max(d, 1e-6))))
+        const slack = Math.asin(Math.min(1, b.r / Math.max(d, 1e-6))); // a big target is hit a little earlier / later
+        const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+        const ang = Math.atan2(dy, dx);
+        if (Math.abs(wrap(ang - th)) > BAT_HIT_HALF + slack)
             continue; // not where the bat is right now
+        if (Math.abs(wrap(ang - c.ang)) > BAT_CONE + slack)
+            continue; // not on the side being swung at (the bat passes over the top on its way round)
         c.hits |= bit;
-        const ax = Math.cos(c.ang), ay = Math.sin(c.ang); // the way the bat was aimed
-        const ox = d > 1 ? dx / d : ax, oy = d > 1 ? dy / d : ay; // straight away from the batter
+        const isPlayer = b instanceof Player, ox = d > 1 ? dx / d : ax, oy = d > 1 ? dy / d : ay; // ox, oy: straight away from the batter
         let ux = ax * BAT_AIM_W + ox * (1 - BAT_AIM_W), uy = ay * BAT_AIM_W + oy * (1 - BAT_AIM_W);
         const m = Math.hypot(ux, uy) || 1;
         ux /= m;
         uy /= m;
-        const out = Math.min(BAT_VMAX, BAT_V + BAT_KEEP * Math.hypot(b.vx, b.vy)); // what it had, plus some; a still ball still gets BAT_V
+        const pow = 1 + BAT_CHARGE_BONUS * c.pow, sp = Math.hypot(b.vx, b.vy); // what it had, plus some; a still target still goes
+        const out = isPlayer ? Math.min(BAT_PLAYER_VMAX * pow, (BAT_PLAYER_V + BAT_PLAYER_KEEP * sp) * pow) : Math.min(BAT_VMAX + BAT_VMAX_CHARGE * c.pow, (BAT_V + BAT_KEEP * sp) * pow);
         b.vx = ux * out + p.vx * BAT_CARRY;
         b.vy = uy * out + p.vy * BAT_CARRY;
-        const s = Math.hypot(b.vx, b.vy);
-        if (s > BALL_VMAX) // big hits raise the ball's speed cap briefly, like a hatchet hit
-            b.boost = Math.max(b.boost, Math.min(1, (s - BALL_VMAX) / (PAD_MAX - BALL_VMAX)));
+        if (b.boost !== undefined) { // balls: big hits raise the speed cap briefly, like a hatchet hit
+            const s = Math.hypot(b.vx, b.vy);
+            if (s > BALL_VMAX)
+                b.boost = Math.max(b.boost, Math.min(1, (s - BALL_VMAX) / (PAD_MAX - BALL_VMAX)));
+        }
         if (b === ball)
             b.pull = { t: BAT_FX, ux, uy, col: p.color }; // streak (only the death ball's timer is stepped in rules.js, so decoys get none)
     }
@@ -234,8 +249,8 @@ class Player {
                 this.cast = { type: 'marionette', aim: true, t: 1, t0: 1, hx, hy, grace: hx || hy ? MARIONETTE_GRACE : 0 };
             else if (this.special === 'decoy' && this.cd.decoy <= 0)
                 this.cast = { type: 'decoy', t: DECOY_CAST, t0: DECOY_CAST, hx, hy, x: this.x, y: this.y }; // remembers the spot (and the arrows) at the press, like plinko
-            else if (this.special === 'bat' && this.cd.bat <= 0) // swings toward the arrow(s) held, or at the death ball if none
-                this.cast = { type: 'bat', t: BAT_T, t0: BAT_T, ang: hx || hy ? Math.atan2(hy, hx) : Math.atan2(ball.y - this.y, ball.x - this.x), hits: 0 };
+            else if (this.special === 'bat' && this.cd.bat <= 0) // charges while the key is held (aim read live), swings on release
+                this.cast = { type: 'bat', t: BAT_T, t0: BAT_T, charging: true, charge: 0, pow: 0, hx, hy, ang: hx || hy ? Math.atan2(hy, hx) : Math.atan2(ball.y - this.y, ball.x - this.x), hits: 0 };
             else if (this.special === 'arrow' && this.cd.arrow <= 0)
                 this.cast = { type: 'arrow', t: 1, t0: 1, charge: 0, ang: this.arrowAng, noTilt: false, tap: { l: 0, r: 0, u: 0, d: 0 }, prev: { l: k.l, r: k.r, u: k.up, d: k.dn } };
 
@@ -262,8 +277,22 @@ class Player {
                         this.cast = null; // released with none: cancelled, nothing spent
                 }
             } else if (c.type === 'bat') {
-                batStep(this, c, ball);
-                c.t -= DT;
+                if (c.charging) { // holding the key: charge up and follow the arrows; the timer does not run yet
+                    const ax = (k.r ? 1 : 0) - (k.l ? 1 : 0), ay = (k.dn ? 1 : 0) - (k.up ? 1 : 0);
+                    if (ax || ay) {
+                        c.hx = ax;
+                        c.hy = ay;
+                    }
+                    c.ang = c.hx || c.hy ? Math.atan2(c.hy, c.hx) : Math.atan2(ball.y - this.y, ball.x - this.x); // last direction held, or the death ball if none ever was
+                    c.charge = Math.min(1, c.charge + DT / BAT_CHARGE_T);
+                    if (!k.sp) { // released: swing
+                        c.charging = false;
+                        c.pow = c.charge;
+                    }
+                } else {
+                    batStep(this, c, ball);
+                    c.t -= DT;
+                }
             } else
                 c.t -= DT;
             if (this.cast && c.t <= 0) {

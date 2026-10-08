@@ -347,8 +347,9 @@ class Player {
             if (this.ropeGround && !this.onBall && Math.abs(this.x - a.x) > 12)
                 this.pivotSide = Math.sign(this.x - a.x); // which side of the pivot you were last on
             if (this.kickReq && !this.onBall) {
-                this.vx -= nx * WEIGHT_KICK;
-                this.vy -= ny * WEIGHT_KICK;
+                const kick = TAUT_K > 0 && this.taut && this.ropeGround && !this.ground && ny > TAUT_MIN_NY ? TAUT_KICK : WEIGHT_KICK; // airborne on a taut floor rope: the bigger float kick
+                this.vx -= nx * kick;
+                this.vy -= ny * kick;
                 this.kickReq = false;
             } // weight press: kick away from the pivot
             if (d > this.len) {
@@ -391,7 +392,7 @@ class Player {
                     this.taut = true; // the grapple-jump slack is used up
                 if (this.taut && s > 0) {
                     if (d < this.len) { // closer than the rope's length: push back out like a stiff spring
-                        const x = this.len - d, f = Math.max(0, TAUT_K * (heavy ? HEAVY_KS : 1) * x * (1 + x / STRETCH_X0) + TAUT_DAMP * Math.max(0, closing)) * s;
+                        const x = this.len - d, f = Math.max(0, TAUT_K * (heavy ? HEAVY_KS : 1) * x * (1 + x / STRETCH_X0) + TAUT_DAMP * closing) * s;
                         this.vx -= nx * f * DT;
                         this.vy -= ny * f * DT;
                     }

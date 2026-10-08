@@ -23,6 +23,7 @@ const HOOK_R = 3, BALL_M = 0.25, DAMP = 0.8; // platform rope damping
 // slack and does nothing: the ball and the player can move toward each other freely.
 const KB = 150, DB = 0.6, BALL_RIGID = 0.6;
 const TAUT_K = 110, TAUT_DAMP = 12, TAUT_MIN_NY = 0.5, TAUT_CENTER = 6, TAUT_DRAG = 3;
+const TAUT_KICK = 300; // weight-key kick (u/s) while floating on a taut floor rope (WEIGHT_KICK is still used for every other grapple)
 const KS = 110; // surface-rope stiffness: firm, but stretches and recoils (elastic overshoot instead of a hard stop)
 // Pivot transfer: when you come back down onto the floor right at a floor/slope pivot (within PIVOT_ZONE of it), the speed the floor would absorb is turned
 // into sideways speed along the surface instead (PIVOT_TRANSFER = share of it; a rotation, so your speed is kept) and sends you out the other side.

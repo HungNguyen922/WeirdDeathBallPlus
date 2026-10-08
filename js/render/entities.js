@@ -164,6 +164,28 @@ function drawPlayerTrails() { // speed lines behind living players (same effect 
         if (p.alive)
             drawTrail(p);
 }
+function drawGrappleRing(p) {
+    const R = p.r + 12;
+    if (p.gCool > 0 || p.gCharge < GRAPPLE_MAX - 0.01) {
+        const f = p.gCool > 0 ? 1 - p.gCool / GRAPPLE_COOLDOWN : p.gCharge / GRAPPLE_MAX;
+        drawTimer(p.x, p.y, R, f, p.gCool > 0 ? '#d25b5b' : f < 0.25 ? '#f0a43c' : '#e8e8e4');
+    }
+    if (p.gBurst > 0) {
+        const u = 1 - p.gBurst / GRAPPLE_BURST_T;
+        cx.shadowColor = '#9333ea'; cx.shadowBlur = 14;
+        cx.globalAlpha = (1 - u) * 0.9;
+        drawTimer(p.x, p.y, R, 1, '#c58bff'); // the ring flashes purple
+        for (let i = 0; i < 3; i++) { // three staggered ripples spreading outward
+            const v = (u - i * 0.2) / 0.6;
+            if (v <= 0 || v >= 1) continue;
+            cx.globalAlpha = (1 - v) * 0.85;
+            cx.strokeStyle = i === 0 ? '#e0c4ff' : '#b36bff';
+            cx.lineWidth = 1 + 4 * (1 - v);
+            cx.beginPath(); cx.arc(p.x, p.y, R + (1 - (1 - v) * (1 - v)) * 48, 0, 7); cx.stroke();
+        }
+        cx.shadowBlur = 0; cx.globalAlpha = 1;
+    }
+}
 function drawPlayers() { // the player discs
     for (const p of players) {
         cx.globalAlpha = p.alive ? 1 : 0.2;
@@ -175,12 +197,13 @@ function drawPlayers() { // the player discs
         cx.fill();
         cx.stroke();
         cx.globalAlpha = 1;
-        if (p.alive && (p.gCool > 0 || p.gCharge < GRAPPLE_MAX - 0.01)) { // grapple meter, only while it is in use / recovering / locked out
-            const w = 30, x = p.x - w / 2, y = p.y - p.r - 11, f = p.gCool > 0 ? 1 - p.gCool / GRAPPLE_COOLDOWN : p.gCharge / GRAPPLE_MAX;
-            cx.fillStyle = 'rgba(0,0,0,.55)';
-            cx.fillRect(x - 1, y - 1, w + 2, 6);
-            cx.fillStyle = p.gCool > 0 ? '#d25b5b' : f < 0.25 ? '#f0a43c' : '#e8e8e4'; // red while locked out, amber when nearly spent
-            cx.fillRect(x, y, w * f, 4);
+        if (p.alive)
+            drawGrappleRing(p);
+        if (p.alive && p.arrowQueued && !p.cast) { // queued arrow: pulsing dashed ring
+            cx.globalAlpha = 0.45 + 0.4 * (0.5 + 0.5 * Math.sin(performance.now() / 90));
+            cx.strokeStyle = p.color; cx.lineWidth = 2; cx.setLineDash([4, 4]);
+            cx.beginPath(); cx.arc(p.x, p.y, p.r + 6, 0, 7); cx.stroke();
+            cx.setLineDash([]); cx.globalAlpha = 1;
         }
     }
 }

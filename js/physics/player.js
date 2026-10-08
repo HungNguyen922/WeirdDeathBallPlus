@@ -28,6 +28,7 @@ class Player {
         this.sim = false; // true on the AI planner's throwaway copies: they must not touch the real game (spawn decoys / pegs)
         this.keys = noKeys();
         this.special = 'dash'; // chosen special ability (see SPECIALS)
+        this.arrowAng = -Math.PI / 2; // last arrow aim, kept across rounds (so not in reset())
         this.reset();
     }
     reset() {
@@ -52,6 +53,8 @@ class Player {
         this.dashT = 0;
         this.dashDir = [0, 0];
         this.prevSp = false;
+        this.arrowQueued = false;
+        this.gBurst = 0;
     }
     get grounded() { return this.ground; }
     // Everything grappleable within RANGE: surfaces (ground = floor/slopes) and the ball.
@@ -169,8 +172,14 @@ class Player {
         for (const id in this.cd)
             this.cd[id] = Math.max(0, this.cd[id] - DT);
         this.dashT = Math.max(0, this.dashT - DT);
+        this.gBurst = Math.max(0, this.gBurst - DT);
         // Start a cast. The arrow(s) held at the press are remembered (dash direction / plinko displacement); plinko also remembers the spot.
-        if (!this.cast && k.sp && !this.prevSp) {
+        if (this.special === 'arrow' && k.sp && this.cd.arrow > 0)
+            this.arrowQueued = true; // held during cooldown: queue the next cast
+        if (!k.sp)
+            this.arrowQueued = false;
+        if (!this.cast && ((k.sp && !this.prevSp) || (this.arrowQueued && this.special === 'arrow' && this.cd.arrow <= 0))) {
+            this.arrowQueued = false;
             const hx = (k.r ? 1 : 0) - (k.l ? 1 : 0), hy = (k.dn ? 1 : 0) - (k.up ? 1 : 0);
             if (this.special === 'dash' && this.dashReady && this.cd.dash <= 0 && (hx || hy) && !(this.ground && !hx && hy > 0)) // pushing straight down into the floor does not use it up
                 this.cast = { type: 'dash', t: DASH_CAST, t0: DASH_CAST, hx, hy };
@@ -181,13 +190,14 @@ class Player {
             else if (this.special === 'decoy' && this.cd.decoy <= 0)
                 this.cast = { type: 'decoy', t: DECOY_CAST, t0: DECOY_CAST, hx, hy, x: this.x, y: this.y }; // remembers the spot (and the arrows) at the press, like plinko
             else if (this.special === 'arrow' && this.cd.arrow <= 0)
-                this.cast = { type: 'arrow', t: 1, t0: 1, charge: 0, ang: -Math.PI / 2, noTilt: false, tap: { l: 0, r: 0, u: 0, d: 0 }, prev: { l: k.l, r: k.r, u: k.up, d: k.dn } };
+                this.cast = { type: 'arrow', t: 1, t0: 1, charge: 0, ang: this.arrowAng, noTilt: false, tap: { l: 0, r: 0, u: 0, d: 0 }, prev: { l: k.l, r: k.r, u: k.up, d: k.dn } };
 
         }
         if (this.cast) {
             const c = this.cast;
             if (c.type === 'arrow') {
                 arrowAimStep(c, k);
+                this.arrowAng = c.ang;
                 if (!k.sp)
                     c.t = 0; // released: fire (below)
             } else if (c.aim) { // marionette: follow the arrows while the key is held; letting go fires (or cancels if there is no direction)
@@ -301,6 +311,7 @@ class Player {
             if (this.gCharge <= 0) { // spent: the grip is torn away
                 this.gCharge = 0;
                 this.gCool = GRAPPLE_COOLDOWN;
+                this.gBurst = GRAPPLE_BURST_T;
                 this.kickReq = false;
                 this.rope = null;
                 this.pending = null;

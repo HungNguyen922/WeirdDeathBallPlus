@@ -26,6 +26,8 @@ class Player {
         this.liftX = this.liftY = 0; this.liftT = 1e9; // the kick still being delivered (see LIFT_RAMP)
         this.tball = null; // the ball (the death ball or a decoy) we are tethered to while onBall
         this.taut = false;
+        this.floatW = 1; // grapple-float weight 0..1: dribbling fades it out so the rope can pull you in, then it eases back
+        this.dribT = 0;  // seconds left of the 'dribbling' window opened by a weighted kick
         this.sim = false; // true on the AI planner's throwaway copies: they must not touch the real game (spawn decoys / pegs)
         this.keys = noKeys();
         this.special = 'dash'; // chosen special ability (see SPECIALS)
@@ -153,6 +155,7 @@ class Player {
     step(ball) {
         const k = this.keys, heavy = k.x;
         this.gjT += DT;
+        this.dribT = Math.max(0, this.dribT - DT);
         if (this.gjT > GJ_CHAIN_T)
             this.gjN = 0; // chain broken
         const ramp = Math.max(LIFT_RAMP, DT);
@@ -350,6 +353,8 @@ class Player {
                 this.vx -= nx * WEIGHT_KICK;
                 this.vy -= ny * WEIGHT_KICK;
                 this.kickReq = false;
+                if (this.ropeGround)
+                    this.dribT = DRIB_T; // weighted kick on a floor pivot = dribbling: the float steps aside
             }
             if (d > this.len) {
                 if (this.onBall) {
@@ -389,15 +394,22 @@ class Player {
                 const s = Math.max(0, Math.min(1, (ny - TAUT_MIN_NY) / 0.3)); // 1 with the pivot straight below, 0 once it is off to the side
                 if (!this.taut && d >= this.len)
                     this.taut = true; // the grapple-jump slack is used up
-                if (this.taut && s > 0) {
-                    if (d < this.len) { // closer than the rope's length: push back out like a stiff spring
-                        const x = this.len - d, f = Math.max(0, TAUT_K * (heavy ? HEAVY_KS : 1) * x * (1 + x / STRETCH_X0) + TAUT_DAMP * closing) * s;
+                // Float weight: dribbling overrides the float (fast fade out), then it settles back in slowly so there is no pop.
+                const wT = this.dribT > 0 ? 0 : 1;
+                this.floatW += (wT - this.floatW) * Math.min(1, (wT ? FLOAT_ON_RATE : FLOAT_OFF_RATE) * DT);
+                const fw = this.floatW * s;
+                if (this.taut && fw > 0.001) {
+                    if (d < this.len) { // closer than the rope's length: below the neutral float point
+                        const x = this.len - d;
+                        const bd = BOB_DEPTH + BOB_KICK_BONUS * (this.dribT / DRIB_T); // bob zone: a little sag is allowed, wider right after a kick
+                        const xe = x <= bd ? x * BOB_SOFT : bd * BOB_SOFT + (x - bd); // soft spring inside the bob zone, full strength past it
+                        const f = Math.max(0, TAUT_K * (heavy ? HEAVY_KS : 1) * xe * (1 + xe / STRETCH_X0) + TAUT_DAMP * closing) * fw;
                         this.vx -= nx * f * DT;
                         this.vy -= ny * f * DT;
                     }
                     if (!this.ground) { // airborne above the pivot: pull back over it and damp sideways speed, so the float is stable
-                        this.vx -= (this.x - a.x) * TAUT_CENTER * s * DT;
-                        this.vx *= 1 - TAUT_DRAG * s * DT;
+                        this.vx -= (this.x - a.x) * TAUT_CENTER * fw * DT;
+                        this.vx *= 1 - TAUT_DRAG * fw * DT;
                     }
                 }
             }

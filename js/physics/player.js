@@ -25,6 +25,7 @@ class Player {
         this.gjN = 0; this.gjT = 99;               // grapple-jump chain: jumps so far, seconds since the last one
         this.liftX = this.liftY = 0; this.liftT = 1e9; // the kick still being delivered (see LIFT_RAMP)
         this.tball = null; // the ball (the death ball or a decoy) we are tethered to while onBall
+        this.taut = false;
         this.sim = false; // true on the AI planner's throwaway copies: they must not touch the real game (spawn decoys / pegs)
         this.keys = noKeys();
         this.special = 'dash'; // chosen special ability (see SPECIALS)
@@ -115,6 +116,7 @@ class Player {
         this.ropeGround = ground;
         this.ropeBase = ground ? { x: p.x, y: p.y - sawY(p.x) } : null; // floor pivots ride the floor when it pops
         this.len = Math.max(d, MIN_LEN);
+        this.taut = false;
         if (ground && this.vy <= 0) {
             const chain = Math.min(GJ_MAX, GJ_START * Math.pow(GJ_GROWTH, this.gjN)); // exponential ramp over a spammed chain
             const lift = LIFT_V * chain * (this.keys.x ? WEIGHT_M : 1);
@@ -129,6 +131,7 @@ class Player {
             this.liftY = uy * lift;
             this.liftT = 0;
             this.len += lift * 0.15;
+            this.taut = false;
         }
     }
     // Something just appeared at (x, y) with radius rr: if we overlap it we are moved out along the arrow(s) held when the cast began (c.hx / c.hy); with none held: up if
@@ -379,6 +382,22 @@ class Player {
                     if (closing < 0) {
                         this.vx -= closing * nx;
                         this.vy -= closing * ny;
+                    }
+                }
+            }
+            if (TAUT_K > 0 && !this.onBall && this.ropeGround) { // taut floor tether: hang above the pivot instead of dropping onto it
+                const s = Math.max(0, Math.min(1, (ny - TAUT_MIN_NY) / 0.3)); // 1 with the pivot straight below, 0 once it is off to the side
+                if (!this.taut && d >= this.len)
+                    this.taut = true; // the grapple-jump slack is used up
+                if (this.taut && s > 0) {
+                    if (d < this.len) { // closer than the rope's length: push back out like a stiff spring
+                        const x = this.len - d, f = Math.max(0, TAUT_K * (heavy ? HEAVY_KS : 1) * x * (1 + x / STRETCH_X0) + TAUT_DAMP * Math.max(0, closing)) * s;
+                        this.vx -= nx * f * DT;
+                        this.vy -= ny * f * DT;
+                    }
+                    if (!this.ground) { // airborne above the pivot: pull back over it and damp sideways speed, so the float is stable
+                        this.vx -= (this.x - a.x) * TAUT_CENTER * s * DT;
+                        this.vx *= 1 - TAUT_DRAG * s * DT;
                     }
                 }
             }

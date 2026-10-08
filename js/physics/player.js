@@ -347,11 +347,10 @@ class Player {
             if (this.ropeGround && !this.onBall && Math.abs(this.x - a.x) > 12)
                 this.pivotSide = Math.sign(this.x - a.x); // which side of the pivot you were last on
             if (this.kickReq && !this.onBall) {
-                const kick = TAUT_K > 0 && this.taut && this.ropeGround && !this.ground && ny > TAUT_MIN_NY ? TAUT_KICK : WEIGHT_KICK; // airborne on a taut floor rope: the bigger float kick
-                this.vx -= nx * kick;
-                this.vy -= ny * kick;
+                this.vx -= nx * WEIGHT_KICK;
+                this.vy -= ny * WEIGHT_KICK;
                 this.kickReq = false;
-            } // weight press: kick away from the pivot
+            }
             if (d > this.len) {
                 if (this.onBall) {
                     // Rope = distance constraint on the ball: cancel only the speed that would stretch it (mass-weighted, so the

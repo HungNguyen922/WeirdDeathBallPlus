@@ -2,10 +2,7 @@
 const AI_NAMES = ['Blue', 'Red', 'Blue 2', 'Red 2'];
 function setAI(i, on) {
     ai[i].on = on;
-    ai[i].plan = null;
-    ai[i].t = 0;
-    ai[i].noGrab = 0;
-    ai[i].held = false;
+    aiReset(i);
     if (!on)
         Object.assign(allPlayers[i].keys, noKeys());
     const btn = document.getElementById('ai' + i);

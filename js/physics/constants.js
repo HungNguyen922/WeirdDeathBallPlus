@@ -24,12 +24,13 @@ const KS = 110; // surface-rope stiffness: firm, but stretches and recoils (elas
 // Pivot transfer: when you come back down onto the floor right at a floor/slope pivot (within PIVOT_ZONE of it), the speed the floor would absorb is turned
 // into sideways speed along the surface instead (PIVOT_TRANSFER = share of it; a rotation, so your speed is kept) and sends you out the other side.
 const PIVOT_ZONE = 2 * PL, PIVOT_MIN_HIT = 60, PIVOT_TRANSFER = 0.85;
-const LIFT_V = 280, WEIGHT_M = 2, WEIGHT_KICK = 120, MIN_LEN = 16; // grapple-jump lift, weight multiplier (lift), min surface tether; WEIGHT_KICK = impulse (u/s) away from the pivot each time weight is pressed while grappling
+const LIFT_V = 280, WEIGHT_M = 1.4, WEIGHT_KICK = 120, MIN_LEN = 16; // grapple-jump lift, weight multiplier (lift), min surface tether; WEIGHT_KICK = impulse (u/s) away from the pivot each time weight is pressed while grappling
 // Grapple-jump ramp. Chain: each grapple jump within GJ_CHAIN_T s of the last extends a chain; the kick is LIFT_V x min(GJ_MAX, GJ_START * GJ_GROWTH^n), n = jumps already in
 // the chain, so spamming ramps it up exponentially. Ease: each kick is delivered over LIFT_RAMP s (smoothstep) instead of in one tick.
-const GJ_START = 0.75, GJ_GROWTH = 0.75, GJ_MAX = 2, GJ_CHAIN_T = 1.5, LIFT_RAMP = 0.005;
+const GJ_START = 0.5, GJ_GROWTH = 0.75, GJ_MAX = 1, GJ_CHAIN_T = 1.5, LIFT_RAMP = 0.005;
+const GRAPPLE_MAX = 4, GRAPPLE_COOLDOWN = 6, GRAPPLE_REGEN = 1; // grapple meter: seconds of use before it is spent, the lockout (s) once it is, and refill speed (charge-seconds per second) while not gripping
 const GROUND_DELAY = 0.1, HOOK_DELAY = 0.1; // the hook lands ~3 frames after the press, on the ground too (measured)
-const HEAVY_KS = 1.0, STRETCH_X0 = 60, HOP_AIM = 0.5; // weight = a firmer rope; the rope stiffens as it stretches (x0 = stretch that doubles it); HOP_AIM = horizontal share of the grapple-jump kick // airborne surface grapples take ~3 video frames to land (measured), then kick away from the pivot
+const HEAVY_KS = 1.0, STRETCH_X0 = 100, HOP_AIM = 0.5; // weight = a firmer rope; the rope stiffens as it stretches (x0 = stretch that doubles it); HOP_AIM = horizontal share of the grapple-jump kick // airborne surface grapples take ~3 video frames to land (measured), then kick away from the pivot
 const PEG_R = 8, PEG_MAX = 2; // plinko peg: half a player's size (r 8 vs 16), bounce strength = the hatchet's (PAD_*), cooldown (s), pegs per player (placing a new one removes the oldest)
 // Ability timing: cast = seconds from pressing the key until the effect happens; cd = cooldown (s) that starts when the effect happens, on top of each
 // ability's own reset rule (dash: once per trip off the floor). PEG_LIFE = seconds a peg lasts before it fizzles out.
@@ -54,7 +55,7 @@ const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: 
 const PLAYER_M = 1, CRASH_E = 1;
 // Ground friction (per second, as a share of speed lost): GROUND_BRAKE slows a player on the floor who is not steering (not applied while tethered); BALL_ROLL_DRAG slows the ball rolling on the floor.
 // Original values were 5 and 0.4; lower = more slippery.
-const GROUND_BRAKE = 0.15, BALL_ROLL_DRAG = 0.15;
+const GROUND_BRAKE = 2, BALL_ROLL_DRAG = 0.15;
 const BALL_R = 14, BALL_I = 6 * BALL_M * BALL_R * BALL_R; // spin inertia: high, so spin takes a whippy throw
 
 // Floor slopes: a ramp up to each goal and a middle peak made of two overlapping triangles (a notch the ball starts in).

@@ -14,9 +14,7 @@ function newRound() {
     pegs.length = 0; 
     decoys.length = 0; 
     clearArrows();
-    ai.forEach(a => { 
-        a.plan = null; a.t = 0; 
-    }); 
+    ai.forEach((a, i) => aiReset(i)); // forget any look-ahead / plan from the last round
     players.forEach(p => p.reset()); 
     ball.reset(); 
     sawReset(); 

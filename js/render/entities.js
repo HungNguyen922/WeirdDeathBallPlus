@@ -95,7 +95,7 @@ function drawCasts() { // abilities being cast: ghost pegs / decoys, marionette 
 function anyArrowHeld(p) { return !!(p.keys.l || p.keys.r || p.keys.up || p.keys.dn); }
 function drawGrappleRange() { // range indicator when nothing is in reach
     for (const p of players) { // range indicator when nothing is in reach
-        if (p.alive && p.keys.z && !p.rope && !p.inReach(ball)) {
+        if (p.alive && p.keys.z && p.gCool <= 0 && !p.rope && !p.inReach(ball)) {
             cx.strokeStyle = p.keys.z ? 'rgba(255,255,255,.7)' : 'rgba(255,255,255,.22)';
             cx.lineWidth = 2;
             cx.setLineDash([8, 8]);
@@ -175,6 +175,13 @@ function drawPlayers() { // the player discs
         cx.fill();
         cx.stroke();
         cx.globalAlpha = 1;
+        if (p.alive && (p.gCool > 0 || p.gCharge < GRAPPLE_MAX - 0.01)) { // grapple meter, only while it is in use / recovering / locked out
+            const w = 30, x = p.x - w / 2, y = p.y - p.r - 11, f = p.gCool > 0 ? 1 - p.gCool / GRAPPLE_COOLDOWN : p.gCharge / GRAPPLE_MAX;
+            cx.fillStyle = 'rgba(0,0,0,.55)';
+            cx.fillRect(x - 1, y - 1, w + 2, 6);
+            cx.fillStyle = p.gCool > 0 ? '#d25b5b' : f < 0.25 ? '#f0a43c' : '#e8e8e4'; // red while locked out, amber when nearly spent
+            cx.fillRect(x, y, w * f, 4);
+        }
     }
 }
 function drawBall(b) { // the Death Ball sprite (decoys use it too)

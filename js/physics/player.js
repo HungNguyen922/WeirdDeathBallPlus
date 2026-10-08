@@ -37,6 +37,8 @@ class Player {
         this.alive = true;
         this.rope = null;
         this.pending = null;
+        this.gCharge = GRAPPLE_MAX; // grapple meter: seconds of grip left
+        this.gCool = 0;             // > 0: the meter was spent; no grappling at all until this runs out (then it is full again)
         this.onBall = false;
         this.ground = false;
         this.ropeBase = null;
@@ -274,11 +276,19 @@ class Player {
             g = G * DOWN_G * (heavy ? 1.35 : 1); // DOWN: drop faster (also cancels the UP float), which keeps dribbles low
         if (k.x && !this.prevX)
             this.kickReq = true; // remembered until the hook lands, so a delayed hook still gets its kick
-        if (!k.z)
+        // Grapple meter: GRAPPLE_MAX seconds of use (rope out, or hook in flight). Spend it all and the grapple is locked out for GRAPPLE_COOLDOWN seconds,
+        // then comes back full. Letting go at any point refills it over time instead.
+        if (this.gCool > 0) {
+            this.gCool = Math.max(0, this.gCool - DT);
+            if (this.gCool === 0)
+                this.gCharge = GRAPPLE_MAX;
+        }
+        const z = k.z && this.gCool <= 0;
+        if (!z)
             this.kickReq = false;
-        if (k.z && !this.rope && !this.pending)
+        if (z && !this.rope && !this.pending)
             this.attach(ball); // also latches on when you drift into reach while holding
-        if (this.pending && k.z) {
+        if (this.pending && z) {
             this.pending.t -= DT;
             if (this.pending.t <= 0) {
                 const h = this.pending;
@@ -286,7 +296,20 @@ class Player {
                 this.land(h.p, h.ground);
             }
         }
-        if (!k.z) {
+        if (this.rope || this.pending) {
+            this.gCharge -= DT;
+            if (this.gCharge <= 0) { // spent: the grip is torn away
+                this.gCharge = 0;
+                this.gCool = GRAPPLE_COOLDOWN;
+                this.kickReq = false;
+                this.rope = null;
+                this.pending = null;
+                this.onBall = false;
+                this.tball = null;
+            }
+        } else if (this.gCool <= 0)
+            this.gCharge = Math.min(GRAPPLE_MAX, this.gCharge + GRAPPLE_REGEN * DT);
+        if (!z) {
             this.rope = null;
             this.pending = null;
             this.onBall = false;

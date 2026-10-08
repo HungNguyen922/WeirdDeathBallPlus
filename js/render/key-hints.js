@@ -102,7 +102,7 @@ function drawKeyHints() {
             cx.globalAlpha = i === 2 && sp.id === 'dash' && !p.dashReady && p.cd.dash <= 0 ? 0.3 : 1; // the dash icon dims while its once-per-trip charge is used up
             iconGlyph(kind, kx, yy - 2, on ? '#0b0e12' : '#e8e8e4');
             cx.globalAlpha = 1;
-            const ab = i === 2 ? ABILITY[sp.id] : null, cf = ab && ab.cd ? p.cd[sp.id] / ab.cd : 0;
+            const ab = i === 2 ? ABILITY[sp.id] : null, cf = i === 0 ? (p.gCool > 0 ? p.gCool / GRAPPLE_COOLDOWN : 1 - p.gCharge / GRAPPLE_MAX) : ab && ab.cd ? p.cd[sp.id] / ab.cd : 0; // the grapple key tints as its meter is spent, and the whole lockout
             if (cf > 0) { // cooldown: a light gray tint over the icon whose top edge moves downward until the normal icon shows
                 cx.save();
                 cx.beginPath(); cx.roundRect(kx - 20, yy - 20, 40, 40, 7); cx.clip();

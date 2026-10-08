@@ -72,7 +72,7 @@ function update() {
     for (let i = 0; i < players.length; i++) // players are solid: everyone bumps everyone (teammates too)
         for (let j = i + 1; j < players.length; j++)
             if (players[i].alive && players[j].alive)
-                collide(players[i], players[j], 1, 1, 0.4);
+                collide(players[i], players[j], PLAYER_M, PLAYER_M, PLAYER_BOUNCE);
     stepArrows();
     const scorer = ball.step();
     events.onBodyStep(ball);

@@ -51,8 +51,14 @@ function padBounce(c) {
         if (vn >= 0)
             continue;
         const out = Math.min(PAD_MAX, Math.max(PAD_KICK, -vn * PAD_E)); // every contact bounces: no soft-hit case, so even a ball rolling across it launches
-        c.vx += (out - vn) * nx;
-        c.vy += (out - vn) * ny;
+        const dv = out - vn; // how much the bounce changes the ball's velocity along the pad's normal
+        c.vx += dv * nx;
+        c.vy += dv * ny;
+        for (const p of players) // the tether passes part of that change of direction on to a player leashed to this ball
+            if (p.alive && p.onBall && p.tball === c && p.rope && Math.hypot(p.rope.x - p.x, p.rope.y - p.y) >= p.len - PAD_TETHER_SLACK) {
+                p.vx += dv * nx * PAD_TETHER_K;
+                p.vy += dv * ny * PAD_TETHER_K;
+            }
         padFlash[i] = 1;
         c.boost = 1;
     }

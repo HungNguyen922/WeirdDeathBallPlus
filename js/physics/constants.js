@@ -16,7 +16,7 @@ const RUN_ACC = 185; // ground acceleration (u/s^2): ~0 -> 270 u/s in ~1.5 s, ro
 const BALL_G = 170; // ball gravity (u/s^2): ~140 px/s^2 in the demo
 const BALL_VMAX = 920; // ball speed cap (u/s): demo throws saturate at ~700-720 px/s
 const BALL_PULL = 0.1; // share of the tether's pull the player feels (1 = original, 0 = weightless ball)
-const BALL_TM = 0.6;  // ball mass as the tether sees it (higher = rope moves the ball less)
+const BALL_TM = 1;  // ball mass as the tether sees it (higher = rope moves the ball less)
 const HOOK_R = 3, BALL_M = 0.25, DAMP = 0.8; // platform rope damping
 // Ball tether: a leash, the same elastic rope as on platforms (progressive spring, firmer with weight) but much stiffer, so the stretch stays small and the
 // maximum length is enforced. BALL_RIGID = share of the outward speed the rope cancels outright; the spring takes the rest. Inside that length the rope is
@@ -29,11 +29,11 @@ const PIVOT_ZONE = 2 * PL, PIVOT_MIN_HIT = 60, PIVOT_TRANSFER = 0.85;
 const LIFT_V = 280, WEIGHT_M = 1.4, WEIGHT_KICK = 120, MIN_LEN = 16; // grapple-jump lift, weight multiplier (lift), min surface tether; WEIGHT_KICK = impulse (u/s) away from the pivot each time weight is pressed while grappling
 // Grapple-jump ramp. Chain: each grapple jump within GJ_CHAIN_T s of the last extends a chain; the kick is LIFT_V x min(GJ_MAX, GJ_START * GJ_GROWTH^n), n = jumps already in
 // the chain, so spamming ramps it up exponentially. Ease: each kick is delivered over LIFT_RAMP s (smoothstep) instead of in one tick.
-const GJ_START = 0.5, GJ_GROWTH = 0.75, GJ_MAX = 1, GJ_CHAIN_T = 1.5, LIFT_RAMP = 0.005;
+const GJ_START = 0.75, GJ_GROWTH = 0.75, GJ_MAX = 1, GJ_CHAIN_T = 1.5, LIFT_RAMP = 0.005;
 const GRAPPLE_BURST_T = 0.7; // length (s) of the purple ripple when the grapple meter is overcharged
 const GRAPPLE_MAX = 4, GRAPPLE_COOLDOWN = 6, GRAPPLE_REGEN = 1; // grapple meter: seconds of use before it is spent, the lockout (s) once it is, and refill speed (charge-seconds per second) while not gripping
 const GROUND_DELAY = 0.1, HOOK_DELAY = 0.1; // the hook lands ~3 frames after the press, on the ground too (measured)
-const HEAVY_KS = 1.0, STRETCH_X0 = 100, HOP_AIM = 0.5; // weight = a firmer rope; the rope stiffens as it stretches (x0 = stretch that doubles it); HOP_AIM = horizontal share of the grapple-jump kick // airborne surface grapples take ~3 video frames to land (measured), then kick away from the pivot
+const HEAVY_KS = 1.0, STRETCH_X0 = 120, HOP_AIM = 0.5; // weight = a firmer rope; the rope stiffens as it stretches (x0 = stretch that doubles it); HOP_AIM = horizontal share of the grapple-jump kick // airborne surface grapples take ~3 video frames to land (measured), then kick away from the pivot
 const PEG_R = 8, PEG_MAX = 2; // plinko peg: half a player's size (r 8 vs 16), bounce strength = the hatchet's (PAD_*), cooldown (s), pegs per player (placing a new one removes the oldest)
 // Ability timing: cast = seconds from pressing the key until the effect happens; cd = cooldown (s) that starts when the effect happens, on top of each
 // ability's own reset rule (dash: once per trip off the floor). PEG_LIFE = seconds a peg lasts before it fizzles out.
@@ -56,6 +56,7 @@ const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: 
 // Crash shot: a player who touches the death ball dies, but first collides with it like two pool balls: an elastic collision along the line between their centers,
 // momentum conserved with the player's mass PLAYER_M against the ball's BALL_M. CRASH_E is the restitution (1 = perfectly elastic, no energy lost).
 const PLAYER_M = 1, CRASH_E = 1;
+const PLAYER_BOUNCE = 0.9; // restitution when two players collide: 1 = attacker stops dead and the victim takes all the speed, 0 = they stick together and share it (was 0.4)
 // Ground friction (per second, as a share of speed lost): GROUND_BRAKE slows a player on the floor who is not steering (not applied while tethered); BALL_ROLL_DRAG slows the ball rolling on the floor.
 // Original values were 5 and 0.4; lower = more slippery.
 const GROUND_BRAKE = 2, BALL_ROLL_DRAG = 0.15;

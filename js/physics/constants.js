@@ -5,7 +5,7 @@ const PL = 32; // one "player length" (diameter)
 const RANGE = 4 * PL; // grapple reach
 const RUN = 2 * PL, RISE = 0.75 * PL, PK = 5, NOTCH = 2; // slopes: 2 player lengths long, three quarters of a player tall; PK = half-gap between the middle peaks
 const GOAL_Y1 = H - RISE, GOAL_Y0 = GOAL_Y1 - 6 * PL; // goal opening sits just above the goal ramps and is 6 player lengths tall; the jut above it reaches down to GOAL_Y0
-// Calibrated against the reference video (tracked at 30 fps; sprite ~25 px = 1 PL = 32 u, so 1 video px = 1.28 u).
+
 const DT = 1 / 120; // fixed physics timestep (120 Hz)
 const G = 410; // free-fall gravity (u/s^2): big arcs in the demo fall at ~320 px/s^2
 const G_FLOAT = 90; // gravity while UP is held in the air: plain jumps are long, symmetric, floaty arcs
@@ -18,6 +18,7 @@ const BALL_VMAX = 920; // ball speed cap (u/s): demo throws saturate at ~700-720
 const BALL_PULL = 0.1; // share of the tether's pull the player feels (1 = original, 0 = weightless ball)
 const BALL_TM = 0.7;  // ball mass as the tether sees it (higher = rope moves the ball less)
 const HOOK_R = 3, BALL_M = 0.25, DAMP = 0.8; // platform rope damping
+
 // Ball tether: a leash, the same elastic rope as on platforms (progressive spring, firmer with weight) but much stiffer, so the stretch stays small and the
 // maximum length is enforced. BALL_RIGID = share of the outward speed the rope cancels outright; the spring takes the rest. Inside that length the rope is
 // slack and does nothing: the ball and the player can move toward each other freely.
@@ -42,10 +43,12 @@ const GRAPPLE_BURST_T = 0.7; // length (s) of the purple ripple when the grapple
 const GRAPPLE_MAX = 4, GRAPPLE_COOLDOWN = 6, GRAPPLE_REGEN = 1; // grapple meter: seconds of use before it is spent, the lockout (s) once it is, and refill speed (charge-seconds per second) while not gripping
 const GROUND_DELAY = 0.1, HOOK_DELAY = 0.1; // the hook lands ~3 frames after the press, on the ground too (measured)
 const HEAVY_KS = 1.0, STRETCH_X0 = 120, HOP_AIM = 0.5; // weight = a firmer rope; the rope stiffens as it stretches (x0 = stretch that doubles it); HOP_AIM = horizontal share of the grapple-jump kick // airborne surface grapples take ~3 video frames to land (measured), then kick away from the pivot
+
 const PEG_R = 8, PEG_MAX = 2; // plinko peg: half a player's size (r 8 vs 16), bounce strength = the hatchet's (PAD_*), cooldown (s), pegs per player (placing a new one removes the oldest)
 // Ability timing: cast = seconds from pressing the key until the effect happens; cd = cooldown (s) that starts when the effect happens, on top of each
 // ability's own reset rule (dash: once per trip off the floor). PEG_LIFE = seconds a peg lasts before it fizzles out.
 const DASH_CAST = 0.12, DASH_COOLDOWN = 5, PLINKO_CAST = DASH_CAST, PLINKO_COOLDOWN = 5, PEG_LIFE = 10;
+
 // Marionette: hold the special key to aim (the arrow(s) are read live while it is held), release to shove the death ball that way. Releasing with no direction cancels it and spends
 // nothing; letting go of the arrows up to MARIONETTE_GRACE s before the key still counts (so releasing both together does not lose your aim). A tap with an arrow held fires at
 // once. The shove cancels the ball's motion against it first, like dash does. The cooldown starts when it fires.
@@ -54,34 +57,36 @@ const DASH_CAST = 0.12, DASH_COOLDOWN = 5, PLINKO_CAST = DASH_CAST, PLINKO_COOLD
 // ball is light, BALL_M against a player's 1, so players knock it around). One per player: casting again (once DECOY_COOLDOWN has run out) removes the old one and puts a new
 // one at the new spot. The cooldown starts when the decoy appears.
 const MARIONETTE_GRACE = 0.1, MARIONETTE_COOLDOWN = 20, MARIONETTE_V = 500, MARIONETTE_FX = 0.3; // shove speed (u/s) added to the ball, length (s) of its streak effect
+
 const DECOY_CAST = 1, DECOY_COOLDOWN = 30, DECOY_BOUNCE_PLAYER = 0.5, DECOY_BOUNCE_BALL = 0.8, DECOY_TELL = true; // DECOY_TELL: draw a dashed ring in the caster's color around the decoy (false = a perfect lookalike)
+
 // Arrow: hold the special key to charge (ARROW_CHARGE_T s to full), release to fire along the aim. LEFT / RIGHT turn it at ARROW_TURN rad/s; a double tap within ARROW_DBL_T s snaps it.
 // The death ball / decoys gain ARROW_BALL_K x the arrow's velocity; an enemy is knocked back by ARROW_KNOCK x it (ARROW_KILLS = true kills instead).
 const ARROW_CHARGE_T = 1.2, ARROW_V_MIN = 300, ARROW_V_MAX = 1200, ARROW_G = G, ARROW_TURN = 2.2, ARROW_DBL_T = 0.25, ARROW_COOLDOWN = 2;
 const ARROW_R = 3, ARROW_BALL_K = 0.6, ARROW_KNOCK = 0.75, ARROW_KILLS = false, ARROW_LIFE = 10, ARROW_STICK_T = 5;
 const ARROW_LEN = 22, ARROW_HALF_W = 2.5, ARROW_SPENT_K = 0.15; // drawn length, half the drawn width (= collision thickness), share of speed a spent arrow keeps
-// Bat: hold the special key to charge (BAT_CHARGE_T s to full; a tap is a weak swing), release to swing it toward the arrow(s) (read live while charging, the last one held counts;
-// none ever held = toward the death ball). The bat is only drawn, it is not a body: it starts behind you (opposite the aim), swings over the top and down through the aim, and
-// follows through BAT_FOLLOW rad past it (BAT_T s in all). While it sweeps, the death ball, decoys and other players (BAT_HITS_TEAMMATES: teammates too) inside a sector at the bat's
-// current angle (BAT_HIT_HALF rad either side, out to BAT_REACH) AND within BAT_CONE rad of the aim are hit once each.
-// Ball / decoy hit: speed = (BAT_V + BAT_KEEP x the speed it had) x (1 + BAT_CHARGE_BONUS x charge), capped at BAT_VMAX (+ BAT_VMAX_CHARGE x charge), mostly along the aim
-// (BAT_AIM_W: 1 = exactly the aimed direction, 0 = straight away from the batter), plus BAT_CARRY x the batter's velocity. Big hits raise the ball's speed cap like a hatchet hit.
-// Player hit: the same with BAT_PLAYER_V / BAT_PLAYER_KEEP / BAT_PLAYER_VMAX (players are heavier than the ball, so they get their own numbers).
-const BAT_T = 0.2, BAT_COOLDOWN = 1.5, BAT_REACH = 90, BAT_HIT_HALF = 0.55, BAT_CONE = 1.0; // swing time (s), cooldown (s), bat tip distance from the player's centre, half-width of the hit sector (rad), half-angle of the cone round the aim where hits count (rad)
-const BAT_WIND = 0.35, BAT_FOLLOW = 0.6, BAT_CHARGE_T = 0.6, BAT_CHARGE_BONUS = 0.5; // extra pull-back at full charge (rad), follow-through past the aim (rad), time to full charge (s), power added at full charge (0.5 = +50%)
-const BAT_V = 700, BAT_KEEP = 1.15, BAT_CARRY = 0.6, BAT_VMAX = 1500, BAT_VMAX_CHARGE = 300, BAT_AIM_W = 0.6, BAT_FX = 0.3; // ball: flat speed added, share of its own speed kept, share of the batter's velocity added, speed cap (+ extra at full charge), aim vs away blend, streak length (s)
-// Impact effects (sparks etc., see render/impact.js) when a player slams into something (terrain, pegs, other players, balls): nothing below IMPACT_V0 (u/s of speed change in a
-// collision), growing to full size at IMPACT_V1.
+
+// Bat: hold the special key to charge (BAT_CHARGE_T s to full; a tap is a weak swing), release to swing. The swing is a SEMICIRCLE (BAT_ARC rad) centred on the direction held
+// (read live while charging, the last one held counts; none ever held = toward the death ball), so it can be tilted anywhere round the player. The bat starts at one end of the
+// arc, sweeps through the aim and finishes at the other end (BAT_T s in all). It is only drawn, it is not a body. Every target (death ball, decoys, other players, teammates too if
+// BAT_HITS_TEAMMATES) whose centre lies inside the half-disc (out to BAT_REACH) is hit once, the moment the bat's sweep passes it.
+// Ball / decoy hit: speed = (BAT_V + BAT_KEEP x the speed it had) x (1 + BAT_CHARGE_BONUS x charge), capped at BAT_VMAX (+ BAT_VMAX_CHARGE x charge), sent along the aim
+// (BAT_AIM_W: 1 = exactly the direction held, 0 = straight away from the batter), plus BAT_CARRY x the batter's velocity. Big hits raise the ball's speed cap like a hatchet hit.
+// Player hit: the same with BAT_PLAYER_V / BAT_PLAYER_KEEP / BAT_PLAYER_VMAX.
+const BAT_T = 0.2, BAT_COOLDOWN = 1.5, BAT_REACH = 90, BAT_ARC = Math.PI, BAT_HIT_MARGIN = 0.08; // swing time (s), cooldown (s), bat tip distance from the player's centre, total swept arc (rad, PI = semicircle), extra angular forgiveness on each sweep step (rad)
+const BAT_WIND = 0.35, BAT_CHARGE_T = 0.6, BAT_CHARGE_BONUS = 0.5; // extra pull-back at full charge (rad, drawn only: the hit arc stays BAT_ARC), time to full charge (s), power added at full charge (0.5 = +50%)
+const BAT_V = 700, BAT_KEEP = 1.15, BAT_CARRY = 0.6, BAT_VMAX = 1500, BAT_VMAX_CHARGE = 300, BAT_AIM_W = 1, BAT_FX = 0.3; // ball: flat speed added, share of its own speed kept, share of the batter's velocity added, speed cap (+ extra at full charge), aim vs away blend (1 = pure aim direction), streak length (s)
 const IMPACT_V0 = 260, IMPACT_V1 = 1000;
 const BAT_PLAYER_V = 550, BAT_PLAYER_KEEP = 0.5, BAT_PLAYER_VMAX = 1100, BAT_HITS_TEAMMATES = true;
+
 const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN } };
+
 // Crash shot: a player who touches the death ball dies, but first collides with it like two pool balls: an elastic collision along the line between their centers,
 // momentum conserved with the player's mass PLAYER_M against the ball's BALL_M. CRASH_E is the restitution (1 = perfectly elastic, no energy lost).
 const PLAYER_M = 1, CRASH_E = 1;
 const PLAYER_BOUNCE = 0.9; // restitution when two players collide: 1 = attacker stops dead and the victim takes all the speed, 0 = they stick together and share it (was 0.4)
+
 // Ground friction (per second, as a share of speed lost): GROUND_BRAKE slows a player on the floor who is not steering (not applied while tethered); BALL_ROLL_DRAG slows the ball rolling on the floor.
 // Original values were 5 and 0.4; lower = more slippery.
 const GROUND_BRAKE = 2, BALL_ROLL_DRAG = 0.15;
 const BALL_R = 14, BALL_I = 6 * BALL_M * BALL_R * BALL_R; // spin inertia: high, so spin takes a whippy throw
-
-// Floor slopes: a ramp up to each goal and a middle peak made of two overlapping triangles (a notch the ball starts in).

@@ -1,26 +1,30 @@
 // PHYSICS - Player: movement, grapple rope, and special abilities (dash / plinko / marionette / decoy).
 // step(ball) advances one fixed timestep. Reads this.keys; never draws.
 const noKeys = () => ({ l: false, r: false, up: false, z: false, x: false, sp: false, dn: false }); // sp = special ability, dn = down, z = grapple, x = weight
-// Bat special. Angle of the bat at swing progress f (0..1): it starts behind the player (opposite the aim, pulled back a little further the more it is charged), sweeps over the top
-// and down through the aim, and follows through BAT_FOLLOW past it, easing in and out (smoothstep). Clockwise when aiming right, anticlockwise when aiming left. The renderer draws
-// the bat at this angle (and earlier ones for the motion blur); the physics only uses it to place the hit sector. Nothing about the drawn bat is solid.
+// Bat special. Angle of the bat at swing progress f (0..1). The swing is a semicircle (BAT_ARC) centred on the aim c.ang: it starts BAT_ARC/2 to one side of the aim (pulled back a
+// little further the more it is charged), sweeps through the aim and ends BAT_ARC/2 on the other side, easing in and out (smoothstep). Clockwise when aiming right, anticlockwise when
+// aiming left. The renderer draws the bat at this angle (and earlier ones for the motion blur); the physics uses the same angle to sweep the hit area.
 function batAngleAt(c, f) {
     f = Math.max(0, Math.min(1, f));
-    const e = f * f * (3 - 2 * f), s = Math.cos(c.ang) >= 0 ? 1 : -1, back = Math.PI + BAT_WIND * c.charge;
-    return c.ang - s * back + s * (back + BAT_FOLLOW) * e;
+    const e = f * f * (3 - 2 * f), s = Math.cos(c.ang) >= 0 ? 1 : -1, half = BAT_ARC / 2, back = half + BAT_WIND * c.charge;
+    return c.ang - s * back + s * (back + half) * e;
 }
 const batAngle = c => batAngleAt(c, c.charging ? 0 : 1 - c.t / c.t0);
 // One physics step of a bat swing, called from Player.step while the cast runs. p = the batter, c = the cast, ball = the death ball. c.hits is a bit mask (one bit per target, in
 // the order of the list below) of what this swing has already hit: a number, not an array, so the AI's shallow cast copies cannot share it.
+// A target is hit when (a) its centre is inside the half-disc, i.e. within BAT_ARC/2 of the aim, and (b) the bat's sweep this step (previous angle -> current angle) passes over it.
+// Testing the whole sweep, not just the bat's current angle, means a fast swing can never skip over something.
 function batStep(p, c, ball) {
-    const th = batAngle(c), targets = [ball];
+    const f = 1 - c.t / c.t0, th = batAngleAt(c, f), prev = batAngleAt(c, f - DT / c.t0), targets = [ball];
     if (!p.sim) { // the AI's planning copies only know the death ball
         targets.push(...decoys);
         for (const q of players)
             if (q !== p && q.alive && (BAT_HITS_TEAMMATES || q.team !== p.team))
                 targets.push(q);
     }
-    const ax = Math.cos(c.ang), ay = Math.sin(c.ang); // the way the bat was aimed
+    const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+    const ax = Math.cos(c.ang), ay = Math.sin(c.ang); // the way the bat was aimed (the direction held)
+    const s = ax >= 0 ? 1 : -1, stepAng = Math.abs(wrap(th - prev)); // s: swing direction, stepAng: how far the bat moved this step
     for (let i = 0; i < targets.length; i++) {
         const b = targets[i], bit = 1 << i;
         if (c.hits & bit)
@@ -29,12 +33,12 @@ function batStep(p, c, ball) {
         if (d > BAT_REACH + b.r)
             continue; // out of reach
         const slack = Math.asin(Math.min(1, b.r / Math.max(d, 1e-6))); // a big target is hit a little earlier / later
-        const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
         const ang = Math.atan2(dy, dx);
-        if (Math.abs(wrap(ang - th)) > BAT_HIT_HALF + slack)
-            continue; // not where the bat is right now
-        if (Math.abs(wrap(ang - c.ang)) > slack)
-            continue; // not on the side being swung at (the bat passes over the top on its way round)
+        if (Math.abs(wrap(ang - c.ang)) > BAT_ARC / 2 + slack)
+            continue; // outside the semicircle
+        const along = s * wrap(ang - prev); // how far past the bat's previous position the target is, measured in the swing direction
+        if (along < -slack - BAT_HIT_MARGIN || along > stepAng + slack + BAT_HIT_MARGIN)
+            continue; // the bat did not pass it this step
         c.hits |= bit;
         const isPlayer = b instanceof Player, ox = d > 1 ? dx / d : ax, oy = d > 1 ? dy / d : ay; // ox, oy: straight away from the batter
         let ux = ax * BAT_AIM_W + ox * (1 - BAT_AIM_W), uy = ay * BAT_AIM_W + oy * (1 - BAT_AIM_W);
@@ -46,9 +50,9 @@ function batStep(p, c, ball) {
         b.vx = ux * out + p.vx * BAT_CARRY;
         b.vy = uy * out + p.vy * BAT_CARRY;
         if (b.boost !== undefined) { // balls: big hits raise the speed cap briefly, like a hatchet hit
-            const s = Math.hypot(b.vx, b.vy);
-            if (s > BALL_VMAX)
-                b.boost = Math.max(b.boost, Math.min(1, (s - BALL_VMAX) / (PAD_MAX - BALL_VMAX)));
+            const sp2 = Math.hypot(b.vx, b.vy);
+            if (sp2 > BALL_VMAX)
+                b.boost = Math.max(b.boost, Math.min(1, (sp2 - BALL_VMAX) / (PAD_MAX - BALL_VMAX)));
         }
         if (b === ball)
             b.pull = { t: BAT_FX, ux, uy, col: p.color }; // streak (only the death ball's timer is stepped in rules.js, so decoys get none)

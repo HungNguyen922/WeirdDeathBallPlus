@@ -178,14 +178,14 @@ class Player {
         }
         const delay = this.grounded ? GROUND_DELAY : HOOK_DELAY; // the hook takes a moment to land
         if (delay > 0) {
-            this.pending = { p: best.p, t: delay, t0: delay, ground: best.ground };
+            this.pending = { p: best.p, t: delay, t0: delay, ground: best.ground, rose: this.vy <= 40 };
             return;
         }
         this.land(best.p, best.ground);
     }
     // The hook lands on a surface: tether length = distance right now. A grapple jump (rising on floor/slopes) kicks the player
     // directly away from the pivot (weight multiplies it), with matching tether slack; a pivot behind you gives a diagonal hop.
-    land(p, ground) {
+    land(p, ground, rose = this.vy <= 0) {
         const dx = this.x - p.x, dy = this.y - p.y, d = Math.hypot(dx, dy);
         this.rope = p;
         this.onBall = false;
@@ -193,7 +193,7 @@ class Player {
         this.ropeBase = ground ? { x: p.x, y: p.y - sawY(p.x) } : null; // floor pivots ride the floor when it pops
         this.len = Math.max(d, MIN_LEN);
         this.taut = false;
-        if (ground && this.vy <= 0) {
+        if (ground && rose) {
             const chain = Math.min(GJ_MAX, GJ_START * Math.pow(GJ_GROWTH, this.gjN)); // exponential ramp over a spammed chain
             const lift = LIFT_V * chain * (this.keys.x ? WEIGHT_M : 1);
             this.gjN++;
@@ -406,12 +406,12 @@ class Player {
             this.kickReq = false; // a primed kick survives the grapple being up
         if (z && !this.rope && !this.pending)
             this.attach(ball); // also latches on when you drift into reach while holding
-        if (this.pending && z) {
+        if (this.pending) {                       
             this.pending.t -= DT;
             if (this.pending.t <= 0) {
                 const h = this.pending;
                 this.pending = null;
-                this.land(h.p, h.ground);
+                this.land(h.p, h.ground, h.rose);
             }
         }
         if (this.rope || this.pending) {
@@ -422,7 +422,7 @@ class Player {
             this.gCharge = Math.min(GRAPPLE_MAX, this.gCharge + GRAPPLE_REGEN * DT);
         if (!z) {
             this.rope = null;
-            this.pending = null;
+            if (!(this.pending && this.pending.ground)) this.pending = null; // a tapped ground hook still lands; its kick applies next tick
             this.onBall = false;
             this.tball = null;
         }

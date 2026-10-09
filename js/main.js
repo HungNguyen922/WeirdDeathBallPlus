@@ -15,13 +15,18 @@ let last = performance.now(), acc = 0;
 function frame(t) {
     acc += Math.min(0.05, (t - last) / 1000);
     last = t;
-    while (acc >= DT) {
-        update();
-        acc -= DT;
-    }
+    if (net.on) { // NET: online, the server runs the simulation; we only draw what it sends
+        acc = 0;
+        net.frame(performance.now());
+    } else
+        while (acc >= DT) {
+            update();
+            acc -= DT;
+        }
     draw();
     requestAnimationFrame(frame);
 }
 
 newRound();
 requestAnimationFrame(frame);
+

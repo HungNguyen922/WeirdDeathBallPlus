@@ -1,6 +1,8 @@
 // INPUT - keyboard bindings, the AI toggle buttons / keys, and mouse clicks on the special-ability menu.
 const AI_NAMES = ['Blue', 'Red', 'Blue 2', 'Red 2'];
 function setAI(i, on) {
+    if (net.on) // NET: online, seats are fixed
+        return;
     ai[i].on = on;
     aiReset(i);
     if (!on)
@@ -13,6 +15,8 @@ for (const i of [0, 1, 2, 3])
     document.getElementById('ai' + i).addEventListener('click', () => { setAI(i, !ai[i].on); cv.focus(); });
 // ---- 1v1 / 2v2 toggle: the teammates (ids 2 and 3) start as computer players; switch them to Human to play them ----
 function setTeams(size) {
+    if (net.on) // NET: online matches are 1v1 for now
+        return;
     setTeamSize(size);
     setAI(2, size === 2);
     setAI(3, size === 2);
@@ -31,6 +35,10 @@ const bindings = [ // [player, { key (or physical key code) -> action }]
     [p4, { Numpad4: 'l', Numpad6: 'r', Numpad8: 'up', Numpad5: 'dn', Numpad7: 'z', Numpad9: 'x', Numpad0: 'sp' }], // Red's teammate (2v2)
 ];
 function setKey(e, v) {
+    if (net.on) { // NET: online, my keys go to the server instead of to a local player
+        netKeyEvent(e, v);
+        return;
+    }
     const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     for (const [pl, m] of bindings) {
         const n = players.includes(pl) && (m[key] || m[e.code]); // only players in the current match listen
@@ -60,11 +68,17 @@ cv.addEventListener('click', e => {
     const h = uiHit(...arenaPos(e));
     if (!h)
         closeSpecialMenu();
-    else if (h.type === 'key')
-        ui.open = ui.open === h.i ? -1 : h.i;
-    else if (!SPECIALS[h.n].locked) {
-        players[h.i].special = SPECIALS[h.n].id;
+    else if (h.type === 'key') {
+        if (!net.on || h.i === net.slot) // NET: online you can only change your own special
+            ui.open = ui.open === h.i ? -1 : h.i;
+    } else if (!SPECIALS[h.n].locked) {
+        if (net.on)
+            net.setSpecial(SPECIALS[h.n].id);
+        else
+            players[h.i].special = SPECIALS[h.n].id;
         closeSpecialMenu();
     }
 });
 cv.addEventListener('click', () => cv.focus()); // so keys go to the game after a click
+
+

@@ -73,7 +73,7 @@ const ARROW_LEN = 22, ARROW_HALF_W = 2.5, ARROW_SPENT_K = 0.15; // drawn length,
 // Ball / decoy hit: speed = (BAT_V + BAT_KEEP x the speed it had) x (1 + BAT_CHARGE_BONUS x charge), capped at BAT_VMAX (+ BAT_VMAX_CHARGE x charge), sent along the aim
 // (BAT_AIM_W: 1 = exactly the direction held, 0 = straight away from the batter), plus BAT_CARRY x the batter's velocity. Big hits raise the ball's speed cap like a hatchet hit.
 // Player hit: the same with BAT_PLAYER_V / BAT_PLAYER_KEEP / BAT_PLAYER_VMAX.
-const BAT_T = 0.2, BAT_COOLDOWN = 1.5, BAT_REACH = 90, BAT_ARC = Math.PI, BAT_HIT_MARGIN = 0.08; // swing time (s), cooldown (s), bat tip distance from the player's centre, total swept arc (rad, PI = semicircle), extra angular forgiveness on each sweep step (rad)
+const BAT_T = 0.2, BAT_COOLDOWN = 1.5, BAT_REACH = PL * 2, BAT_ARC = Math.PI, BAT_HIT_MARGIN = 0.08; // swing time (s), cooldown (s), bat tip distance from the player's centre, total swept arc (rad, PI = semicircle), extra angular forgiveness on each sweep step (rad)
 const BAT_WIND = 0.35, BAT_CHARGE_T = 0.6, BAT_CHARGE_BONUS = 0.5; // extra pull-back at full charge (rad, drawn only: the hit arc stays BAT_ARC), time to full charge (s), power added at full charge (0.5 = +50%)
 const BAT_V = 700, BAT_KEEP = 1.15, BAT_CARRY = 0.6, BAT_VMAX = 1500, BAT_VMAX_CHARGE = 300, BAT_AIM_W = 1, BAT_FX = 0.3; // ball: flat speed added, share of its own speed kept, share of the batter's velocity added, speed cap (+ extra at full charge), aim vs away blend (1 = pure aim direction), streak length (s)
 const IMPACT_V0 = 260, IMPACT_V1 = 1000;

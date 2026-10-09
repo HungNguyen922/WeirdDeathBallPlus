@@ -33,7 +33,7 @@ function batStep(p, c, ball) {
         const ang = Math.atan2(dy, dx);
         if (Math.abs(wrap(ang - th)) > BAT_HIT_HALF + slack)
             continue; // not where the bat is right now
-        if (Math.abs(wrap(ang - c.ang)) > BAT_CONE + slack)
+        if (Math.abs(wrap(ang - c.ang)) > slack)
             continue; // not on the side being swung at (the bat passes over the top on its way round)
         c.hits |= bit;
         const isPlayer = b instanceof Player, ox = d > 1 ? dx / d : ax, oy = d > 1 ? dy / d : ay; // ox, oy: straight away from the batter
@@ -509,7 +509,6 @@ class Player {
         this.vx *= 1 - 0.1 * DT;
         this.x += this.vx * DT;
         this.y += this.vy * DT;
-        const pvx = this.vx, pvy = this.vy; // velocity going into this step's collisions: how much they change it is how hard we hit
         // The hook is just the rope's anchor point: nothing blocks you from reaching it, so you can swing straight through the pivot and out the other side.
         for (const q of pegs)
             pegBounce(this, q);
@@ -568,10 +567,5 @@ class Player {
                 this.vx *= -0.2;
         } else
             this.netSide = side;
-        if (!this.sim) { // impact effects: whatever we hit (floor, slope, ledge, wall, ceiling, net, peg, arrow) pushed us by dv, so it is on the opposite side to dv
-            const dvx = this.vx - pvx, dvy = this.vy - pvy, dv = Math.hypot(dvx, dvy);
-            if (dv > IMPACT_V0)
-                events.onImpact(this, this.x - dvx / dv * this.r, this.y - dvy / dv * this.r, dvx / dv, dvy / dv, dv);
-        }
     }
 }

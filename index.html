@@ -5,23 +5,84 @@
 <link rel="stylesheet" href="css/style.css">
 </head><body>
 <canvas id="c" width="1302" height="740" tabindex="0"></canvas>
-<div class="keys">
-<div><b style="color:#42a5f5">Blue</b>: ←/→ move, ↑ jump, ↓ drop, X grapple, C weight, Z dash</div>
-<div><b style="color:#ef5350">Red</b>: A/D move, W jump, S drop, F grapple, G weight, H dash</div>
-<div>R restart, T toggles 2v2. Click the game first so it gets keyboard focus.</div>
-<div class="team2" style="display:none"><b style="color:#42a5f5">Blue 2</b>: J/L move, I jump, K drop, U grapple, O weight, P dash &nbsp; <b style="color:#ef5350">Red 2</b>: Numpad 4/6 move, 8 jump, 5 drop, 7 grapple, 9 weight, 0 dash &nbsp; (keys 3 / 4 toggle their AI)</div>
+
+<div id="menu" class="overlay" hidden>
+<div class="dialog" role="dialog" aria-modal="true" aria-label="Menu">
+<div class="dhead">
+<div class="tabs" role="tablist">
+<button class="tab on" role="tab" data-tab="game" aria-selected="true">Game</button>
+<button class="tab" role="tab" data-tab="controls" aria-selected="false">Controls</button>
 </div>
-<div class="ai">Opponent:
+<button id="menuclose" class="x" aria-label="Close menu" title="Close (Esc)">&#10005;</button>
+</div>
+
+<section data-panel="game">
+<div class="group">
+<h3>Who plays</h3>
+<div class="row">
 <button id="ai0" class="blue" title="Toggle: play Blue yourself or let the computer play it (key 1)">Blue: Human</button>
 <button id="ai1" class="red" title="Toggle: play Red yourself or let the computer play it (key 2)">Red: Human</button>
 <button id="ai2" class="blue team2" style="display:none" title="Blue's teammate: play it yourself or let the computer (key 3)">Blue 2: Human</button>
 <button id="ai3" class="red team2" style="display:none" title="Red's teammate: play it yourself or let the computer (key 4)">Red 2: Human</button>
-<button id="mode2v2" class="mode" title="Toggle 2v2: each team gets a second player, spawned 2 player lengths from the ball and from the goal scoop (key T)">2v2: Off</button>
-<button id="music" class="mode on" title="Toggle the background music (key M). Music starts on your first key press or click.">♪ Music: On</button>
-<button id="online" class="mode" title="Play online: asks for a room name; a friend joins the same room">Online: Off</button>
-<span id="netstatus"></span>
-<span>or press 1 / 2. Set both to AI to watch them play.</span>
 </div>
+<p class="hint">Or press 1 / 2 (3 / 4 in 2v2). Set both to AI to watch them play.</p>
+</div>
+<div class="group">
+<h3>Match</h3>
+<div class="row">
+<button id="mode2v2" class="mode" title="Toggle 2v2: each team gets a second player, spawned 2 player lengths from the ball and from the goal scoop (key T)">2v2: Off</button>
+</div>
+</div>
+<div class="group">
+<h3>Sound</h3>
+<div class="row">
+<button id="music" class="mode on" title="Toggle the background music (key M). Music starts on your first key press or click.">&#9834; Music: On</button>
+</div>
+</div>
+<div class="group">
+<h3>Online</h3>
+<div class="row">
+<button id="online" class="mode" title="Play online: asks for a room name; a friend joins the same room">Online: Off</button>
+</div>
+<p class="hint">Connection status shows on the floor, under the score.</p>
+</div>
+<p class="hint">Click the game once so it gets keyboard focus.</p>
+</section>
+
+<section data-panel="controls" hidden>
+<div class="scroll">
+<table>
+<thead><tr><th>Player</th><th>Move</th><th>Jump</th><th>Drop</th><th>Grapple</th><th>Weight</th><th>Special</th></tr></thead>
+<tbody>
+<tr><th class="pb">Blue</th><td><kbd>&larr;</kbd> <kbd>&rarr;</kbd></td><td><kbd>&uarr;</kbd></td><td><kbd>&darr;</kbd></td><td><kbd>X</kbd></td><td><kbd>C</kbd></td><td><kbd>Z</kbd></td></tr>
+<tr><th class="pr">Red</th><td><kbd>A</kbd> <kbd>D</kbd></td><td><kbd>W</kbd></td><td><kbd>S</kbd></td><td><kbd>F</kbd></td><td><kbd>G</kbd></td><td><kbd>H</kbd></td></tr>
+<tr class="team2" style="display:none"><th class="pb">Blue 2</th><td><kbd>J</kbd> <kbd>L</kbd></td><td><kbd>I</kbd></td><td><kbd>K</kbd></td><td><kbd>U</kbd></td><td><kbd>O</kbd></td><td><kbd>P</kbd></td></tr>
+<tr class="team2" style="display:none"><th class="pr">Red 2</th><td><kbd>Num 4</kbd> <kbd>Num 6</kbd></td><td><kbd>Num 8</kbd></td><td><kbd>Num 5</kbd></td><td><kbd>Num 7</kbd></td><td><kbd>Num 9</kbd></td><td><kbd>Num 0</kbd></td></tr>
+</tbody>
+</table>
+</div>
+<p class="hint team2" style="display:none">Teammates in 2v2 always use Dash as their special.</p>
+<div class="group">
+<h3>Shortcuts</h3>
+<ul class="keys">
+<li><kbd>Esc</kbd> open / close this menu (it also closes the special-ability list first)</li>
+<li><kbd>R</kbd> restart the match</li>
+<li><kbd>T</kbd> switch between 1v1 and 2v2</li>
+<li><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> toggle AI for Blue, Red, Blue 2, Red 2 (3 and 4 only exist in 2v2)</li>
+<li><kbd>M</kbd> music on / off</li>
+</ul>
+</div>
+<div class="group">
+<h3>Tips</h3>
+<ul class="keys">
+<li>Click the special keycap beside Blue's or Red's goal to pick a different special ability.</li>
+<li>Online, either layout (arrows + X / C / Z, or WASD + F / G / H) controls your seat.</li>
+</ul>
+</div>
+</section>
+</div>
+</div>
+
 <script src="js/physics/constants.js"></script>
 <script src="js/physics/terrain.js"></script>
 <script src="js/physics/collision.js"></script>
@@ -46,5 +107,6 @@
 <script src="js/input.js"></script>
 <script src="js/net/client.js"></script>
 <script src="js/net/predict.js"></script>
+<script src="js/menu.js"></script>
 <script src="js/main.js"></script>
 </body></html>

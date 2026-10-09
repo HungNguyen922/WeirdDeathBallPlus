@@ -1,6 +1,6 @@
 // RENDER - the score display, drawn on the floor of the arena (the empty slab under the playing surface) so it never covers anything the players need to see.
 // Coordinates are ARENA coordinates (drawn inside render.js's translate), so the slab sits at y = H + something and spans x = 0..W between the goal ramps.
-// The bars are progress toward WIN points (they fill from the outer edge toward the middle).
+// The bars are progress toward WIN points (they fill from the outer edge toward the middle). Under them, online, the connection status line.
 const hud = { shown: [0, 0], flash: [0, 0], line: [0, 0] }; // shown = smoothed fill (0..1); flash = brief glow after a point; line = threshold-line glow (read by arena.js)
 const HUD_TOP = H + 14; // top of the score plaque; the floor can only pop up (never down), so this stays clear of it
 const HUD_BAR_W = 360, HUD_BAR_H = 30, HUD_BAR_X = 30; // bar size and its distance from the arena's side wall
@@ -50,6 +50,28 @@ function drawBar(side, color, frac, flash) {
     cx.stroke();
     cx.restore();
 }
+function drawNetStatus() { // online: room, seat, ping and so on (net.status is kept up to date by net/client.js), wrapped to at most 3 lines under the score
+    const text = typeof net !== 'undefined' ? net.status : '';
+    if (!text)
+        return;
+    const maxW = W - 60, lines = [];
+    cx.save();
+    cx.font = '12px system-ui, sans-serif';
+    cx.textAlign = 'center';
+    cx.fillStyle = 'rgba(232,232,228,.8)';
+    let cur = '';
+    for (const word of text.split(' ')) {
+        const t = cur ? cur + ' ' + word : word;
+        if (cur && cx.measureText(t).width > maxW) {
+            lines.push(cur);
+            cur = word;
+        } else
+            cur = t;
+    }
+    lines.push(cur);
+    lines.slice(0, 3).forEach((l, i) => cx.fillText(l, W / 2, HUD_TOP + 72 + i * 16));
+    cx.restore();
+}
 function drawHud() {
     for (const t of [0, 1]) { // fade bookkeeping: keep this running every frame, the arena reads hud.line and padFlash
         hud.shown[t] += (Math.min(1, score[t] / WIN) - hud.shown[t]) * 0.08;
@@ -70,4 +92,5 @@ function drawHud() {
     cx.fillStyle = '#42a5f5'; cx.fillText(String(score[0]), mid - 32, y + 43);
     cx.fillStyle = '#e8e8e4'; cx.fillText('-', mid, y + 41);
     cx.fillStyle = '#ef5350'; cx.fillText(String(score[1]), mid + 32, y + 43);
+    drawNetStatus();
 }

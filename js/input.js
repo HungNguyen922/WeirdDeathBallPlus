@@ -1,4 +1,4 @@
-// INPUT - keyboard bindings, the AI toggle buttons / keys, and mouse clicks on the special-ability menu.
+// INPUT - keyboard bindings, the AI toggle buttons / keys, and mouse clicks on the special-ability menu and the Menu tile.
 const AI_NAMES = ['Blue', 'Red', 'Blue 2', 'Red 2'];
 function setAI(i, on) {
     if (net.on) // NET: online, seats are fixed
@@ -60,7 +60,7 @@ function setKey(e, v) {
 window.addEventListener('keydown', e => setKey(e, true));
 window.addEventListener('keyup', e => setKey(e, false));
 window.addEventListener('blur', () => allPlayers.forEach(p => Object.assign(p.keys, noKeys())));
-// ---- mouse: special-ability menu ----
+// ---- mouse: special-ability menu and the Menu tile ----
 const arenaPos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width - OX, (e.clientY - r.top) * cv.height / r.height - HUD]; };
 cv.addEventListener('mousemove', e => { ui.hover = uiHit(...arenaPos(e)); cv.style.cursor = ui.hover ? 'pointer' : ''; });
 cv.addEventListener('mouseleave', () => { ui.hover = null; cv.style.cursor = ''; });
@@ -68,7 +68,10 @@ cv.addEventListener('click', e => {
     const h = uiHit(...arenaPos(e));
     if (!h)
         closeSpecialMenu();
-    else if (h.type === 'key') {
+    else if (h.type === 'menu') { // the tile under Blue's keys: open the Menu panel (menu.js)
+        closeSpecialMenu();
+        gameMenu.open();
+    } else if (h.type === 'key') {
         if (!net.on || h.i === net.slot) // NET: online you can only change your own special
             ui.open = ui.open === h.i ? -1 : h.i;
     } else if (!SPECIALS[h.n].locked) {
@@ -80,5 +83,3 @@ cv.addEventListener('click', e => {
     }
 });
 cv.addEventListener('click', () => cv.focus()); // so keys go to the game after a click
-
-

@@ -1,4 +1,4 @@
-// RENDER - the special-ability dropdown next to each player's keycaps (hit-testing lives here too, so input.js can use it).
+// RENDER - the special-ability dropdown next to each player's keycaps (hit-testing lives here too, so input.js can use it), plus the Menu tile below Blue's keys.
 // ---- Special-ability dropdown: click the special keycap to open a list of ability icons, click one to equip it. Add new abilities to SPECIALS. ----
 const SPECIALS = [
     { id: 'dash', name: 'DASH', icon: 'dash' },
@@ -13,6 +13,8 @@ const ui = { open: -1, hover: null }; // open = index of the player whose menu i
 const hintX = i => (i === 0 ? -OX / 2 : W + OX / 2);
 const spKey = i => ({ x: hintX(i) + 26, y: 195, w: 40, h: 40 }); // the special keycap (third key of the action row)
 const spItem = (i, n) => ({ x: hintX(i) + 26, y: 240 + n * 32, w: 40, h: 32 }); // menu rows, directly under it
+const menuKey = () => ({ x: hintX(0) - 20, y: 270, w: 40, h: 40 }); // the Menu tile: Blue's wall, directly under the weight key (the middle key of the action row)
+const menuTileShown = () => ui.open !== 0; // hidden while Blue's special list is open: that list's hover name is drawn across this spot
 const inRect = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 function uiHit(x, y) {
     if (ui.open >= 0)
@@ -22,9 +24,30 @@ function uiHit(x, y) {
     for (const i of [0, 1])
         if (inRect(spKey(i), x, y))
             return { type: 'key', i };
+    if (menuTileShown() && inRect(menuKey(), x, y))
+        return { type: 'menu' };
     return null;
 }
 function closeSpecialMenu() { ui.open = -1; }
+function drawMenuTile() { // a keycap-style tile that opens the Menu panel (the panel itself is page UI, see menu.js)
+    if (!menuTileShown())
+        return;
+    const r = menuKey(), kx = r.x + r.w / 2, hot = !!(ui.hover && ui.hover.type === 'menu'), on = typeof gameMenu !== 'undefined' && gameMenu.isOpen();
+    const yy = keyCap(kx, r.y + r.h / 2, r.w, EDGE, on, false), col = on ? '#0b0e12' : hot ? '#ffffff' : '#e8e8e4';
+    cx.save();
+    cx.strokeStyle = col; cx.lineWidth = 2.6; cx.lineCap = 'round'; // the hamburger icon
+    cx.beginPath();
+    for (const dy of [-6, 0, 6])
+        line(kx - 8, yy - 2 + dy, kx + 8, yy - 2 + dy);
+    cx.stroke();
+    cx.textAlign = 'center';
+    cx.font = 'bold 8px system-ui, sans-serif';
+    cx.fillStyle = on ? '#0b0e12' : '#98a2ad';
+    cx.fillText('ESC', kx + 13, yy + 15); // the key that also opens it
+    cx.fillStyle = '#98a2ad';
+    cx.fillText('MENU', kx, r.y + r.h + 16);
+    cx.restore();
+}
 function drawSpecialMenu() {
     if (ui.open < 0)
         return;

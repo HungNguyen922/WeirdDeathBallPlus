@@ -53,7 +53,7 @@ const net = {
             return 'Disconnected. Reload the page to reconnect.';
         const who = this.slot === 0 ? 'you are Blue' : this.slot === 1 ? 'you are Red' : 'spectating';
         const state = this.slot >= 0 && !this.running ? ' - waiting for an opponent...' : '';
-        return `Online, room "${this.room}": ${who}${state}${this.rtt ? ` (ping ${Math.round(this.rtt)} ms)` : ''}`;
+        return `Online, room "${this.room}": ${who}${state}${this.rtt ? ` (ping ${Math.round(this.rtt)} ms${this.tps ? `, server ${this.tps} ticks/s` : ''}${this.extra ? ', ' + this.extra() : ''})` : ''}`;
     },
     join(room, server) {
         if (this.ws)
@@ -89,6 +89,7 @@ const net = {
             this.onSnapshot(m);
         } else if (m.t === 'pong') {
             this.rtt = performance.now() - m.c;
+            this.tps = m.tps || 0;
             this.setStatus(this.describe());
         } else if (m.t === 'error')
             this.setStatus('Server: ' + m.msg);

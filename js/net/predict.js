@@ -14,7 +14,7 @@ const PRED_MAX_AHEAD = 40;   // never predict more than this many ticks past the
 const PRED_SNAP_DIST = 120;  // a correction bigger than this (u) is a teleport (respawn, hatchet): show it at once
 const PRED_ERR_DECAY = 0.86; // per rendered frame, share of the visual correction that is left
 
-const pred = { state: null, tick: 0, ack: 0, log: [], err: { x: 0, y: 0 }, lastT: -1 }; // state = saveState() at pred.tick; log = my inputs { seq, pt, bits }
+const pred = { state: null, tick: 0, ack: 0, log: [], err: { x: 0, y: 0 }, lastT: -1, lastFix: 0 }; // state = saveState() at pred.tick; log = my inputs { seq, pt, bits }
 
 function predBitsOf(keys) {
     let b = 0;
@@ -76,6 +76,7 @@ function predReconcile(T, s, ack) {
     loadState(s);
     predQuiet(() => { while (pred.tick < end) predStep(); });
     pred.state = saveState();
+    pred.lastFix = old && !fresh ? Math.hypot(old.x - pred.state.players[slot].x, old.y - pred.state.players[slot].y) : 0;
     if (!old || fresh) {
         pred.err.x = pred.err.y = 0;
         return 0;
@@ -140,4 +141,5 @@ if (typeof net.onSnapshot === 'function') {
         frame(now);
     };
     net.shape = predShape;
+    net.extra = () => `prediction on, ${pred.state ? pred.tick - pred.lastT : 0} ticks ahead, last fix ${pred.lastFix.toFixed(1)} u`; // shown in the status line next to the ping
 }

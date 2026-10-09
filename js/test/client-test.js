@@ -114,7 +114,7 @@ console.log('\nresponsiveness');
     check(xs[xs.length - 1] > xs[0] + 40, `Blue moved right while RIGHT was held (${xs[0].toFixed(0)} -> ${xs[xs.length - 1].toFixed(0)})`);
     check(smooth > 0.9, `position changes on ${(smooth * 100).toFixed(0)}% of frames: interpolated (30 Hz snapshots shown raw would be ~50%)`);
     check(Math.max(...steps.map(Math.abs)) < 12, `no jumps: biggest per-frame move ${Math.max(...steps.map(Math.abs)).toFixed(1)} u`);
-    check(steps.every(s => s > -0.5), 'it never visibly steps backwards');
+    { const run = steps.filter((_, i) => xs[i] < 420); check(run.every(s => s > -0.5), 'it never visibly steps backwards on the approach (worst ' + Math.min(...run).toFixed(2) + ' u; hitting the death ball at x~445 is a real collision, not smoothing)'); }
 
     console.log('\ngoals and deaths reach the renderer');
     // keep Blue running right: it hits the death ball and dies -> Red scores

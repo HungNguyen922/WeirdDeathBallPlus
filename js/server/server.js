@@ -50,6 +50,7 @@ class Room {
         this.running = false;
         this.acc = 0;
         this.last = performance.now();
+        this.tps = 0; this.tpsN = 0; this.tpsT = performance.now(); // achieved sim ticks per second (should sit at 120)
     }
     get everyone() { return [...this.seats.filter(Boolean), ...this.watchers]; }
     get empty() { return !this.seats[0] && !this.seats[1] && this.watchers.size === 0; }
@@ -123,12 +124,18 @@ class Room {
             ctx.update();
             this.tick++;
             n++;
+            this.tpsN++;
             this.acc -= DT_MS;
             if (this.tick % SNAP_EVERY === 0)
                 this.snapshot();
         }
         if (this.acc > DT_MS * MAX_CATCHUP)
             this.acc = 0;
+        if (now - this.tpsT >= 1000) {
+            this.tps = Math.round(this.tpsN * 1000 / (now - this.tpsT));
+            this.tpsN = 0;
+            this.tpsT = now;
+        }
     }
     snapshot() {
         const ctx = this.sim.ctx;
@@ -208,7 +215,7 @@ function startServer(port = 8080, host = '0.0.0.0') {
             } else if (m.t === 'sp' && room)
                 room.setSpecial(slot, m.s);
             else if (m.t === 'ping')
-                conn.send(JSON.stringify({ t: 'pong', c: Number(m.c) || 0, tick: room ? room.tick : 0 }));
+                conn.send(JSON.stringify({ t: 'pong', c: Number(m.c) || 0, tick: room ? room.tick : 0, tps: room ? room.tps : 0 }));
         });
         conn.on('close', () => {
             if (!room)

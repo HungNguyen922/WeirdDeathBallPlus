@@ -33,7 +33,7 @@ const KS = 110; // surface-rope stiffness: firm, but stretches and recoils (elas
 // Pivot transfer: when you come back down onto the floor right at a floor/slope pivot (within PIVOT_ZONE of it), the speed the floor would absorb is turned
 // into sideways speed along the surface instead (PIVOT_TRANSFER = share of it; a rotation, so your speed is kept) and sends you out the other side.
 const PIVOT_ZONE = 2 * PL, PIVOT_MIN_HIT = 60, PIVOT_TRANSFER = 0.85;
-const LIFT_V = 280, WEIGHT_M = 1.4, WEIGHT_KICK = 270, MIN_LEN = 16; // grapple-jump lift, weight multiplier (lift), min surface tether; WEIGHT_KICK = impulse (u/s) away from the pivot each time weight is pressed while grappling
+const LIFT_V = 280, WEIGHT_M = 1.4, WEIGHT_KICK = 300, MIN_LEN = 16; // grapple-jump lift, weight multiplier (lift), min surface tether; WEIGHT_KICK = impulse (u/s) away from the pivot each time weight is pressed while grappling
 // Grapple-jump ramp. Chain: each grapple jump within GJ_CHAIN_T s of the last extends a chain; the kick is LIFT_V x min(GJ_MAX, GJ_START * GJ_GROWTH^n), n = jumps already in
 // the chain, so spamming ramps it up exponentially. Ease: each kick is delivered over LIFT_RAMP s (smoothstep) instead of in one tick.
 const GJ_START = 0.4, GJ_GROWTH = 1.1, GJ_MAX = 1, GJ_CHAIN_T = 1.5, LIFT_RAMP = 0.005;
@@ -63,13 +63,16 @@ const ARROW_LEN = 22, ARROW_HALF_W = 2.5, ARROW_SPENT_K = 0.15; // drawn length,
 // Bat: hold the special key to charge (BAT_CHARGE_T s to full; a tap is a weak swing), release to swing it toward the arrow(s) (read live while charging, the last one held counts;
 // none ever held = toward the death ball). The bat is only drawn, it is not a body: it starts behind you (opposite the aim), swings over the top and down through the aim, and
 // follows through BAT_FOLLOW rad past it (BAT_T s in all). While it sweeps, the death ball, decoys and other players (BAT_HITS_TEAMMATES: teammates too) inside a sector at the bat's
-// current angle (BAT_HIT_HALF rad either side, out to BAT_REACH) AND within BAT_CONE rad of the aim are hit once each.
+// current angle (BAT_HIT_HALF rad either side, out to BAT_REACH) are hit once each, anywhere along the swing. WHEN along the swing it connects steers the shot: early (the bat still
+// round behind / over the top) it goes wide, mostly straight away from the batter (aim share BAT_AIM_W_EARLY); by the time the bat reaches the aim it goes exactly the way you
+// chose (BAT_AIM_W_LATE = 1). BAT_Q_POW bends the curve between them (above 1 = stays wide for longer).
 // Ball / decoy hit: speed = (BAT_V + BAT_KEEP x the speed it had) x (1 + BAT_CHARGE_BONUS x charge), capped at BAT_VMAX (+ BAT_VMAX_CHARGE x charge), mostly along the aim
-// (BAT_AIM_W: 1 = exactly the aimed direction, 0 = straight away from the batter), plus BAT_CARRY x the batter's velocity. Big hits raise the ball's speed cap like a hatchet hit.
+// plus BAT_CARRY x the batter's velocity. Big hits raise the ball's speed cap like a hatchet hit.
 // Player hit: the same with BAT_PLAYER_V / BAT_PLAYER_KEEP / BAT_PLAYER_VMAX (players are heavier than the ball, so they get their own numbers).
-const BAT_T = 0.2, BAT_COOLDOWN = 1.5, BAT_REACH = 90, BAT_HIT_HALF = 0.55, BAT_CONE = 1.0; // swing time (s), cooldown (s), bat tip distance from the player's centre, half-width of the hit sector (rad), half-angle of the cone round the aim where hits count (rad)
+const BAT_T = 0.2, BAT_COOLDOWN = 1.5, BAT_REACH = 90, BAT_HIT_HALF = 0.55; // swing time (s), cooldown (s), bat tip distance from the player's centre, half-width of the hit sector (rad)
 const BAT_WIND = 0.35, BAT_FOLLOW = 0.6, BAT_CHARGE_T = 0.6, BAT_CHARGE_BONUS = 0.5; // extra pull-back at full charge (rad), follow-through past the aim (rad), time to full charge (s), power added at full charge (0.5 = +50%)
-const BAT_V = 700, BAT_KEEP = 1.15, BAT_CARRY = 0.6, BAT_VMAX = 1500, BAT_VMAX_CHARGE = 300, BAT_AIM_W = 0.6, BAT_FX = 0.3; // ball: flat speed added, share of its own speed kept, share of the batter's velocity added, speed cap (+ extra at full charge), aim vs away blend, streak length (s)
+const BAT_V = 700, BAT_KEEP = 1.15, BAT_CARRY = 0.6, BAT_VMAX = 1500, BAT_VMAX_CHARGE = 300, BAT_FX = 0.3; // ball: flat speed added, share of its own speed kept, share of the batter's velocity added, speed cap (+ extra at full charge), streak length (s)
+const BAT_AIM_W_EARLY = 0.1, BAT_AIM_W_LATE = 1, BAT_Q_POW = 1.3; // aim share of the shot for the earliest / latest contact (0 = straight away from the batter, 1 = exactly the aimed way), curve between them
 // Impact effects (sparks etc., see render/impact.js) when a player slams into something (terrain, pegs, other players, balls): nothing below IMPACT_V0 (u/s of speed change in a
 // collision), growing to full size at IMPACT_V1.
 const IMPACT_V0 = 260, IMPACT_V1 = 1000;

@@ -41,7 +41,7 @@ const net = {
     on: false, slot: -1, ws: null, room: '', running: false, rtt: 0, status: '',
     keys: noKeys(), seq: 0, ack: 0, pendingSpecial: null,
     dtMs: 1000 / 120, snapEvery: 4,
-    buf: [], evq: [], off: 0, lastSnapAt: 0, cur: null,
+    buf: [], evq: [], off: 0, lastSnapAt: 0, cur: null, shown: null, shape: null,
     setStatus(t) {
         this.status = t;
         const el = document.getElementById('netstatus');
@@ -144,14 +144,9 @@ const net = {
         while (buf.length > 2 && buf[1].tick <= this.cur)
             buf.shift();
     },
-    applyTick(t) {
-        const buf = this.buf;
-        let i = 0;
-        while (i + 1 < buf.length && buf[i + 1].tick <= t)
-            i++;
-        const a = buf[i], b = buf[i + 1] || a;
-        const u = b.tick > a.tick && b.tick - a.tick <= 3 * this.snapEvery ? Math.min(1, Math.max(0, (t - a.tick) / (b.tick - a.tick))) : 0;
-        loadState(netMixState(a.s, b.s, u));
+    show(st) { // load a state into the game's globals for drawing (also used to put the drawn world back after the predictor borrowed them)
+        this.shown = st;
+        loadState(st);
         if (this.slot >= 0) { // my own side shows what I am pressing right now, not what the server heard a round trip ago
             Object.assign(allPlayers[this.slot].keys, this.keys);
             if (this.pendingSpecial) {
@@ -161,6 +156,15 @@ const net = {
                     allPlayers[this.slot].special = this.pendingSpecial;
             }
         }
+    },
+    applyTick(t) {
+        const buf = this.buf;
+        let i = 0;
+        while (i + 1 < buf.length && buf[i + 1].tick <= t)
+            i++;
+        const a = buf[i], b = buf[i + 1] || a;
+        const u = b.tick > a.tick && b.tick - a.tick <= 3 * this.snapEvery ? Math.min(1, Math.max(0, (t - a.tick) / (b.tick - a.tick))) : 0;
+        this.show(this.shape ? this.shape(netMixState(a.s, b.s, u)) : netMixState(a.s, b.s, u)); // this.shape: net/predict.js overlays my predicted player
         while (this.evq.length && this.evq[0][1] <= t)
             this.fire(this.evq.shift());
         if (pause > 0)

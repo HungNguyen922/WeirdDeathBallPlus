@@ -33,6 +33,8 @@ function makeBrowser(port, query) {
         events.onBatHit = () => { __counts.bats++; };
     `);
     vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/net/client.js'), 'utf8'), ctx, { filename: 'js/net/client.js' });
+    if (!process.env.NOPREDICT)
+        vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/net/predict.js'), 'utf8'), ctx, { filename: 'js/net/predict.js' }); // prediction on, like the page
     return { sim, ctx, els, counts, net: sim.run('net'), listeners };
 }
 
@@ -84,11 +86,27 @@ function rawClient(port, room) {
     const expect = (alive + 1) * 120;
     check(bodiesPerSec > expect * 0.85 && bodiesPerSec < expect * 1.15, `trail samples fire once per sim tick per body (${bodiesPerSec.toFixed(0)}/s, expected ~${expect})`);
 
+console.log('\nresponsiveness');
+    {
+        const y0 = B.sim.run('players[0].y'), t1 = performance.now();
+        B.net.keys.up = true; B.net.sendKeys();
+        while (performance.now() - t1 < 70) await sleep(5);
+        const rise = y0 - B.sim.run('players[0].y');
+        B.net.keys.up = false; B.net.sendKeys();
+        if (process.env.NOPREDICT)
+            console.log('  info without prediction my player rose ' + rise.toFixed(2) + ' u in 70 ms');
+        else
+            check(rise > 3, 'with prediction my jump shows within 70 ms of the key press, inside the 100 ms interpolation delay (rose ' + rise.toFixed(2) + ' u)');
+        await sleep(1800); // land again
+    }
+
     frames.length = 0;
     B.net.keys.r = true; B.net.sendKeys();
     await sleep(120);
     check(B.sim.run('players[0].keys.r') === true, 'my own key shows as pressed immediately (before the server round trip)');
     await sleep(1500);
+    if (!process.env.NOPREDICT)
+        check(B.sim.run('pred.state !== null && pred.tick > 0'), 'the predictor is running (predicted tick ' + B.sim.run('pred.tick') + ')');
     const xs = frames.map(f => f.x);
     const moved = xs.filter((x, i) => i > 0 && x !== xs[i - 1]).length;
     const steps = xs.slice(1).map((x, i) => x - xs[i]);

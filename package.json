@@ -1,0 +1,13 @@
+{
+  "name": "weird-death-ball",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Weird Death Ball: browser game plus an authoritative WebSocket room server",
+  "scripts": {
+    "start": "node js/server/server.js",
+    "test": "node js/test/state-test.js && node js/test/predict-test.js && node js/test/net-test.js && node js/test/client-test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

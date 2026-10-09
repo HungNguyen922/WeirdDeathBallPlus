@@ -112,7 +112,7 @@ function drawCasts() { // abilities being cast: ghost pegs / decoys, marionette 
             cx.restore();
         } else if (p.cast.type === 'barbwire') { // time left on the wire: a ring that drains as the key is held, turning red when nearly out
             const left = 1 - Math.min(1, p.cast.held / BARBWIRE_MAX_T);
-            drawTimer(p.x, p.y, p.r + 6, left, left < 0.25 ? '#ff5a4d' : col);
+            drawTimer(p.x, p.y, p.r + 6, left, left < 0.25 ? '#b36bff' : col);
         } else if (p.cast.type === 'arrow') { // charge ring (white and pulsing at full) and the arrow held out along the aim
             const c = p.cast, full = c.charge >= 1, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 70);
             drawTimer(p.x, p.y, p.r + 6, c.charge, full ? '#ffffff' : col);

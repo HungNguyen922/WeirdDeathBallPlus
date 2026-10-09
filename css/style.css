@@ -1,12 +1,12 @@
 :root{--bg:#f4f4f2;--fg:#1c1f23;--mut:#5d6670;--line:rgba(128,128,128,.3)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101316;--fg:#e8e8e4;--mut:#98a2ad}}
 :root[data-theme="dark"]{--bg:#101316;--fg:#e8e8e4;--mut:#98a2ad}
-body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;
-    html,body{overflow:hidden;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;user-select:none}
-    body{position:fixed;inset:0}
-    canvas{touch-action:none}
-    padding:calc(12px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) calc(12px + env(safe-area-inset-left,0px))}
-canvas{flex:none;width:auto;height:auto;max-width:100%;
+/* the page never scrolls, pans or zooms: the game fills one screen */
+html,body{overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
+body{margin:0;position:fixed;inset:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;
+  padding:calc(12px + env(safe-area-inset-top,0px)) calc(12px + env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) calc(12px + env(safe-area-inset-left,0px))}
+@media (pointer:coarse){body{background:#0b0e12}}
+canvas{flex:none;width:auto;height:auto;max-width:100%;touch-action:none;
   max-height:calc(100vh - 24px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
   max-height:calc(100dvh - 24px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
   background:#14181d;border-radius:8px;outline:none}
@@ -26,7 +26,7 @@ section button.red.on{background:#ef5350}
 /* the menu panel */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;z-index:10}
 .overlay[hidden]{display:none}
-.dialog{background:var(--bg);color:var(--fg);border:2px solid var(--mut);border-radius:10px;width:100%;max-width:640px;max-height:calc(100dvh - 24px);overflow:auto;padding:12px 16px 16px;box-sizing:border-box}
+.dialog{background:var(--bg);color:var(--fg);border:2px solid var(--mut);border-radius:10px;width:100%;max-width:640px;max-height:calc(100dvh - 24px);overflow:auto;overscroll-behavior:contain;touch-action:pan-y;padding:12px 16px 16px;box-sizing:border-box}
 .dhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .tabs{display:flex;gap:6px}
 .tab{border-color:transparent;border-bottom:3px solid transparent;border-radius:6px 6px 0 0;color:var(--mut);padding:3px 14px}
@@ -37,9 +37,10 @@ section[hidden]{display:none}
 h3{margin:0 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .hint{margin:6px 0 0;color:var(--mut);font-size:13px}
+body:not(.touch) .touchonly,body:not(.touch) #specialgroup{display:none} /* only shown once the page knows it is on a touch screen */
 
 /* controls tab */
-.scroll{overflow-x:auto;margin-bottom:6px}
+.scroll{overflow-x:auto;margin-bottom:6px;touch-action:pan-x pan-y}
 table{border-collapse:collapse;width:100%;white-space:nowrap}
 th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
 thead th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);font-weight:600}
@@ -48,3 +49,25 @@ kbd{font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fg);bo
 ul.keys{margin:0;padding:0;list-style:none}
 ul.keys li{padding:3px 0;color:var(--mut)}
 ul.keys li kbd{margin-right:2px}
+
+/* touch controls (js/touch.js): drawn over the whole screen, never intercepting touches themselves */
+#touchui{display:none;position:fixed;inset:0;pointer-events:none;z-index:5}
+body.touch #touchui{display:block}
+.zones{position:absolute;right:0;top:0;width:50%;height:100%;display:flex;flex-direction:column}
+.zone{flex:1;display:flex;align-items:center;justify-content:center;border-top:1px dashed rgba(255,255,255,0);transition:border-color .6s,background .08s}
+.zone.down{background:rgba(255,255,255,.14)}
+.lhint{position:absolute;left:0;top:0;width:50%;height:100%;display:flex;align-items:center;justify-content:center}
+.hintbit{opacity:0;transition:opacity .6s;color:rgba(255,255,255,.75);font-weight:700;font-size:12px;letter-spacing:.12em;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+#touchui.hint .hintbit{opacity:1}
+#touchui.hint .zone{border-top-color:rgba(255,255,255,.3)}
+#stick{position:fixed;left:0;top:0;width:calc(var(--R,48px)*2);height:calc(var(--R,48px)*2);margin:calc(var(--R,48px)*-1) 0 0 calc(var(--R,48px)*-1);box-sizing:border-box;border-radius:50%;border:2px solid rgba(255,255,255,.55);background:rgba(255,255,255,.07);opacity:0;transition:opacity .15s}
+#stick.on{opacity:1}
+#stick.ghost{opacity:.35;transition-duration:.4s} /* released, but its centre can still be reused for a quick tap */
+#stick .knob{position:absolute;left:50%;top:50%;width:calc(var(--R,48px)*.8);height:calc(var(--R,48px)*.8);margin:calc(var(--R,48px)*-.4) 0 0 calc(var(--R,48px)*-.4);border-radius:50%;background:rgba(255,255,255,.4)}
+
+/* portrait on a phone: ask for landscape (tap to play anyway) */
+#rotate{display:none;position:fixed;inset:0;z-index:20;background:#0b0e12;color:#e8e8e4;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px;font-size:18px}
+#rotate .ico{font-size:56px;line-height:1}
+#rotate small{color:#98a2ad;font-size:13px}
+@media (orientation:portrait) and (pointer:coarse){#rotate{display:flex}}
+#rotate[hidden]{display:none !important}

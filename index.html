@@ -6,6 +6,18 @@
 </head><body>
 <canvas id="c" width="1302" height="740" tabindex="0"></canvas>
 
+<!-- touch controls (shown on touch screens; see js/touch.js): left half = floating stick, right half = three bands, top to bottom: special, weight, grapple -->
+<div id="touchui" aria-hidden="true">
+<div class="lhint hintbit">DRAG TO MOVE</div>
+<div class="zones">
+<div class="zone" data-act="sp"><span class="hintbit">SPECIAL</span></div>
+<div class="zone" data-act="x"><span class="hintbit">WEIGHT</span></div>
+<div class="zone" data-act="z"><span class="hintbit">GRAPPLE</span></div>
+</div>
+<div id="stick"><div class="knob"></div></div>
+</div>
+<div id="rotate"><div class="ico">&#8635;</div><div>Rotate your phone to landscape</div><small>or tap here to play anyway</small></div>
+
 <div id="menu" class="overlay" hidden>
 <div class="dialog" role="dialog" aria-modal="true" aria-label="Menu">
 <div class="dhead">
@@ -33,6 +45,11 @@
 <button id="mode2v2" class="mode" title="Toggle 2v2: each team gets a second player, spawned 2 player lengths from the ball and from the goal scoop (key T)">2v2: Off</button>
 </div>
 </div>
+<div class="group" id="specialgroup">
+<h3>Special ability</h3>
+<div class="row" id="specialpick"></div>
+<p class="hint">Changes the player you control with the touch controls (Blue offline, your seat online).</p>
+</div>
 <div class="group">
 <h3>Sound</h3>
 <div class="row">
@@ -50,6 +67,14 @@
 </section>
 
 <section data-panel="controls" hidden>
+<div class="group touchonly">
+<h3>Touch</h3>
+<ul class="keys">
+<li><b>Left half:</b> touch and drag to move. Where you first touch becomes the centre; the direction you drag picks one of 8 arrow-key directions.</li>
+<li><b>Snap the aim:</b> the centre stays put for a moment after you lift, so tap the same direction twice quickly to snap the arrow's aim.</li>
+<li><b>Right half:</b> top third = special, middle = weight, bottom = grapple. Touching the line between two thirds presses both.</li>
+</ul>
+</div>
 <div class="scroll">
 <table>
 <thead><tr><th>Player</th><th>Move</th><th>Jump</th><th>Drop</th><th>Grapple</th><th>Weight</th><th>Special</th></tr></thead>
@@ -107,6 +132,7 @@
 <script src="js/input.js"></script>
 <script src="js/net/client.js"></script>
 <script src="js/net/predict.js"></script>
+<script src="js/touch.js"></script>
 <script src="js/menu.js"></script>
 <script src="js/main.js"></script>
 </body></html>

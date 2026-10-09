@@ -58,7 +58,7 @@ const DASH_CAST = 0.12, DASH_COOLDOWN = 5, PLINKO_CAST = DASH_CAST, PLINKO_COOLD
 // one at the new spot. The cooldown starts when the decoy appears.
 const MARIONETTE_GRACE = 0.1, MARIONETTE_COOLDOWN = 20, MARIONETTE_V = 500, MARIONETTE_FX = 0.3; // shove speed (u/s) added to the ball, length (s) of its streak effect
 
-const DECOY_CAST = 1, DECOY_COOLDOWN = 30, DECOY_BOUNCE_PLAYER = 0.5, DECOY_BOUNCE_BALL = 0.8, DECOY_TELL = true; // DECOY_TELL: draw a dashed ring in the caster's color around the decoy (false = a perfect lookalike)
+const DECOY_CAST = 1, DECOY_COOLDOWN = 30, DECOY_BOUNCE_PLAYER = 0.75, DECOY_BOUNCE_BALL = 0.8, DECOY_TELL = true; // DECOY_TELL: draw a dashed ring in the caster's color around the decoy (false = a perfect lookalike)
 
 // Arrow: hold the special key to charge (ARROW_CHARGE_T s to full), release to fire along the aim. LEFT / RIGHT turn it at ARROW_TURN rad/s; a double tap within ARROW_DBL_T s snaps it.
 // The death ball / decoys gain ARROW_BALL_K x the arrow's velocity; an enemy is knocked back by ARROW_KNOCK x it (ARROW_KILLS = true kills instead).
@@ -88,10 +88,10 @@ const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: 
 
 // Crash shot: a player who touches the death ball dies, but first collides with it like two pool balls: an elastic collision along the line between their centers,
 // momentum conserved with the player's mass PLAYER_M against the ball's BALL_M. CRASH_E is the restitution (1 = perfectly elastic, no energy lost).
-const PLAYER_M = 1, CRASH_E = 1;
+const PLAYER_M = 1, CRASH_E = 0.75;
 const PLAYER_BOUNCE = 0.9; // restitution when two players collide: 1 = attacker stops dead and the victim takes all the speed, 0 = they stick together and share it (was 0.4)
 
 // Ground friction (per second, as a share of speed lost): GROUND_BRAKE slows a player on the floor who is not steering (not applied while tethered); BALL_ROLL_DRAG slows the ball rolling on the floor.
 // Original values were 5 and 0.4; lower = more slippery.
 const GROUND_BRAKE = 2, BALL_ROLL_DRAG = 0.15;
-const BALL_R = 14, BALL_I = 6 * BALL_M * BALL_R * BALL_R; // spin inertia: high, so spin takes a whippy throw
+const BALL_R = 14, BALL_I = 3 * BALL_M * BALL_R * BALL_R, BALL_W_MAX = 60; // spin inertia (was 6x: lower = spins up easier) and top spin speed (rad/s, was a hardcoded 45)

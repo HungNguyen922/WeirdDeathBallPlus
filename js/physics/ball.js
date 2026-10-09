@@ -25,7 +25,7 @@ class Ball {
         }
         this.x += this.vx * DT;
         this.y += this.vy * DT;
-        this.w = Math.max(-45, Math.min(45, this.w * (1 - 0.3 * DT)));
+        this.w = Math.max(-BALL_W_MAX, Math.min(BALL_W_MAX, this.w * (1 - 0.3 * DT)));
         this.th += this.w * DT; // spin carries in the air
         if (this.y - this.r < 0) {
             this.y = this.r;

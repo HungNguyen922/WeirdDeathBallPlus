@@ -3,7 +3,7 @@ const pegs = []; // floating bounce pegs {x, y, vx, vy, r, team, owner, flash, l
 const decoys = []; // decoy balls (Ball instances with .decoy = true, .team and .owner)
 // Player ids: 0 = Blue, 1 = Red (always in play); 2 = Blue's teammate, 3 = Red's teammate (2v2 only).
 const BLUE = '#42a5f5', RED = '#ef5350';
-const p1 = new Player(0, 250, BLUE, 0), p2 = new Player(1, 750, RED, 1);
+const p1 = new Player(0, 250, BLUE, 0), p2 = new Player(1, W - 250, RED, 1);
 const p3 = new Player(0, 0, BLUE, 2), p4 = new Player(1, 0, RED, 3);
 const allPlayers = [p1, p2, p3, p4];
 const players = [p1, p2], ball = new Ball(); // `players` = who is in the current match (edited in place by layoutTeams)
@@ -15,7 +15,7 @@ function layoutTeams(size) { // size 1 = 1v1, 2 = 2v2; takes effect on the next 
     if (size === 2)
         players.push(p3, p4);
     p1.sx = size === 2 ? NETX - SPAWN_BALL_D : 250;
-    p2.sx = size === 2 ? NETX + SPAWN_BALL_D : 750;
+    p2.sx = size === 2 ? NETX + SPAWN_BALL_D : W - 250;
     p3.sx = RUN + SPAWN_SCOOP_D;
     p4.sx = W - RUN - SPAWN_SCOOP_D;
 }

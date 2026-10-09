@@ -16,6 +16,7 @@ const rng = seed => { let s = seed >>> 0; return () => { s = (Math.imul(s, 16645
 function makeClient() {
     const sim = loadSim();
     sim.ctx.NET_BITS = NET_BITS;
+    sim.ctx.performance = performance;
     sim.run('const net = { slot: 0, off: 0, dtMs: 1000 / 120, rtt: 0, running: true };'); // just enough of client.js for predict.js
     vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/net/predict.js'), 'utf8'), sim.ctx, { filename: 'js/net/predict.js' });
     return sim;
@@ -129,6 +130,172 @@ console.log('\nreconcile fixes a deliberately wrong prediction');
     check(Math.abs(C.run('pred.err.x') - 60) < 1e-6 && C.run('pred.state.players[0].x') === snap.players[0].x, 'the predicted state is back on the server state, the 60 u shows up as a smoothing offset');
     for (let i = 0; i < 60; i++) C.run('predFrame(0)');
     check(Math.abs(C.run('pred.err.x')) < 0.1, 'the offset fades out over a few frames instead of snapping');
+}
+
+console.log('\nwhat is drawn from which timeline');
+{
+    const S = loadSim(), C = makeClient();
+    for (const sim of [S, C]) sim.run('setTeamSize(1)');
+    for (let i = 0; i < 300; i++) S.run('update()');
+    const snap = S.save();
+    C.ctx.__s = snap;
+    C.run('predReconcile(300, __s, 0)');
+    // the predicted world: the ball is further along, I have an arrow and a peg out; the interpolated (older) world has the opponent's arrow and peg too
+    C.run(`pred.state.ball.x = 600; pred.state.ball.th = 0; pred.state.ball.r = 14;
+           pred.state.arrows = [{ owner: 0, x: 1 }]; pred.state.pegs = [{ owner: 0, x: 11 }];`);
+    const mixed = JSON.parse(JSON.stringify(snap));
+    mixed.ball.x = 500; mixed.arrows = [{ owner: 0, x: 2 }, { owner: 1, x: 3 }]; mixed.pegs = [{ owner: 1, x: 12 }, { owner: 0, x: 13 }];
+    mixed.players[1].onBall = true; mixed.players[1].tball = 0; mixed.players[1].hookAng = 0; mixed.players[1].rope = { x: 500, y: 0 };
+    C.ctx.__m = mixed;
+    const out = C.run('predShape(__m)');
+    check(out.ball.x === 600, 'the death ball comes from the predicted timeline (the swing and the hit are on the same clock)');
+    check(JSON.stringify(out.arrows.map(a => a.x)) === '[3,1]', 'arrows: the opponent\'s from the drawn world, mine from the prediction (no duplicate of mine)');
+    check(JSON.stringify(out.pegs.map(q => q.x)) === '[12,11]', 'plinko pegs: same split');
+    check(Math.abs(Math.hypot(out.players[1].rope.x - 600, out.players[1].rope.y - out.ball.y) - 14) < 1e-6, 'an opponent tethered to the ball has their hook moved onto the predicted ball');
+    check(mixed.ball.x === 500 && mixed.arrows.length === 2, 'the interpolated state itself is not modified');
+    C.run('pred.errBall.x = 30');
+    check(C.run('predShape(__m)').ball.x === 630, 'a pending ball correction is added to the drawn ball');
+    C.run('pred.errBall.x = 0; pred.state.pause = 1');
+    check(C.run('predShape(__m)').ball.x === 500, 'while the predicted world is frozen on a goal the drawn ball stays on the drawn timeline');
+    C.run('pred.state.pause = 0; PRED_WORLD_OFF = 1');
+}
+{
+    console.log('\nball corrections are smoothed, not snapped');
+    const S = loadSim(), C = makeClient();
+    for (const sim of [S, C]) sim.run('setTeamSize(1)');
+    for (let i = 0; i < 200; i++) S.run('update()');
+    const snap = S.save();
+    C.ctx.__s = snap;
+    C.run('predReconcile(200, __s, 0); pred.state.ball.x += 70; pred.state.ball.y -= 20'); // my prediction had the ball somewhere else than the server says
+    C.run('predReconcile(200, __s, 0)');
+    check(Math.abs(C.run('pred.errBall.x') - 70) < 1e-6 && Math.abs(C.run('pred.errBall.y') + 20) < 1e-6, 'a late opponent hit on the ball shows up as a blended correction (70, -20)');
+    C.run('pred.state.ball.x += 400');
+    C.run('predReconcile(200, __s, 0)');
+    check(C.run('pred.errBall.x') < 100, 'a huge ball correction snaps instead of sliding across the arena');
+}
+
+console.log('\nmy own hit effects fire at predicted time and their server copies are dropped');
+{
+    const S = loadSim(), C = makeClient(), LAG = 12, r = rng(77);
+    for (const sim of [S, C]) { sim.run('setTeamSize(1)'); sim.run("players[0].special = 'bat'; players[1].special = 'dash'"); }
+    S.run('players[0].x = players[0].sx = NETX - 60'); // standing beside the ball, so swings connect
+    C.run('var __pf = []; events.onBatHit = (p, b, x, y, ux, uy, k) => __pf.push(pred.tick); events.onImpact = () => {};');
+    S.run('var __sv = []; var __tk = 0; events.onBatHit = (p, b) => __sv.push(__tk); events.onImpact = () => {};');
+    const inflightIn = [], inflightSnap = [];
+    let bits = 0, seq = 0, applied = 0, serverSeq = 0;
+    for (let n = 1; n <= 3000; n++) {
+        let nb = bits;
+        if (r() < 0.03) nb ^= NET_BITS.sp; // only swing: stand still beside the ball
+        if (nb !== bits) {
+            bits = nb; ++seq;
+            C.ctx.__b = bits; C.ctx.__q = seq; C.ctx.__base = n - 1 + LAG;
+            C.run('predPress(__b, __q, pred.state ? pred.tick : __base)');
+            inflightIn.push({ at: n + LAG, seq, bits });
+        }
+        while (inflightIn.length && inflightIn[0].at <= n) { const m = inflightIn.shift(); applied = m.bits; serverSeq = m.seq; }
+        S.ctx.__tk = n;
+        S.run(`Object.assign(players[0].keys, ${bitsToKeys(applied)}); update()`);
+        if (n % 4 === 0) inflightSnap.push({ at: n + LAG, tick: n, ack: serverSeq, s: JSON.parse(JSON.stringify(S.save())) });
+        while (inflightSnap.length && inflightSnap[0].at <= n) {
+            const m = inflightSnap.shift();
+            C.ctx.__T = m.tick; C.ctx.__s = m.s; C.ctx.__a = m.ack;
+            C.run('predReconcile(__T, __s, __a)');
+        }
+        C.ctx.__t = n + LAG;
+        C.run('predAdvance(__t)');
+    }
+    const serverHits = S.run('__sv'), predicted = C.run('__pf');
+    check(serverHits.length >= 3, `the scenario produces bat hits (${serverHits.length})`);
+    // each predicted hit is at tick t of the server timeline; the server reaches the same tick LAG ticks of real time later... compare in server ticks
+    check(predicted.length === serverHits.length, `exactly one predicted effect per real hit, none doubled by rollbacks (${predicted.length} predicted, ${serverHits.length} real)`);
+    check(predicted.every((t, i) => t === serverHits[i] || Math.abs(t - serverHits[i]) <= 1), 'and each is for the same sim tick as the real one');
+    // the dedupe: a server event for my slot that matches a predicted one is dropped once; one with no prediction goes through
+    C.ctx.__e1 = ['bt', serverHits[0], 0, 'b', 0, 0, 0, 0, 0];
+    C.run('pred.fired = [{ type: "bt", tick: __e1[1], used: false }]');
+    check(C.run('predSkipServerEvent(__e1)') === true && C.run('predSkipServerEvent(__e1)') === false, 'the server copy of a predicted hit is dropped once, a second one is not');
+    C.ctx.__e2 = ['bt', 5000, 1, 'b', 0, 0, 0, 0, 0];
+    check(C.run('predSkipServerEvent(__e2)') === false, 'effects belonging to the opponent are never dropped');
+}
+
+console.log('\nwhat is DRAWN for my rope and decoy (the drawn world is older than the predicted one)');
+function drawnInvariants({ LAG, DELAY, seed, special, script, ticks, opp }) {
+    const S = loadSim(), C = makeClient(), r = rng(seed), hist = [];
+    for (const sim of [S, C]) { sim.run('setTeamSize(1)'); sim.run(`players[0].special = '${special}'; players[1].special = 'decoy'`); }
+    const inflightIn = [], inflightSnap = [];
+    let bits = 0, seq = 0, applied = 0, serverSeq = 0, bits1 = 0;
+    const res = { frames: 0, tetheredDecoy: 0, decoyDrawnEarly: 0, ropeOff: 0, ropeOffOpp: 0, worst: 0, worstOpp: 0, rawOpp: 0, myDecoyMissing: 0, sawMyDecoy: 0, wrongTarget: 0 };
+    for (let n = 1; n <= ticks; n++) {
+        let nb = bits;
+        const f = script(n, r);
+        nb = (nb & ~(f.mask || 0)) | (f.set || 0);
+        if (nb !== bits) {
+            bits = nb; ++seq;
+            C.ctx.__b = bits; C.ctx.__q = seq; C.ctx.__base = n - 1 + LAG;
+            C.run('predPress(__b, __q, pred.state ? pred.tick : __base)');
+            inflightIn.push({ at: n + LAG, seq, bits });
+        }
+        while (inflightIn.length && inflightIn[0].at <= n) { const m = inflightIn.shift(); applied = m.bits; serverSeq = m.seq; }
+        if (opp) bits1 = opp(n, r, bits1);
+        S.run(`Object.assign(players[0].keys, ${bitsToKeys(applied)}); Object.assign(players[1].keys, ${bitsToKeys(bits1)}); update()`);
+        hist[n] = JSON.parse(JSON.stringify(S.save()));
+        if (n % 4 === 0) inflightSnap.push({ at: n + LAG, tick: n, ack: serverSeq, s: hist[n] });
+        while (inflightSnap.length && inflightSnap[0].at <= n) {
+            const m = inflightSnap.shift();
+            C.ctx.__T = m.tick; C.ctx.__s = m.s; C.ctx.__a = m.ack;
+            C.run('predReconcile(__T, __s, __a)');
+        }
+        C.ctx.__t = n + LAG;
+        C.run('predAdvance(__t)');
+        const drawnTick = n - LAG - DELAY;
+        if (drawnTick < 60 || !C.run('!!pred.state')) continue;
+        C.ctx.__m = hist[drawnTick];
+        const out = C.run('predShape(__m)');
+        res.frames++;
+        const me = out.players[0];
+        if (C.run('pred.state.players[0].tball') > 0) {
+            res.tetheredDecoy++;
+            const d = out.decoys[me.tball - 1];
+            if (!d) { res.wrongTarget++; continue; }
+            const off = Math.abs(Math.hypot(me.rope.x - d.x, me.rope.y - d.y) - d.r);
+            res.worst = Math.max(res.worst, off);
+            if (off > 1) res.ropeOff++;
+        }
+        const mineDrawn = out.decoys.find(d => d.owner === 0), mineReal = hist[n].decoys.find(d => d.owner === 0), mineOld = hist[drawnTick].decoys.find(d => d.owner === 0);
+        if (mineReal) res.sawMyDecoy++;
+        if (mineReal && !mineOld && mineDrawn) res.decoyDrawnEarly++;
+        if (mineReal && !mineDrawn && C.run('pred.state.decoys.some(d => d.owner === 0)')) res.myDecoyMissing++;
+        // the opponent's rope, when it is on a decoy: hook on that decoy's edge in the DRAWN list, whichever decoy (mine from the prediction) it is
+        const opp1 = out.players[1];
+        if (opp1.onBall && opp1.tball > 0) {
+            const d = out.decoys[opp1.tball - 1];
+            if (d) { const off = Math.abs(Math.hypot(opp1.rope.x - d.x, opp1.rope.y - d.y) - d.r); res.worstOpp = Math.max(res.worstOpp, off); if (off > res.rawOpp + 0.5) res.ropeOffOpp++; }
+        }
+        const rawO = hist[drawnTick].players[1]; // the unmodified server state: the sim itself places the hook before the decoy moves, so it is never exactly on the edge
+        if (rawO.onBall && rawO.tball > 0) { const d = hist[drawnTick].decoys[rawO.tball - 1]; if (d) res.rawOpp = Math.max(res.rawOpp, Math.abs(Math.hypot(rawO.rope.x - d.x, rawO.rope.y - d.y) - d.r)); }
+    }
+    return res;
+}
+const castThenGrapple = (n, r) => { // cast the decoy, then hold the grapple and swing about
+    const f = { set: 0, mask: 0 };
+    if (n === 10) f.set |= NET_BITS.sp;
+    if (n === 13) f.mask |= NET_BITS.sp;
+    if (n === 150) f.set |= NET_BITS.z;
+    if (n > 150 && n % 40 === 0) f.set |= NET_BITS[r() < 0.5 ? 'l' : 'r'];
+    if (n > 150 && n % 40 === 20) f.mask |= NET_BITS.l | NET_BITS.r;
+    if (n === 900) f.mask |= NET_BITS.z;
+    return f;
+};
+for (const [LAG, DELAY] of [[12, 12], [24, 20]]) {
+    const res = drawnInvariants({ LAG, DELAY, seed: 3, special: 'decoy', script: castThenGrapple, ticks: 900 });
+    check(res.tetheredDecoy > 100 && res.sawMyDecoy > 100, `scenario really grapples my own decoy (${res.tetheredDecoy} frames tethered, decoy alive for ${res.sawMyDecoy} frames)`);
+    check(res.wrongTarget === 0 && res.ropeOff === 0, `lag ${LAG}: my hook sits on the decoy I see, every frame (worst ${res.worst.toFixed(2)} u off its edge, ${res.wrongTarget} frames with no decoy at my tether)`);
+    check(res.decoyDrawnEarly > 20, `lag ${LAG}: my decoy appears the moment it is cast, not a lag later (${res.decoyDrawnEarly} frames drawn ahead of the drawn world)`);
+}
+{
+    // the opponent is swinging on THEIR decoy and I am grappling mine: both hooks stay on what is drawn
+    const oppScript = (n, r, b) => { if (n === 12) return b | NET_BITS.sp; if (n === 15) return b & ~NET_BITS.sp; if (n === 160) return b | NET_BITS.z; if (n > 160 && n % 50 === 0) return (b & ~(NET_BITS.l | NET_BITS.r)) | NET_BITS[r() < 0.5 ? 'l' : 'r']; return b; };
+    const res = drawnInvariants({ LAG: 12, DELAY: 12, seed: 8, special: 'decoy', script: castThenGrapple, ticks: 900, opp: oppScript });
+    check(res.ropeOff === 0 && res.ropeOffOpp === 0, `both players on decoys: my rope ${res.ropeOff} bad frames, theirs ${res.ropeOffOpp} bad frames (worst ${res.worst.toFixed(2)} / ${res.worstOpp.toFixed(2)} u; the raw server state itself is ${res.rawOpp.toFixed(2)} u off, that is the sim's one-tick order)`);
 }
 
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nall good');

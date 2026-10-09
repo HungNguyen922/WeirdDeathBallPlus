@@ -164,19 +164,39 @@ function predShape(mixed) {
         out.ball = { ...b, x: b.x + pred.errBall.x, y: b.y + pred.errBall.y };
         out.pegs = mixed.pegs.filter(q => q.owner !== slot).concat(ps.pegs.filter(q => q.owner === slot));
         out.arrows = mixed.arrows.filter(a => a.owner !== slot).concat(ps.arrows.filter(a => a.owner === slot));
-        out.players = mixed.players.map((q, i) => { // an opponent tethered to the ball: their hook is on the ball's edge, so move it with the ball
-            if (i === slot || !q.onBall || q.tball !== 0 || !q.rope)
-                return q;
-            const ang = out.ball.th + q.hookAng;
-            return { ...q, rope: { ...q.rope, x: out.ball.x + Math.cos(ang) * out.ball.r, y: out.ball.y + Math.sin(ang) * out.ball.r } };
+        // Decoys: mine, and the one I am tethered to, come from the predicted world (the rope end is computed there, so it must hang on the decoy that is drawn).
+        // The others stay on the drawn timeline. Decoys are told apart by owner (one per player), because their index in the list differs between the two worlds.
+        const tethered = me.tball > 0 ? ps.decoys[me.tball - 1] : null;
+        const fromPred = ps.decoys.filter(d => d.owner === slot || d === tethered), predOwners = new Set(fromPred.map(d => d.owner));
+        const list = mixed.decoys.filter(d => !predOwners.has(d.owner)).concat(fromPred);
+        const idxOf = owner => list.findIndex(d => d.owner === owner) + 1; // 0 = no such decoy in this picture
+        out.decoys = list;
+        out.players = mixed.players.map((q, i) => {
+            if (i === slot)
+                return q; // replaced below
+            if (q.onBall && q.tball === 0 && q.rope) { // tethered to the ball: their hook is on the ball's edge, so move it with the ball
+                const ang = out.ball.th + q.hookAng;
+                return { ...q, rope: { ...q.rope, x: out.ball.x + Math.cos(ang) * out.ball.r, y: out.ball.y + Math.sin(ang) * out.ball.r } };
+            }
+            if (q.tball > 0) { // tethered to a decoy: find it again in the new list; if it was mine and is gone in my timeline they let go
+                const owner = mixed.decoys[q.tball - 1].owner, k = idxOf(owner);
+                if (!k)
+                    return { ...q, tball: null, onBall: false, rope: null };
+                if (!predOwners.has(owner) || !q.rope)
+                    return { ...q, tball: k };
+                const d = list[k - 1], ang = d.th + q.hookAng; // the decoy was swapped for its predicted copy: hang the hook on that one
+                return { ...q, tball: k, rope: { ...q.rope, x: d.x + Math.cos(ang) * d.r, y: d.y + Math.sin(ang) * d.r } };
+            }
+            return q;
         });
+        pred.drawnDecoyIdx = idxOf; // my own tether is remapped with this below
     } else if (me.tball === 0)
         out.ball = ps.ball; // old behaviour: only while I am tethered to it
     if (!theirs.alive)
         return out; // death is the server's call (a predicted death is shown early: it is almost always the ball, which we simulate too)
     const mine = { ...me, x: me.x + pred.err.x, y: me.y + pred.err.y };
-    if (me.tball > 0)
-        mine.tball = theirs.tball; // a decoy index in the predicted world means nothing in the interpolated one
+    if (me.tball > 0) // the index of a decoy in the predicted world means nothing in the drawn list: look it up by owner
+        mine.tball = PRED_WORLD && ps.pause <= 0 ? pred.drawnDecoyIdx(ps.decoys[me.tball - 1].owner) || null : theirs.tball;
     const players = out.players.slice();
     players[slot] = mine;
     out.players = players;

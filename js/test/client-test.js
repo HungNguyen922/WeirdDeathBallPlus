@@ -163,6 +163,27 @@ console.log('\nresponsiveness');
     const e = mk(100, 0); e.score = [1, 0]; e.msg = 'Blue scores!';
     check(mix(a, e, 0.25).score[0] === 0 && mix(a, e, 0.75).score[0] === 1, 'score switches, it is never fractional');
 
+    console.log('\nadaptive buffering (simulated arrival times, no sockets)');
+    {
+        const J = makeBrowser(port, ''), n = J.net;
+        let clock = 10000, tick = 0;
+        J.ctx.performance = { now: () => clock };
+        const feed = (count, jitterFn) => { for (let i = 0; i < count; i++) { tick += 4; clock += 1000 / 30; const j = jitterFn(i); clock += j; n.onSnapshot({ tick, s: {}, ev: [], ack: 0 }); clock -= j; } };
+        n.dtMs = 1000 / 120;
+        feed(120, () => 0);
+        const calm = n.delayMs;
+        check(calm < 85, `on a clean connection the buffer settles near its minimum (${calm.toFixed(0)} ms)`);
+        feed(60, i => (i % 3 === 0 ? 160 : 0)); // every third packet arrives 160 ms late
+        const spiky = n.delayMs;
+        check(spiky > 150 && spiky <= 260, `when packets start arriving late the buffer grows to cover it (${spiky.toFixed(0)} ms)`);
+        feed(300, () => 0);
+        check(n.delayMs < spiky - 40 && n.delayMs >= 70, `and shrinks back once the connection calms down (${n.delayMs.toFixed(0)} ms)`);
+        // smoothed rtt: one slow ping must not move the prediction lead much
+        n.rtt = 78;
+        n.onMessage({ t: 'pong', c: clock - 400, tps: 120 });
+        check(n.rtt > 78 && n.rtt < 78 + 0.25 * 400, `a single 400 ms ping only nudges the smoothed rtt (${n.rtt.toFixed(0)} ms)`);
+    }
+
     for (const x of [red, red2]) try { x.ws.close(); } catch (er) {}
     try { B.net.ws.close(); } catch (er) {}
     await sleep(200);

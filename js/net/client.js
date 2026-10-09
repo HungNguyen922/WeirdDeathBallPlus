@@ -6,7 +6,9 @@
 //
 // Start it with  ?room=NAME  in the page URL, or the "Play online" button. Optional  &server=host:port  points at a different game server.
 const NET_BITS = { l: 1, r: 2, up: 4, dn: 8, z: 16, x: 32, sp: 64 }; // must match server/server.js
-const NET_DELAY_MS = 100; // how far in the past we draw: enough to always have a snapshot ahead of us to interpolate towards
+const NET_DELAY_MS = 100; // how far in the past we draw to start with; it then adapts to the connection (below)
+const NET_DELAY_MIN = 70, NET_DELAY_MAX = 260; // limits for the adaptive delay (ms): about two snapshots at the least, a quarter second at the most
+const NET_PING_MS = 500; // how often we measure the round trip
 const NET_TELEPORT = 150; // a body that moved further than this between two snapshots was reset / respawned: do not slide it across the arena
 
 // ---- interpolation ----
@@ -41,7 +43,7 @@ const net = {
     on: false, slot: -1, ws: null, room: '', running: false, rtt: 0, status: '',
     keys: noKeys(), seq: 0, ack: 0, pendingSpecial: null,
     dtMs: 1000 / 120, snapEvery: 4,
-    buf: [], evq: [], off: 0, lastSnapAt: 0, cur: null, shown: null, shape: null,
+    buf: [], evq: [], off: 0, lastSnapAt: 0, cur: null, shown: null, shape: null, skipEvent: null, jit: 0, delayMs: NET_DELAY_MS,
     setStatus(t) {
         this.status = t;
         const el = document.getElementById('netstatus');
@@ -53,7 +55,7 @@ const net = {
             return 'Disconnected. Reload the page to reconnect.';
         const who = this.slot === 0 ? 'you are Blue' : this.slot === 1 ? 'you are Red' : 'spectating';
         const state = this.slot >= 0 && !this.running ? ' - waiting for an opponent...' : '';
-        return `Online, room "${this.room}": ${who}${state}${this.rtt ? ` (ping ${Math.round(this.rtt)} ms${this.tps ? `, server ${this.tps} ticks/s` : ''}${this.extra ? ', ' + this.extra() : ''})` : ''}`;
+        return `Online, room "${this.room}": ${who}${state}${this.rtt ? ` (ping ${Math.round(this.rtt)} ms${this.tps ? `, server ${this.tps} ticks/s` : ''}${this.extra ? ', ' + this.extra() : ''}, buffer ${Math.round(this.delayMs)} ms)` : ''}`;
     },
     join(room, server) {
         if (this.ws)
@@ -65,7 +67,7 @@ const net = {
         const ws = this.ws = new WebSocket(url);
         ws.onopen = () => {
             ws.send(JSON.stringify({ t: 'join', room, special: (allPlayers[0] || {}).special }));
-            this.pingTimer = setInterval(() => this.ws && this.ws.readyState === 1 && this.ws.send(JSON.stringify({ t: 'ping', c: performance.now() })), 2000);
+            this.pingTimer = setInterval(() => this.ws && this.ws.readyState === 1 && this.ws.send(JSON.stringify({ t: 'ping', c: performance.now() })), NET_PING_MS);
         };
         ws.onmessage = e => { try { this.onMessage(JSON.parse(e.data)); } catch (err) { console.error('bad message', err); } };
         ws.onclose = () => { clearInterval(this.pingTimer); this.setStatus(this.describe()); };
@@ -88,7 +90,8 @@ const net = {
         } else if (m.t === 'snap') {
             this.onSnapshot(m);
         } else if (m.t === 'pong') {
-            this.rtt = performance.now() - m.c;
+            const sample = performance.now() - m.c;
+            this.rtt = this.rtt ? this.rtt + (sample - this.rtt) * 0.2 : sample; // smoothed: one slow packet must not make the prediction lurch ahead
             this.tps = m.tps || 0;
             this.setStatus(this.describe());
         } else if (m.t === 'error')
@@ -102,6 +105,9 @@ const net = {
         }
         const sample = now - m.tick * this.dtMs; // how long after "server time zero" this packet arrived; the smallest recent value is the best clock estimate
         this.off = this.buf.length ? Math.min(sample, this.off + (now - this.lastSnapAt) * 0.0005) : sample;
+        const queue = Math.max(0, sample - this.off); // how much later than the best packet this one arrived: the jitter
+        this.jit += (queue - this.jit) * (queue > this.jit ? 0.3 : 0.02); // reacts fast to a spike, recovers slowly
+        this.delayMs += (Math.min(NET_DELAY_MAX, Math.max(NET_DELAY_MIN, 40 + 2 * this.jit)) - this.delayMs) * 0.05; // the buffer we draw behind: just enough for the jitter we measure
         this.lastSnapAt = now;
         this.buf.push({ tick: m.tick, s: m.s });
         if (this.buf.length > 80)
@@ -135,7 +141,7 @@ const net = {
         if (!buf.length)
             return;
         const newest = buf[buf.length - 1].tick;
-        let target = (now - this.off - NET_DELAY_MS) / this.dtMs; // the server tick we should be showing right now
+        let target = (now - this.off - this.delayMs) / this.dtMs; // the server tick we should be showing right now
         if (target > newest)
             target = newest; // starved (or the match is paused): hold on the newest snapshot
         if (this.cur === null || Math.abs(target - this.cur) > 240)
@@ -180,6 +186,8 @@ const net = {
         }
     },
     fire(e) { // the renderer's hooks, driven by what the server's simulation reported
+        if (this.skipEvent && this.skipEvent(e)) // my own effects were already shown at predicted time
+            return;
         const ref = r => (r === 'b' ? ball : r[0] === 'p' ? allPlayers[+r.slice(1)] : decoys[+r.slice(1)] || ball);
         if (e[0] === 'pt')
             events.onPoint(e[2], e[3]);

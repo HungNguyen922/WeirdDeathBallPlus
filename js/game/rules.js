@@ -41,6 +41,40 @@ function resetMatch() { // R key
     pause = 0;
     newRound();
 }
+// Barbwire: while its owner holds the special key, their grapple rope kills any other player it touches. The rope is the segment from the owner to the hook; while the hook is
+// still in flight it is the part of the line that has reached out so far (the same line the renderer draws). A player counts as touching it when the segment passes within
+// their radius (plus BARBWIRE_HALF_W for the rope's own thickness).
+function ropeEnd(p) { // where the owner's rope currently ends: the pivot, or the hook's tip in flight; null = no rope out
+    if (p.rope)
+        return p.rope;
+    if (p.pending && p.keys.z) {
+        const f = Math.min(1, 1 - p.pending.t / p.pending.t0);
+        return { x: p.x + (p.pending.p.x - p.x) * f, y: p.y + (p.pending.p.y - p.y) * f };
+    }
+    return null;
+}
+function distToSeg(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+    const t = l2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2)) : 0;
+    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+function barbedRopeKills() {
+    for (const p of players) {
+        if (!p.alive || !p.cast || p.cast.type !== 'barbwire')
+            continue;
+        const e = ropeEnd(p);
+        if (!e)
+            continue;
+        for (const q of players)
+            if (q !== p && q.alive && (BARBWIRE_HITS_TEAMMATES || q.team !== p.team) && distToSeg(q.x, q.y, p.x, p.y, e.x, e.y) < q.r + BARBWIRE_HALF_W) {
+                q.alive = false; // caught on the wire
+                q.rope = null;
+                q.pending = null;
+                q.onBall = false;
+                q.tball = null;
+            }
+    }
+}
 function update() {
     sawStep();
     for (const q of pegs) {
@@ -71,6 +105,7 @@ function update() {
             p.step(ball);
             events.onBodyStep(p);
         }
+    barbedRopeKills(); // before the body collisions below, so a barbed rope wins over the "touching an enemy overcharges your grapple" rule
     for (let i = 0; i < players.length; i++) // players are solid: everyone bumps everyone (teammates too)
         for (let j = i + 1; j < players.length; j++)
             if (players[i].alive && players[j].alive) {

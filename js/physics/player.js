@@ -1,4 +1,4 @@
-// PHYSICS - Player: movement, grapple rope, and special abilities (dash / plinko / marionette / decoy).
+// PHYSICS - Player: movement, grapple rope, and special abilities (dash / plinko / marionette / decoy / arrow / bat / barbwire).
 // step(ball) advances one fixed timestep. Reads this.keys; never draws.
 const noKeys = () => ({ l: false, r: false, up: false, z: false, x: false, sp: false, dn: false }); // sp = special ability, dn = down, z = grapple, x = weight
 // Bat special. Angle of the bat at swing progress f (0..1). The swing is a semicircle (BAT_ARC) centred on the aim c.ang: it starts BAT_ARC/2 to one side of the aim (pulled back a
@@ -113,7 +113,7 @@ class Player {
         this.liftX = this.liftY = 0; this.liftT = 1e9; // the kick still being delivered (see LIFT_RAMP)
         this.dashReady = true; // one dash per trip off the floor
         this.tball = null;
-        this.cd = { dash: 0, plinko: 0, marionette: 0, decoy: 0, arrow: 0, bat: 0 }; // per-ability cooldown remaining (s)
+        this.cd = { dash: 0, plinko: 0, marionette: 0, decoy: 0, arrow: 0, bat: 0, barbwire: 0 }; // per-ability cooldown remaining (s)
         this.cast = null; // ability being cast: { type, t, t0, hx, hy, x, y }
         this.dashT = 0;
         this.dashDir = [0, 0];
@@ -178,14 +178,14 @@ class Player {
         }
         const delay = this.grounded ? GROUND_DELAY : HOOK_DELAY; // the hook takes a moment to land
         if (delay > 0) {
-            this.pending = { p: best.p, t: delay, t0: delay, ground: best.ground, rose: this.vy <= 40 };
+            this.pending = { p: best.p, t: delay, t0: delay, ground: best.ground };
             return;
         }
         this.land(best.p, best.ground);
     }
     // The hook lands on a surface: tether length = distance right now. A grapple jump (rising on floor/slopes) kicks the player
     // directly away from the pivot (weight multiplies it), with matching tether slack; a pivot behind you gives a diagonal hop.
-    land(p, ground, rose = this.vy <= 0) {
+    land(p, ground) {
         const dx = this.x - p.x, dy = this.y - p.y, d = Math.hypot(dx, dy);
         this.rope = p;
         this.onBall = false;
@@ -193,7 +193,7 @@ class Player {
         this.ropeBase = ground ? { x: p.x, y: p.y - sawY(p.x) } : null; // floor pivots ride the floor when it pops
         this.len = Math.max(d, MIN_LEN);
         this.taut = false;
-        if (ground && rose) {
+        if (ground && this.vy <= 0) {
             const chain = Math.min(GJ_MAX, GJ_START * Math.pow(GJ_GROWTH, this.gjN)); // exponential ramp over a spammed chain
             const lift = LIFT_V * chain * (this.keys.x ? WEIGHT_M : 1);
             this.gjN++;
@@ -271,6 +271,8 @@ class Player {
                 this.cast = { type: 'decoy', t: DECOY_CAST, t0: DECOY_CAST, hx, hy, x: this.x, y: this.y }; // remembers the spot (and the arrows) at the press, like plinko
             else if (this.special === 'bat' && this.cd.bat <= 0) // charges while the key is held (aim read live), swings on release
                 this.cast = { type: 'bat', t: BAT_T, t0: BAT_T, charging: true, charge: 0, pow: 0, hx, hy, ang: hx || hy ? Math.atan2(hy, hx) : Math.atan2(ball.y - this.y, ball.x - this.x), hits: 0 };
+            else if (this.special === 'barbwire' && this.cd.barbwire <= 0) // active for as long as the key is held (up to BARBWIRE_MAX_T); the cooldown scales with it
+                this.cast = { type: 'barbwire', t: 1, t0: 1, held: 0, hx, hy };
             else if (this.special === 'arrow' && this.cd.arrow <= 0)
                 this.cast = { type: 'arrow', t: 1, t0: 1, charge: 0, ang: this.arrowAng, noTilt: false, tap: { l: 0, r: 0, u: 0, d: 0 }, prev: { l: k.l, r: k.r, u: k.up, d: k.dn } };
 
@@ -296,6 +298,10 @@ class Player {
                     else
                         this.cast = null; // released with none: cancelled, nothing spent
                 }
+            } else if (c.type === 'barbwire') { // the rope is lethal while the key is held (see barbedRopeKills in rules.js); letting go or running out of time ends it
+                c.held += DT;
+                if (!k.sp || c.held >= BARBWIRE_MAX_T)
+                    c.t = 0;
             } else if (c.type === 'bat') {
                 if (c.charging) { // holding the key: charge up and follow the arrows; the timer does not run yet
                     const ax = (k.r ? 1 : 0) - (k.l ? 1 : 0), ay = (k.dn ? 1 : 0) - (k.up ? 1 : 0);
@@ -362,6 +368,8 @@ class Player {
                     if (!this.sim)
                         fireArrow(this, c);
                     this.cd.arrow = ARROW_COOLDOWN;
+                } else if (c.type === 'barbwire') {
+                    this.cd.barbwire = Math.min(c.held, BARBWIRE_MAX_T) * BARBWIRE_CD_RATIO; // proportional to how long it was held
                 } else if (c.type === 'bat') {
                     this.cd.bat = BAT_COOLDOWN; // the cooldown starts when the swing ends
                 }
@@ -406,12 +414,12 @@ class Player {
             this.kickReq = false; // a primed kick survives the grapple being up
         if (z && !this.rope && !this.pending)
             this.attach(ball); // also latches on when you drift into reach while holding
-        if (this.pending) {                       
+        if (this.pending && z) {
             this.pending.t -= DT;
             if (this.pending.t <= 0) {
                 const h = this.pending;
                 this.pending = null;
-                this.land(h.p, h.ground, h.rose);
+                this.land(h.p, h.ground);
             }
         }
         if (this.rope || this.pending) {
@@ -422,7 +430,7 @@ class Player {
             this.gCharge = Math.min(GRAPPLE_MAX, this.gCharge + GRAPPLE_REGEN * DT);
         if (!z) {
             this.rope = null;
-            if (!(this.pending && this.pending.ground)) this.pending = null; // a tapped ground hook still lands; its kick applies next tick
+            this.pending = null;
             this.onBall = false;
             this.tball = null;
         }

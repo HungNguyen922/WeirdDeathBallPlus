@@ -34,11 +34,11 @@ const KS = 110; // surface-rope stiffness: firm, but stretches and recoils (elas
 // Pivot transfer: when you come back down onto the floor right at a floor/slope pivot (within PIVOT_ZONE of it), the speed the floor would absorb is turned
 // into sideways speed along the surface instead (PIVOT_TRANSFER = share of it; a rotation, so your speed is kept) and sends you out the other side.
 const PIVOT_ZONE = 2 * PL, PIVOT_MIN_HIT = 60, PIVOT_TRANSFER = 0.85;
-const LIFT_V = 330, WEIGHT_M = 1.4, WEIGHT_KICK = 300, MIN_LEN = 16; // grapple-jump lift, weight multiplier (lift), min surface tether; WEIGHT_KICK = impulse (u/s) away from the pivot each time weight is pressed while grappling
+const LIFT_V = 280, WEIGHT_M = 1.4, WEIGHT_KICK = 300, MIN_LEN = 16; // grapple-jump lift, weight multiplier (lift), min surface tether; WEIGHT_KICK = impulse (u/s) away from the pivot each time weight is pressed while grappling
 // Grapple-jump ramp. Chain: each grapple jump within GJ_CHAIN_T s of the last extends a chain; the kick is LIFT_V x min(GJ_MAX, GJ_START * GJ_GROWTH^n), n = jumps already in
 // the chain, so spamming ramps it up exponentially. Ease: each kick is delivered over LIFT_RAMP s (smoothstep) instead of in one tick.
-const GJ_START = 0.65, GJ_GROWTH = 1.18, GJ_MAX = 1, GJ_CHAIN_T = 1.5, LIFT_RAMP = 0.005;
-const LIFT_SLACK = 0.35, LIFT_SLACK_W = 0.22; // extra tether length per unit of grapple-jump lift (normal / weighted)
+const GJ_START = 0.4, GJ_GROWTH = 1.1, GJ_MAX = 1, GJ_CHAIN_T = 1.5, LIFT_RAMP = 0.005;
+const LIFT_SLACK = 0.15, LIFT_SLACK_W = 0.07; // extra tether length per unit of grapple-jump lift (normal / weighted)
 const GRAPPLE_BURST_T = 0.7; // length (s) of the purple ripple when the grapple meter is overcharged
 const GRAPPLE_MAX = 4, GRAPPLE_COOLDOWN = 6, GRAPPLE_REGEN = 1; // grapple meter: seconds of use before it is spent, the lockout (s) once it is, and refill speed (charge-seconds per second) while not gripping
 const GROUND_DELAY = 0.1, HOOK_DELAY = 0.1; // the hook lands ~3 frames after the press, on the ground too (measured)
@@ -79,7 +79,12 @@ const BAT_V = 700, BAT_KEEP = 1.15, BAT_CARRY = 0.6, BAT_VMAX = 1500, BAT_VMAX_C
 const IMPACT_V0 = 260, IMPACT_V1 = 1000;
 const BAT_PLAYER_V = 550, BAT_PLAYER_KEEP = 0.5, BAT_PLAYER_VMAX = 1100, BAT_HITS_TEAMMATES = true;
 
-const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN } };
+// Barbwire: hold the special key to make your grapple rope (the hook in flight, then the tether) lethal: any other player whose body touches it dies (teammates too if
+// BARBWIRE_HITS_TEAMMATES). It only does anything while a rope is out, but the clock runs the whole time the key is held. Letting go (or BARBWIRE_MAX_T s, whichever comes first)
+// starts the cooldown, which is proportional to how long it was held: BARBWIRE_CD_RATIO x the hold time (a quick tap costs almost nothing, a full hold costs BARBWIRE_MAX_T x ratio).
+const BARBWIRE_MAX_T = 4, BARBWIRE_CD_RATIO = 2, BARBWIRE_HALF_W = 2, BARBWIRE_HITS_TEAMMATES = true; // longest hold (s), cooldown seconds per second held, half the rope's lethal thickness (u)
+
+const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 
 // Crash shot: a player who touches the death ball dies, but first collides with it like two pool balls: an elastic collision along the line between their centers,
 // momentum conserved with the player's mass PLAYER_M against the ball's BALL_M. CRASH_E is the restitution (1 = perfectly elastic, no energy lost).

@@ -20,7 +20,7 @@ const { loadSim, ROOT } = require('./sim-node.js');
 const TICK_HZ = 120, DT_MS = 1000 / TICK_HZ, SNAP_EVERY = 4; // snapshots at 30 Hz
 const MAX_CATCHUP = 8; // never run more than this many ticks in one go (after a stall, drop the debt instead of spiralling)
 const MAX_ROOMS = 50, MAX_SPECTATORS = 8, MSG_PER_SEC = 400;
-const SPECIAL_IDS = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat'];
+const SPECIAL_IDS = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire'];
 
 // Code that runs INSIDE a room's sandbox: it captures the game's events (the renderer's hooks) into a list, and applies input bits to a player's keys.
 const ROOM_PRELUDE = `

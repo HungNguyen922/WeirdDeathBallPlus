@@ -9,6 +9,8 @@ function draw() {
     drawPegs();
     drawAITags();
     drawCasts();
+    drawWarps();
+    drawAwakened();
     drawGrappleRange();
     drawRopes();
     drawDashStreaks();

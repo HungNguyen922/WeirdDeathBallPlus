@@ -9,6 +9,8 @@ const PICK_DESC = { // two short lines under the highlighted special
     arrow: ['Hold to charge, release to', 'fire. Shoves ball and foes.'],
     bat: ['Hold to charge, release to', 'swing a half-circle.'],
     barbwire: ['Your grapple rope kills', 'any player it touches.'],
+    warp: ['Press to mark a spot, press', 'again to teleport there.'],
+    awakened: ['10 s of stronger grapple,', 'kicks and crash shots.'],
 };
 const pickSp = id => SPECIALS.find(a => a.id === id) || SPECIALS[0];
 const PICK_NAMES = ['BLUE', 'RED', 'BLUE 2', 'RED 2']; // by player id
@@ -31,11 +33,14 @@ function drawPickBadge(x, y, p, ready, t) { // the player's marker: a round badg
     }
     cx.restore();
 }
+const PICK_ICON_EXT = 14; // how far (u, stroke included) any icon glyph reaches from its centre (the tallest are about 13): the name is placed below this
 function drawPickPanel(p, x, y, w, h, compact) { // one player's panel: badge, name, big icon, what it does, and whether they are locked in
     const col = p.color, sp = pickSp(PICK_LIST[pick.cur[p.id]]), ready = pick.ready[p.id], mid = x + w / 2, tm = performance.now();
     const L = compact // two stacked panels on a side are the small version
-        ? { title: 24, tf: 17, icon: 62, is: 3, name: 108, nf: 14, desc: 124, ds: 13, df: 10.5, status: h - 12 }
-        : { title: 32, tf: 22, icon: 92, is: 4.2, name: 146, nf: 17, desc: 166, ds: 14, df: 11, status: h - 18 };
+        ? { title: 24, tf: 17, icon: 62, is: 2.6, nf: 14, dg: 16, ds: 13, df: 10.5, status: h - 12 }
+        : { title: 32, tf: 22, icon: 92, is: 4.2, nf: 17, dg: 20, ds: 14, df: 11, status: h - 18 };
+    L.name = L.icon + PICK_ICON_EXT * L.is + L.nf; // the name sits under the icon's lowest possible edge, so no icon can ever run into it
+    L.desc = L.name + L.dg;
     cx.save();
     cx.fillStyle = 'rgba(255,255,255,.04)'; cx.strokeStyle = col; cx.lineWidth = 2;
     cx.beginPath(); cx.roundRect(x, y, w, h, 10); cx.fill(); cx.stroke();

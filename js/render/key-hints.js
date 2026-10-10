@@ -71,6 +71,22 @@ function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebel
             cx.moveTo(bx - 4, by + 4); cx.lineTo(bx + 4, by - 4);
         }
         cx.stroke();
+    } else if (kind === 'awakened') { // a solid core with rays all round it: powered up
+        cx.arc(0, 0, 4, 0, 7); cx.fill();
+        cx.beginPath(); cx.lineWidth = 2; cx.lineCap = 'round';
+        for (let n = 0; n < 8; n++) {
+            const a = n * Math.PI / 4, r0 = n % 2 ? 7 : 6.5, r1 = n % 2 ? 9 : 11;
+            cx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); cx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
+        }
+        cx.stroke();
+    } else if (kind === 'warp') { // a solid ring, a dashed ring, and an arrow from one to the other
+        cx.lineWidth = 2;
+        cx.arc(-5, 5, 4.2, 0, 7); cx.stroke();
+        cx.beginPath(); cx.setLineDash([2.2, 2.2]); cx.arc(5.5, -5.5, 4.6, 0, 7); cx.stroke(); cx.setLineDash([]);
+        cx.beginPath(); cx.lineWidth = 1.8;
+        cx.moveTo(-2, 2); cx.lineTo(2, -2);
+        cx.moveTo(-0.5, -2.5); cx.lineTo(2.2, -2.2); cx.lineTo(2.5, 0.5);
+        cx.stroke();
     } else if (kind === 'locked') { // padlock
         cx.fillRect(-6, -1, 12, 9);
         cx.beginPath(); cx.arc(0, -2, 4.5, Math.PI, 0); cx.stroke();
@@ -127,7 +143,7 @@ function drawKeyHints() {
             cx.globalAlpha = i === 2 && sp.id === 'dash' && !p.dashReady && p.cd.dash <= 0 ? 0.3 : 1; // the dash icon dims while its once-per-trip charge is used up
             iconGlyph(kind, kx, yy - 2, on ? '#0b0e12' : '#e8e8e4');
             cx.globalAlpha = 1;
-            const ab = i === 2 ? ABILITY[sp.id] : null, cf = i === 0 ? (p.gCool > 0 ? p.gCool / GRAPPLE_COOLDOWN : 1 - p.gCharge / GRAPPLE_MAX) : ab && ab.cd ? p.cd[sp.id] / ab.cd : 0; // the grapple key tints as its meter is spent, and the whole lockout
+            const ab = i === 2 ? ABILITY[sp.id] : null, cf = i === 0 ? (p.gCool > 0 ? p.gCool / p.grapLock : 1 - p.gCharge / p.grapMax) : ab && ab.cd ? p.cd[sp.id] / ab.cd : 0; // the grapple key tints as its meter is spent, and the whole lockout
             if (cf > 0) { // cooldown: a light gray tint over the icon whose top edge moves downward until the normal icon shows
                 cx.save();
                 cx.beginPath(); cx.roundRect(kx - 20, yy - 20, 40, 40, 7); cx.clip();

@@ -3,7 +3,7 @@
 // 2. REPLAY: from a saved state, the same inputs must produce bit-identical state, tick for tick. This is the property rollback netcode stands on.
 const { loadSim } = require('../server/sim-node.js');
 
-const SPECIALS = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat'];
+const SPECIALS = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'warp', 'awakened'];
 const KEYS = ['l', 'r', 'up', 'dn', 'z', 'x', 'sp'];
 function rng(seed) { let s = seed >>> 0; return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; }; }
 

@@ -84,7 +84,16 @@ const BAT_PLAYER_V = 550, BAT_PLAYER_KEEP = 0.5, BAT_PLAYER_VMAX = 1100, BAT_HIT
 // starts the cooldown, which is proportional to how long it was held: BARBWIRE_CD_RATIO x the hold time (a quick tap costs almost nothing, a full hold costs BARBWIRE_MAX_T x ratio).
 const BARBWIRE_MAX_T = 4, BARBWIRE_CD_RATIO = 2, BARBWIRE_HALF_W = 2, BARBWIRE_HITS_TEAMMATES = true; // longest hold (s), cooldown seconds per second held, half the rope's lethal thickness (u)
 
-const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
+// Warp: press the special key to drop a marker where you stand (placing is free and instant, and a marker stays until it is used or the round ends). A dashed line is drawn from you to
+// it. Press again to teleport to the marker: position only, so velocity (all your momentum) is kept. Your grapple stays attached (the rope's normal leash rules apply from the new spot). The cooldown (WARP_COOLDOWN s) starts at the teleport; a second press while it runs does nothing, and the marker waits. WARP_FX = how long the arrival / departure rings last.
+const WARP_COOLDOWN = 15, WARP_FX = 0.4;
+
+// Awakened: press the special key to power up for AWAKENED_T s; when it wears off the cooldown (AWAKENED_COOLDOWN s) starts. While awake the Player getters (grapMax, range,
+// grapLock, kickV, crashK) return boosted numbers: grapple meter (seconds of use), grapple reach, the weighted kick, the ball's gain from a crash shot, and the overcharge lockout
+// (0.5 = half as long). The grapple meter keeps its fill share across the switch (4 of 4 s becomes 6 of 6 s, and back). Pressing again while awake does nothing.
+const AWAKENED = { use: 2, range: 2, kick: 2, crash: 2, lock: 0.5 }, AWAKENED_T = 10, AWAKENED_COOLDOWN = 15;
+
+const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 const START_CD = 1; // share of each ability's full cooldown still running at the start of a round (0 = ready at once, 1 = full cooldown)
 
 // Crash shot: a player who touches the death ball dies, but first collides with it like two pool balls: an elastic collision along the line between their centers,

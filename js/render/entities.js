@@ -149,6 +149,57 @@ function drawCasts() { // abilities being cast: ghost pegs / decoys, marionette 
         }
     }
 }
+function drawAwakened() { // Awakened: a golden pulsing aura on a powered-up player, with a ring that drains as the time runs out
+    const tm = performance.now();
+    cx.save();
+    for (const p of players) {
+        if (!p.alive || !(p.awakeT > 0))
+            continue;
+        const left = p.awakeT / AWAKENED_T, pulse = 0.5 + 0.5 * Math.sin(tm / 90), fade = left < 0.2 ? 0.5 + 0.5 * Math.sin(tm / 60) : 1; // flickers when nearly spent
+        cx.shadowColor = '#ffd35a'; cx.shadowBlur = 16;
+        cx.globalAlpha = (0.55 + 0.3 * pulse) * fade; cx.strokeStyle = '#ffd35a'; cx.lineWidth = 2.5;
+        cx.beginPath(); cx.arc(p.x, p.y, p.r + 11 + 2 * pulse, 0, 7); cx.stroke();
+        cx.shadowBlur = 0; cx.globalAlpha = 1;
+        drawTimer(p.x, p.y, p.r + 8, left, '#ffd35a');
+    }
+    cx.restore();
+}
+function drawWarps() { // Warp: the marker, the dashed line to it, and the rings left by a teleport (all in the owner's team colour; both teams see both markers)
+    const tm = performance.now();
+    cx.save();
+    cx.lineCap = 'round';
+    for (const p of players) {
+        const col = p.team === 0 ? '#42a5f5' : '#ef5350', w = p.warp, fx = p.warpFx;
+        if (w && p.alive) {
+            const ready = p.cd.warp <= 0, pulse = 0.5 + 0.5 * Math.sin(tm / 160);
+            cx.strokeStyle = col; cx.lineWidth = 1.6; cx.globalAlpha = ready ? 0.7 : 0.4;
+            cx.setLineDash([7, 6]); cx.lineDashOffset = -(tm / 40) % 13; // marching dashes, from you to the spot
+            cx.beginPath(); line(p.x, p.y, w.x, w.y); cx.stroke();
+            cx.setLineDash([]); cx.lineDashOffset = 0;
+            cx.globalAlpha = ready ? 0.65 + 0.35 * pulse : 0.45; cx.lineWidth = 2; // the marker: a dashed ghost of the player with a cross in the middle
+            cx.setLineDash([4, 4]);
+            cx.beginPath(); cx.arc(w.x, w.y, p.r, 0, 7); cx.stroke();
+            cx.setLineDash([]);
+            cx.beginPath(); line(w.x - 4, w.y, w.x + 4, w.y); line(w.x, w.y - 4, w.x, w.y + 4); cx.stroke();
+            cx.globalAlpha = 1;
+            if (!ready) // still cooling down: the ring around the marker fills until the teleport is available
+                drawTimer(w.x, w.y, p.r + 5, 1 - p.cd.warp / WARP_COOLDOWN, col);
+            else {
+                cx.globalAlpha = 0.25 + 0.25 * pulse; cx.strokeStyle = col; cx.lineWidth = 2;
+                cx.beginPath(); cx.arc(w.x, w.y, p.r + 5 + 3 * pulse, 0, 7); cx.stroke();
+                cx.globalAlpha = 1;
+            }
+        }
+        if (fx) { // a ring grows out of the spot you left and out of the one you arrived at, fading as it goes
+            const f = 1 - fx.t / WARP_FX;
+            cx.strokeStyle = col; cx.lineWidth = 3 * (1 - f) + 1; cx.globalAlpha = (1 - f) * 0.9;
+            cx.beginPath(); cx.arc(fx.ax, fx.ay, p.r * (1 - 0.5 * f) , 0, 7); cx.stroke(); // collapses where you left
+            cx.beginPath(); cx.arc(fx.bx, fx.by, p.r * (0.5 + 1.8 * f), 0, 7); cx.stroke(); // bursts out where you arrive
+            cx.globalAlpha = 1;
+        }
+    }
+    cx.restore();
+}
 function anyArrowHeld(p) { return !!(p.keys.l || p.keys.r || p.keys.up || p.keys.dn); }
 function drawGrappleRange() { // range indicator when nothing is in reach
     for (const p of players) { // range indicator when nothing is in reach
@@ -157,7 +208,7 @@ function drawGrappleRange() { // range indicator when nothing is in reach
             cx.lineWidth = 2;
             cx.setLineDash([8, 8]);
             cx.beginPath();
-            cx.arc(p.x, p.y, RANGE, 0, 7);
+            cx.arc(p.x, p.y, p.range, 0, 7);
             cx.stroke();
             cx.setLineDash([]);
         }
@@ -250,8 +301,8 @@ function drawPlayerTrails() { // speed lines behind living players (same effect 
 }
 function drawGrappleRing(p) {
     const R = p.r + 2;
-    if (p.gCool > 0 || p.gCharge < GRAPPLE_MAX - 0.01) {
-        const f = p.gCool > 0 ? 1 - p.gCool / GRAPPLE_COOLDOWN : p.gCharge / GRAPPLE_MAX;
+    if (p.gCool > 0 || p.gCharge < p.grapMax - 0.01) {
+        const f = p.gCool > 0 ? 1 - p.gCool / p.grapLock : p.gCharge / p.grapMax;
         drawTimer(p.x, p.y, R, f, p.gCool > 0 ? '#d25b5b' : f < 0.25 ? '#f0a43c' : '#e8e8e4');
     }
     if (p.gBurst > 0) {

@@ -87,7 +87,12 @@ function collide(a, b, ma, mb, e) {
 // depends on how hard and how squarely p hit, like a cue ball hitting an object ball. Hits that push the ball past its speed cap raise the cap briefly (like a hatchet
 // hit) so big shots are not clipped. Returns the impact speed (0 if they were not closing).
 function crashShot(p, b) {
-    const hit = collide(p, b, PLAYER_M, BALL_M, CRASH_E);
+    const vx0 = b.vx, vy0 = b.vy, hit = collide(p, b, PLAYER_M, BALL_M, CRASH_E);
+    const k = p.crashK; // Awakened: the ball gains more speed from the same hit
+    if (k !== 1) {
+        b.vx = vx0 + (b.vx - vx0) * k;
+        b.vy = vy0 + (b.vy - vy0) * k;
+    }
     const s = Math.hypot(b.vx, b.vy);
     if (s > BALL_VMAX)
         b.boost = Math.max(b.boost, Math.min(1, (s - BALL_VMAX) / (PAD_MAX - BALL_VMAX)));

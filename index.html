@@ -81,16 +81,13 @@
 </ul>
 </div>
 <div class="scroll">
-<table>
-<thead><tr><th>Player</th><th>Move</th><th>Jump</th><th>Drop</th><th>Grapple</th><th>Weight</th><th>Special</th></tr></thead>
-<tbody>
-<tr><th class="pb">Blue</th><td><kbd>&larr;</kbd> <kbd>&rarr;</kbd></td><td><kbd>&uarr;</kbd></td><td><kbd>&darr;</kbd></td><td><kbd>X</kbd></td><td><kbd>C</kbd></td><td><kbd>Z</kbd></td></tr>
-<tr><th class="pr">Red</th><td><kbd>A</kbd> <kbd>D</kbd></td><td><kbd>W</kbd></td><td><kbd>S</kbd></td><td><kbd>F</kbd></td><td><kbd>G</kbd></td><td><kbd>H</kbd></td></tr>
-<tr class="team2" style="display:none"><th class="pb">Blue 2</th><td><kbd>J</kbd> <kbd>L</kbd></td><td><kbd>I</kbd></td><td><kbd>K</kbd></td><td><kbd>U</kbd></td><td><kbd>O</kbd></td><td><kbd>P</kbd></td></tr>
-<tr class="team2" style="display:none"><th class="pr">Red 2</th><td><kbd>Num 4</kbd> <kbd>Num 6</kbd></td><td><kbd>Num 8</kbd></td><td><kbd>Num 5</kbd></td><td><kbd>Num 7</kbd></td><td><kbd>Num 9</kbd></td><td><kbd>Num 0</kbd></td></tr>
-</tbody>
+<table class="keymap">
+<thead><tr><th>Player</th><th>Left</th><th>Right</th><th>Jump</th><th>Drop</th><th>Grapple</th><th>Weight</th><th>Special</th></tr></thead>
+<tbody id="keytable"></tbody>
 </table>
 </div>
+<p class="hint" id="keymsg">Click a key, then press the new one (Esc cancels). If that key is already used, the two swap. Saved in this browser.</p>
+<div class="row"><button id="keyreset" class="mode" title="Put every player's keys back to the defaults">Reset keys</button></div>
 <p class="hint team2" style="display:none">Teammates in 2v2 always use Dash as their special.</p>
 <div class="group">
 <h3>Shortcuts</h3>
@@ -107,7 +104,7 @@
 <h3>Tips</h3>
 <ul class="keys">
 <li>Click the special keycap beside Blue's or Red's goal to pick a different special ability.</li>
-<li>Online, either layout (arrows + X / C / Z, or WASD + F / G / H) controls your seat.</li>
+<li>Online, both the Blue and the Red layout above control your seat.</li>
 </ul>
 </div>
 </section>
@@ -141,6 +138,7 @@
 <script src="js/render/render.js"></script>
 <script src="js/audio/song-data.js"></script>
 <script src="js/audio/music.js"></script>
+<script src="js/keybinds.js"></script>
 <script src="js/input.js"></script>
 <script src="js/net/client.js"></script>
 <script src="js/net/predict.js"></script>

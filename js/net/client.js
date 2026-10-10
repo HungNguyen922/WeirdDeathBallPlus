@@ -250,9 +250,17 @@ function netServerUrl() {
 }
 
 // ---- keyboard while online: both players' layouts drive MY seat (arrows + X / C / Z, or WASD + F / G / H) ----
-const NET_KEYMAP = { ...bindings[0][1], ...bindings[1][1] };
+const NET_KEYMAP = {};
+function refreshNetKeymap() { // (again whenever the keys are rebound on the Controls tab)
+    for (const k in NET_KEYMAP)
+        delete NET_KEYMAP[k];
+    Object.assign(NET_KEYMAP, bindings[0][1], bindings[1][1]);
+}
+refreshNetKeymap();
+if (typeof keybinds !== 'undefined')
+    keybinds.listeners.push(refreshNetKeymap); // (after input.js's own listener, which refills `bindings` first)
 function netKeyEvent(e, v) {
-    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key, act = NET_KEYMAP[key] || NET_KEYMAP[e.code];
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key, act = NET_KEYMAP[typeof keyToken === 'function' ? keyToken(e) : key] || (typeof keyToken === 'function' ? undefined : NET_KEYMAP[e.code]);
     if (act) {
         e.preventDefault();
         if (net.keys[act] !== v) {

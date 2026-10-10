@@ -34,20 +34,32 @@ document.getElementById('mode2v2').addEventListener('click', () => {
     cv.focus();
 });
 // ---- input ----
-const bindings = [ // [player, { key (or physical key code) -> action }]
-    [p1, { ArrowLeft: 'l', ArrowRight: 'r', ArrowUp: 'up', ArrowDown: 'dn', x: 'z', c: 'x', z: 'sp' }],
-    [p2, { a: 'l', d: 'r', w: 'up', s: 'dn', f: 'z', g: 'x', h: 'sp' }],
-    [p3, { j: 'l', l: 'r', i: 'up', k: 'dn', u: 'z', o: 'x', p: 'sp' }], // Blue's teammate (2v2)
-    [p4, { Numpad4: 'l', Numpad6: 'r', Numpad8: 'up', Numpad5: 'dn', Numpad7: 'z', Numpad9: 'x', Numpad0: 'sp' }], // Red's teammate (2v2)
+const bindings = [ // [player, { key token -> action }]: Blue, Red, Blue's teammate, Red's teammate (2v2). The keys come from keybinds.js (they can be changed on the Controls tab and are remembered)
+    [p1, {}], [p2, {}], [p3, {}], [p4, {}],
 ];
+function refreshBindings() { // rebuild the tables from keybinds.map (the same objects are refilled, so anything holding one, like net/client.js's NET_KEYMAP, only has to copy again)
+    bindings.forEach(([, m], seat) => {
+        for (const k in m)
+            delete m[k];
+        for (const a of KEY_ACTIONS)
+            m[keybinds.map[seat][a]] = a;
+    });
+    allPlayers.forEach(p => Object.assign(p.keys, noKeys())); // a key held while its binding changes must not stay stuck down
+    if (typeof net !== 'undefined' && net.on) { // (net/client.js loads after this file, so the very first call runs before it exists)
+        Object.assign(net.keys, noKeys());
+        net.sendKeys();
+    }
+}
+keybinds.listeners.push(refreshBindings);
+refreshBindings();
 function setKey(e, v) {
     if (net.on) { // NET: online, my keys go to the server instead of to a local player
         netKeyEvent(e, v);
         return;
     }
-    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key, token = keyToken(e);
     for (const [pl, m] of bindings) {
-        const n = players.includes(pl) && (m[key] || m[e.code]); // only players in the current match listen
+        const n = players.includes(pl) && m[token]; // only players in the current match listen
         if (n) {
             pl.keys[n] = v;
             e.preventDefault();

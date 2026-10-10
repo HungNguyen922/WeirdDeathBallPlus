@@ -8,9 +8,80 @@ const gameMenu = (() => {
     if (!menu)
         return { open() {}, close() {}, refresh() {}, isOpen: () => false };
     const pickTitle = pickBtn ? pickBtn.title : '';
+    // ---- Controls tab: click a key, then press the new one. The bindings live in keybinds.js (remembered in this browser); this is only the table. ----
+    // The capture listener is added first and in the capture phase, so while a key is being picked nothing else (the game, Esc closing the panel, the music key) sees the press.
+    const keyTable = document.getElementById('keytable'), keyMsg = document.getElementById('keymsg'), keyReset = document.getElementById('keyreset'), keyHelp = keyMsg ? keyMsg.textContent : '';
+    const SEAT_ROWS = [{ name: 'Blue', cls: 'pb' }, { name: 'Red', cls: 'pr' }, { name: 'Blue 2', cls: 'pb' }, { name: 'Red 2', cls: 'pr' }];
+    let capturing = null; // { seat, action } while waiting for the new key
+    const setKeyMsg = t => { if (keyMsg) keyMsg.textContent = t || keyHelp; };
+    function renderKeys() {
+        if (!keyTable)
+            return;
+        keyTable.textContent = '';
+        SEAT_ROWS.forEach((r, seat) => {
+            const tr = document.createElement('tr'), th = document.createElement('th');
+            if (seat >= 2) { // the teammates' rows show in 2v2 only (input.js's setTeams toggles every .team2 element)
+                tr.className = 'team2';
+                tr.style.display = typeof teamSize !== 'undefined' && teamSize === 2 ? '' : 'none';
+            }
+            th.className = r.cls;
+            th.textContent = r.name;
+            tr.appendChild(th);
+            for (const a of KEY_ACTIONS) {
+                const td = document.createElement('td'), b = document.createElement('button'), on = !!capturing && capturing.seat === seat && capturing.action === a;
+                b.type = 'button';
+                b.className = 'keycell' + (on ? ' capturing' : '');
+                b.textContent = on ? 'press…' : keyName(keybinds.map[seat][a]);
+                b.title = KEY_ACTION_NAMES[a] + ' for ' + r.name + ': click, then press the new key';
+                b.addEventListener('click', () => {
+                    capturing = on ? null : { seat, action: a };
+                    setKeyMsg('');
+                    renderKeys();
+                });
+                td.appendChild(b);
+                tr.appendChild(td);
+            }
+            keyTable.appendChild(tr);
+        });
+    }
+    function stopCapture() {
+        if (!capturing)
+            return;
+        capturing = null;
+        setKeyMsg('');
+        renderKeys();
+    }
+    window.addEventListener('keydown', e => {
+        if (!capturing)
+            return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (e.repeat)
+            return;
+        if (e.key === 'Escape')
+            return stopCapture();
+        const why = keyCheck(e);
+        if (why)
+            return setKeyMsg(why); // stay in capture mode so another key can be tried
+        const { seat, action } = capturing;
+        capturing = null;
+        bindKey(seat, action, keyToken(e)); // (swaps with whoever had that key)
+        setKeyMsg('');
+        renderKeys();
+    }, true);
+    if (keyReset)
+        keyReset.addEventListener('click', () => {
+            capturing = null;
+            resetKeybinds();
+            renderKeys();
+            setKeyMsg('Keys are back to the defaults.');
+        });
+    renderKeys();
     const tabs = [...menu.querySelectorAll('[role=tab]')], panels = [...menu.querySelectorAll('[data-panel]')];
     const isOpen = () => !menu.hidden;
     function showTab(name) {
+        if (name !== 'controls')
+            stopCapture();
         for (const t of tabs) {
             const on = t.dataset.tab === name;
             t.classList.toggle('on', on);
@@ -170,6 +241,7 @@ const gameMenu = (() => {
         menu.hidden = false;
     }
     function close() {
+        stopCapture();
         menu.hidden = true;
         if (canvas)
             canvas.focus(); // so keys go back to the game

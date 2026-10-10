@@ -114,6 +114,8 @@ class Player {
         this.dashReady = true; // one dash per trip off the floor
         this.tball = null;
         this.cd = { dash: 0, plinko: 0, marionette: 0, decoy: 0, arrow: 0, bat: 0, barbwire: 0 }; // per-ability cooldown remaining (s)
+        for (const id in ABILITY)
+            this.cd[id] = ABILITY[id].cd * START_CD;
         this.cast = null; // ability being cast: { type, t, t0, hx, hy, x, y }
         this.dashT = 0;
         this.dashDir = [0, 0];

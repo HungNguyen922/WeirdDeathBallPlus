@@ -30,6 +30,17 @@ const gameMenu = (() => {
         pickBtn.disabled = locked;
         pickBtn.title = locked ? 'Only the host (the player who created the room) can change this.' : pickTitle;
     }
+    // The 2v2 button: offline it toggles 2v2 against the AI (input.js keeps its label); online it is the room's 2v2 lobby switch, host only. The server restarts the match, and the
+    // label follows the roster message, so it catches up a moment after the click.
+    const teamBtn = document.getElementById('mode2v2');
+    function labelTeams() {
+        if (!teamBtn || !net.on)
+            return;
+        teamBtn.textContent = '2v2 lobby: ' + (net.lobby2v2 ? 'On' : 'Off');
+        teamBtn.classList.toggle('on', !!net.lobby2v2);
+        teamBtn.disabled = !net.host;
+        teamBtn.title = net.host ? 'On: new players fill Blue, Red, Blue 2 and Red 2 automatically, and the match starts once all four seats are taken (restarts the match). Off: new players wait for you to place them.' : 'Only the host (the player who created the room) can change this.';
+    }
     // Special ability picker: big buttons, for touch screens where the keycaps on the wall are tiny, and for online seats that have no keycap (the second player on a team).
     // It changes the player you control (touch.seat()).
     function renderPicker() {
@@ -110,7 +121,7 @@ const gameMenu = (() => {
             if (!list.length) {
                 const p = document.createElement('p');
                 p.className = 'hint';
-                p.textContent = g.team >= 0 ? 'Nobody yet: the match waits until both teams have a player.' : 'Nobody waiting.';
+                p.textContent = g.team >= 0 ? (net.lobby2v2 ? 'Nobody yet: the 2v2 match waits until both teams are full.' : 'Nobody yet: the match waits until both teams have a player.') : 'Nobody waiting.';
                 box.appendChild(p);
             }
             for (const m of list)
@@ -142,6 +153,7 @@ const gameMenu = (() => {
         if (!isOpen())
             return;
         labelPick();
+        labelTeams();
         renderPicker();
         renderRoster();
     }
@@ -152,6 +164,7 @@ const gameMenu = (() => {
             showTab(tab);
         document.body.classList.toggle('online', !!net.on); // shows the special picker online even without a touch screen
         labelPick();
+        labelTeams();
         renderPicker();
         renderRoster();
         menu.hidden = false;

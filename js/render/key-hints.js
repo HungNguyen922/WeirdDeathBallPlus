@@ -82,17 +82,28 @@ function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebel
     }
     cx.restore();
 }
+// Layout of the key blocks on the wall. The solid wall is only GOAL_Y0 (= 384) tall (the tunnel opens below it), so two stacked blocks have to be compact:
+// each block is about 176 px tall (name 63 -> labels 239 before the shift), HINT_DY lifts the first block to the top of the wall, HINT_ROW_H is the step down to a team's second block.
+// special-menu.js reads HINT_ACT_Y / HINT_DY to place the special keycap's click area and its dropdown, so change them here only.
+const HINT_DY = -55, HINT_ROW_H = 186, HINT_ACT_Y = 203, HINT_LABEL_Y = 239; // first block's shift, step to the second block, centre of the grapple / weight / special row, baseline of their labels
 function drawKeyHints() {
-    const cfg = [
+    const cfg = [ // one block per seat (player id): Blue's two seats on the left wall, Red's two on the right; dirs = labels for up / left / down / right, act = labels for grapple / weight / special
         { i: 0, p: p1, x: -OX / 2, col: '#42a5f5', name: 'BLUE', dirs: ['', '', '', ''], act: ['X', 'C', 'Z'] },
         { i: 1, p: p2, x: W + OX / 2, col: '#ef5350', name: 'RED', dirs: ['W', 'A', 'S', 'D'], act: ['F', 'G', 'H'] },
+        { i: 2, p: p3, x: -OX / 2, col: '#42a5f5', name: 'BLUE 2', dirs: ['I', 'J', 'K', 'L'], act: ['U', 'O', 'P'] },
+        { i: 3, p: p4, x: W + OX / 2, col: '#ef5350', name: 'RED 2', dirs: ['8', '4', '5', '6'], act: ['7', '9', '0'] },
     ];
     cx.textAlign = 'center';
     for (const { i: pi, p, x, col, name, dirs, act } of cfg) {
+        if (!players.includes(p)) // only seats that are in the current match (1v1 has two blocks, 2v2 four)
+            continue;
+        const row = players.filter(q => q.team === p.team).indexOf(p), hasMenu = pi < 2; // a team's first seat sits on top; only the first two players have the special dropdown (teammates always use Dash)
+        cx.save();
+        cx.translate(0, HINT_DY + row * HINT_ROW_H);
         const k = p.keys;
         cx.font = 'italic 800 18px system-ui, sans-serif';
         cx.fillStyle = col;
-        cx.fillText(name, x, 70);
+        cx.fillText(name, x, 76);
         const KEY = 34, PT = 38; // arrow cluster: up on top, left / down / right below
         const keys = [[0, 105 - 143, 0, k.up, false, dirs[0]], [-PT, 0, -Math.PI / 2, k.l, false, dirs[1]], [0, 0, Math.PI, k.dn, false, dirs[2]], [PT, 0, Math.PI / 2, k.r, false, dirs[3]]];
         for (const [dx, dy, ang, on, dim, letter] of keys) {
@@ -110,9 +121,9 @@ function drawKeyHints() {
         cx.fillStyle = '#98a2ad';
         cx.fillText('MOVE / JUMP / DROP', x, 174);
         const sp = SPECIALS.find(a => a.id === p.special) || SPECIALS[0];
-        const row = [['grapple', 'GRAPPLE', k.z], ['weight', 'WEIGHT', k.x], [sp.icon, sp.name, k.sp]]; // main inputs; the third is the equipped special
-        row.forEach(([kind, label, on], i) => {
-            const kx = x + (i - 1) * 46, yy = keyCap(kx, 215, 40, col, on, false);
+        const actions = [['grapple', 'GRAPPLE', k.z], ['weight', 'WEIGHT', k.x], [sp.icon, sp.name, k.sp]]; // main inputs; the third is the equipped special
+        actions.forEach(([kind, label, on], i) => {
+            const kx = x + (i - 1) * 46, yy = keyCap(kx, HINT_ACT_Y, 40, col, on, false);
             cx.globalAlpha = i === 2 && sp.id === 'dash' && !p.dashReady && p.cd.dash <= 0 ? 0.3 : 1; // the dash icon dims while its once-per-trip charge is used up
             iconGlyph(kind, kx, yy - 2, on ? '#0b0e12' : '#e8e8e4');
             cx.globalAlpha = 1;
@@ -128,17 +139,18 @@ function drawKeyHints() {
             cx.fillStyle = on ? '#0b0e12' : '#98a2ad';
             cx.fillText(act[i], kx + 13, yy + 15);
             cx.fillStyle = '#98a2ad';
-            if (!(i === 2 && ui.open === pi)) { // the open menu covers the label
+            if (!(i === 2 && hasMenu && ui.open === pi)) { // the open menu covers the label
                 if (label.length > 8)
                     cx.font = 'bold 6.5px system-ui, sans-serif'; // long names (MARIONETTE) shrink to stay clear of the neighbouring labels
-                cx.fillText(label, kx, 251);
+                cx.fillText(label, kx, HINT_LABEL_Y);
                 cx.font = 'bold 8px system-ui, sans-serif';
             }
-            if (i === 2 && !pickFixed) { // dropdown caret
+            if (i === 2 && hasMenu && !pickFixed) { // dropdown caret
                 const hot = ui.open === pi || (ui.hover && ui.hover.type === 'key' && ui.hover.i === pi);
                 cx.fillStyle = hot ? '#fff' : on ? '#0b0e12' : '#98a2ad';
                 cx.beginPath(); cx.moveTo(kx + 8, yy - 15); cx.lineTo(kx + 16, yy - 15); cx.lineTo(kx + 12, yy - 10); cx.closePath(); cx.fill();
             }
         });
+        cx.restore();
     }
 }

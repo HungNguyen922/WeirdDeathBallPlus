@@ -8,15 +8,16 @@
 // passed on if they leave) moves them. The match runs only while both teams have a player (1v1, 1v2 and 2v2 all work); any change to who is seated restarts it.
 //
 // Protocol: JSON text messages over a WebSocket.
-//   client -> server   {t:'join', room, special}          join a room
+//   client -> server   {t:'join', room, special, lobby2v2}  join a room; lobby2v2 = true only counts for the player who creates the room (they become the host)
 //                      {t:'in', n, k}                      my keys changed. n = my input counter, k = bit mask: l1 r2 up4 dn8 z16 x32 sp64   (z = grapple, x = weight, sp = special)
 //                      {t:'sp', s}                         equip special ability s (ignored while pick screens are on)
 //                      {t:'fixed', v}                      host only: specials only on pick screens (true) or free swapping (false); restarts the match
+//                      {t:'lobby2v2', v}                   host only: 2v2 lobby on (newcomers fill Blue, Red, Blue 2, Red 2 and the match waits for all four seats) or off
 //                      {t:'assign', c, to}                 host only: move member c to team 0 (Blue), 1 (Red) or -1 (waiting); restarts the match if seats change
 //                      {t:'ping', c}                       latency probe
 //   server -> client   {t:'welcome', room, slot, cid, tick, hz, snapEvery}   slot: 0..3 = a seat, -1 = waiting / spectating; cid = your member id
 //                      {t:'slot', slot}                    your seat changed (the host moved you)
-//                      {t:'roster', slots:[bool x4], spectators, running, host, you, members:[{c, team, slot, host}]}
+//                      {t:'roster', slots:[bool x4], spectators, running, lobby2v2, host, you, members:[{c, team, slot, host}]}
 //                      {t:'snap', tick, ack, s, ev}         s = saveState(), ack = my last input counter the server has applied, ev = [[name, tick, ...args], ...]
 //                      {t:'pong', c, tick, tps}    {t:'error', msg}
 const http = require('http'), fs = require('fs'), path = require('path');
@@ -56,6 +57,7 @@ class Room {
         this.nextOrder = 1;
         this.host = null; // the connection allowed to change room settings and move players
         this.fixed = false; // specials only on pick screens
+        this.lobby2v2 = false; // 2v2 lobby: newcomers fill all four seats automatically and the match waits until every seat is taken
         this.tick = 0;
         this.running = false;
         this.acc = 0;
@@ -65,6 +67,21 @@ class Room {
     get everyone() { return [...this.conns]; }
     get empty() { return this.conns.size === 0; }
     teamCount(t) { let n = 0; for (const c of this.conns) if (c.team === t) n++; return n; }
+    openTeam() { // 2v2 lobby: the team a newcomer should take (the emptier one that still has a seat, Blue on a tie), or -1 when all seats are taken
+        const open = [0, 1].filter(t => this.teamCount(t) < TEAM_MAX);
+        return open.length ? open.reduce((a, b) => (this.teamCount(b) < this.teamCount(a) ? b : a)) : -1;
+    }
+    fillSeats() { // 2v2 lobby: whoever has been waiting longest takes any free seat
+        if (!this.lobby2v2)
+            return;
+        for (const c of [...this.conns].filter(x => x.team < 0).sort((a, b) => a.order - b.order)) {
+            const t = this.openTeam();
+            if (t < 0)
+                break;
+            c.team = t;
+            c.order = this.nextOrder++;
+        }
+    }
     // Work out the seats from each connection's team: a team's members take its seats in the order they joined the team. Returns true if any seat changed.
     reseat() {
         const old = this.seats, seats = [null, null, null, null];
@@ -92,7 +109,8 @@ class Room {
                 c.moved = false;
                 c.send(JSON.stringify({ t: 'slot', slot: c.slot }));
             }
-        const ready = this.teamCount(0) > 0 && this.teamCount(1) > 0; // an empty team means there is nothing to play: the match waits
+        const need = this.lobby2v2 ? TEAM_MAX : 1; // a 2v2 lobby waits for full teams, otherwise one player each is enough
+        const ready = this.teamCount(0) >= need && this.teamCount(1) >= need; // an empty (or, in a 2v2 lobby, unfilled) team means the match waits
         if (ready && (changed || !this.running))
             this.start();
         else if (!ready)
@@ -102,8 +120,9 @@ class Room {
             this.snapshot(); // someone watching a paused room still gets to see the board
     }
     join(conn, special) {
-        const free = [0, 1].find(t => this.teamCount(t) === 0); // a team with nobody on it: the newcomer plays there. Later arrivals wait for the host.
-        const team = free === undefined ? -1 : free;
+        let team = this.lobby2v2 ? this.openTeam() : [0, 1].find(t => this.teamCount(t) === 0); // a 2v2 lobby seats newcomers anywhere there is room; otherwise a team with nobody on it, and later arrivals wait for the host
+        if (team === undefined)
+            team = -1;
         if (team < 0 && [...this.conns].filter(c => c.team < 0).length >= MAX_SPECTATORS)
             return -2;
         conn.cid = this.nextCid++;
@@ -123,6 +142,7 @@ class Room {
             return;
         if (conn === this.host) // seated players first, then whoever has been waiting longest
             this.host = [...this.conns].sort((a, b) => (b.team >= 0) - (a.team >= 0) || a.order - b.order)[0] || null;
+        this.fillSeats(); // 2v2 lobby: a free seat goes to whoever has waited longest
         this.settle(this.reseat());
     }
     assign(cid, to) { // the host moves a member: 0 = Blue, 1 = Red, -1 = waiting
@@ -165,11 +185,16 @@ class Room {
         if (this.running)
             this.start();
     }
+    setLobby2v2(v) { // the host's 2v2 switch. On: everyone already waiting takes the open seats and the match waits for all four. Off: back to host-placed teams; nobody is moved off a team.
+        this.lobby2v2 = !!v;
+        this.fillSeats();
+        this.settle(this.reseat());
+    }
     roster() {
         const members = [...this.conns]
             .sort((a, b) => (a.slot < 0) - (b.slot < 0) || a.slot - b.slot || a.order - b.order) // seated by seat, then the waiting list in order
             .map(c => ({ c: c.cid, team: c.team, slot: c.slot, host: c === this.host }));
-        const base = { t: 'roster', slots: this.seats.map(Boolean), spectators: members.filter(m => m.slot < 0).length, running: this.running, members };
+        const base = { t: 'roster', slots: this.seats.map(Boolean), spectators: members.filter(m => m.slot < 0).length, running: this.running, lobby2v2: this.lobby2v2, members };
         for (const c of this.conns)
             c.send(JSON.stringify({ ...base, host: c === this.host, you: c.cid }));
     }
@@ -264,6 +289,7 @@ function startServer(port = 8080, host = '0.0.0.0') {
                     if (rooms.size >= MAX_ROOMS)
                         return conn.send(JSON.stringify({ t: 'error', msg: 'server is full' }));
                     rooms.set(name, r = new Room(name));
+                    r.lobby2v2 = m.lobby2v2 === true; // the creator can open the room as a 2v2 lobby from the start
                 }
                 if (r.join(conn, m.special) === -2) {
                     if (r.empty)
@@ -281,6 +307,8 @@ function startServer(port = 8080, host = '0.0.0.0') {
                 room.setSpecial(conn, m.s);
             else if (m.t === 'fixed' && room && room.host === conn)
                 room.setFixed(m.v);
+            else if (m.t === 'lobby2v2' && room && room.host === conn)
+                room.setLobby2v2(m.v);
             else if (m.t === 'assign' && room && room.host === conn)
                 room.assign(Number(m.c), Number(m.to));
             else if (m.t === 'ping')

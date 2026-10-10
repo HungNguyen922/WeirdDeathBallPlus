@@ -56,9 +56,9 @@ const DASH_CAST = 0.12, DASH_COOLDOWN = 5, PLINKO_CAST = DASH_CAST, PLINKO_COOLD
 // never kills. Unlike the death ball it is also a solid body: it collides with players, the death ball and other decoys (DECOY_BOUNCE_*: 0 = dead stop, 1 = perfectly bouncy; the
 // ball is light, BALL_M against a player's 1, so players knock it around). One per player: casting again (once DECOY_COOLDOWN has run out) removes the old one and puts a new
 // one at the new spot. The cooldown starts when the decoy appears.
-const MARIONETTE_GRACE = 0.1, MARIONETTE_COOLDOWN = 20, MARIONETTE_V = 500, MARIONETTE_FX = 0.3; // shove speed (u/s) added to the ball, length (s) of its streak effect
+const MARIONETTE_GRACE = 0.1, MARIONETTE_COOLDOWN = 10, MARIONETTE_V = 500, MARIONETTE_FX = 0.3; // shove speed (u/s) added to the ball, length (s) of its streak effect
 
-const DECOY_CAST = 1, DECOY_COOLDOWN = 30, DECOY_BOUNCE_PLAYER = 0.75, DECOY_BOUNCE_BALL = 0.8, DECOY_TELL = false; // DECOY_TELL: draw a dashed ring in the caster's color around the decoy (false = a perfect lookalike)
+const DECOY_CAST = 1, DECOY_COOLDOWN = 20, DECOY_BOUNCE_PLAYER = 0.75, DECOY_BOUNCE_BALL = 0.8, DECOY_TELL = false; // DECOY_TELL: draw a dashed ring in the caster's color around the decoy (false = a perfect lookalike)
 
 // Arrow: hold the special key to charge (ARROW_CHARGE_T s to full), release to fire along the aim. LEFT / RIGHT turn it at ARROW_TURN rad/s; a double tap within ARROW_DBL_T s snaps it.
 // The death ball / decoys gain ARROW_BALL_K x the arrow's velocity; an enemy is knocked back by ARROW_KNOCK x it (ARROW_KILLS = true kills instead).

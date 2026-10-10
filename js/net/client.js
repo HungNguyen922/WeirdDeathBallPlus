@@ -39,8 +39,18 @@ function netMixState(a, b, u) { // two saveState() snapshots -> one in between. 
     return { ...s, players: netMixList(a.players, b.players, u), ball: netMixBody(a.ball, b.ball, u), decoys: netMixList(a.decoys, b.decoys, u), pegs: netMixList(a.pegs, b.pegs, u), arrows: netMixList(a.arrows, b.arrows, u), saw: netMix(a.saw, b.saw, u) };
 }
 
+function netClearAI() { // online every seat is a person: the offline AI flags must not carry over (they kept drawing "AI" tags and let the computer steer predicted players)
+    if (typeof ai === 'undefined')
+        return;
+    for (let i = 0; i < ai.length; i++)
+        if (typeof setAI === 'function')
+            setAI(i, false); // (also resets the AI toggle buttons; has to run before net.on is set, setAI ignores calls while online)
+        else
+            ai[i].on = false;
+}
+
 const net = {
-    on: false, slot: -1, ws: null, room: '', running: false, rtt: 0, status: '',
+    on: false, slot: -1, ws: null, room: '', running: false, rtt: 0, status: '', lobby2v2: false,
     members: [], you: 0,
     keys: noKeys(), seq: 0, ack: 0, pendingSpecial: null,
     dtMs: 1000 / 120, snapEvery: 4,
@@ -55,19 +65,22 @@ const net = {
         if (!this.ws || this.ws.readyState > 1)
             return 'Disconnected. Reload the page to reconnect.';
         const who = this.slot >= 0 ? 'you are ' + (this.slot % 2 === 0 ? 'Blue' : 'Red') + (this.slot >= 2 ? ' 2' : '') : 'spectating';
-        const state = !this.running ? (this.slot >= 0 ? ' - waiting for an opponent...' : ' - waiting for players...') : '';
+        const seated = this.members.filter(m => m.slot >= 0).length;
+        const state = !this.running ? (this.lobby2v2 ? ` - 2v2 lobby: waiting for players (${seated}/4)...` : this.slot >= 0 ? ' - waiting for an opponent...' : ' - waiting for players...') : '';
         return `Online, room "${this.room}": ${who}${state}${this.rtt ? ` (ping ${Math.round(this.rtt)} ms${this.tps ? `, server ${this.tps} ticks/s` : ''}${this.extra ? ', ' + this.extra() : ''}, buffer ${Math.round(this.delayMs)} ms)` : ''}`;
     },
     join(room, server) {
         if (this.ws)
             return;
+        netClearAI();
         this.on = true;
         this.room = room;
         const url = server || netServerUrl();
         this.setStatus('Connecting to ' + url + '...');
         const ws = this.ws = new WebSocket(url);
         ws.onopen = () => {
-            ws.send(JSON.stringify({ t: 'join', room, special: (allPlayers[0] || {}).special }));
+            const want2v2 = typeof location !== 'undefined' && new URLSearchParams(location.search).get('2v2') === '1'; // ?room=NAME&2v2=1 opens a new room as a 2v2 lobby
+            ws.send(JSON.stringify({ t: 'join', room, special: (allPlayers[0] || {}).special, lobby2v2: want2v2 }));
             this.pingTimer = setInterval(() => this.ws && this.ws.readyState === 1 && this.ws.send(JSON.stringify({ t: 'ping', c: performance.now() })), NET_PING_MS);
         };
         ws.onmessage = e => { try { this.onMessage(JSON.parse(e.data)); } catch (err) { console.error('bad message', err); } };
@@ -96,6 +109,7 @@ const net = {
             this.setStatus(this.describe());
         } else if (m.t === 'roster') {
             this.running = m.running;
+            this.lobby2v2 = !!m.lobby2v2;
             this.host = !!m.host;
             this.members = m.members || [];
             this.you = m.you;
@@ -154,6 +168,10 @@ const net = {
     setFixed(v) {
         if (this.ws && this.ws.readyState === 1)
             this.ws.send(JSON.stringify({ t: 'fixed', v: !!v }));
+    },
+    setLobby2v2(v) { // host only (the server checks): make the room a 2v2 lobby, or turn that off
+        if (this.ws && this.ws.readyState === 1)
+            this.ws.send(JSON.stringify({ t: 'lobby2v2', v: !!v }));
     },
     assign(cid, to) {
         if (this.ws && this.ws.readyState === 1)

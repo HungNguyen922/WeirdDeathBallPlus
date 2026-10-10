@@ -26,7 +26,13 @@ function setTeams(size) {
     btn.textContent = '2v2: ' + (size === 2 ? 'On' : 'Off');
     btn.classList.toggle('on', size === 2);
 }
-document.getElementById('mode2v2').addEventListener('click', () => { setTeams(teamSize === 2 ? 1 : 2); cv.focus(); });
+document.getElementById('mode2v2').addEventListener('click', () => {
+    if (!net.on)
+        setTeams(teamSize === 2 ? 1 : 2);
+    else if (net.host) // online this button is the room's 2v2 lobby switch (host only; menu.js labels it)
+        net.setLobby2v2(!net.lobby2v2);
+    cv.focus();
+});
 // ---- input ----
 const bindings = [ // [player, { key (or physical key code) -> action }]
     [p1, { ArrowLeft: 'l', ArrowRight: 'r', ArrowUp: 'up', ArrowDown: 'dn', x: 'z', c: 'x', z: 'sp' }],

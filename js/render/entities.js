@@ -34,6 +34,8 @@ function drawArrows() {
         arrowShape(a.x, a.y, a.ang, ARROW_LEN, a.team === 0 ? '#42a5f5' : '#ef5350', a.stuck ? Math.min(1, a.life / 0.5) : 1);
 }
 function drawAITags() { // "AI" tag over a computer-controlled player
+    if (net.on) // online every seat is a person (the ai flags are offline-only state)
+        return;
     for (const p of players) { // "AI" tag over a computer-controlled player
         if (p.alive && ai[p.id].on) {
             cx.fillStyle = 'rgba(255,255,255,.8)';

@@ -11,17 +11,15 @@ const SPECIALS = [
 ];
 const ui = { open: -1, hover: null }; // open = index of the player whose menu is open (-1 = none)
 const hintX = i => (i === 0 ? -OX / 2 : W + OX / 2);
-const spKey = i => ({ x: hintX(i) + 26, y: 195, w: 40, h: 40 }); // the special keycap (third key of the action row)
-const spItem = (i, n) => ({ x: hintX(i) + 26, y: 240 + n * 32, w: 40, h: 32 }); // menu rows, directly under it
-const menuKey = () => ({ x: W / 2 - 60, y: H + 111, w: 120, h: 24 }); // the Menu button: a pill on the floor, centred under the online status lineconst inRect = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+const spKey = i => ({ x: hintX(i) + 26, y: HINT_ACT_Y + HINT_DY - 20, w: 40, h: 40 }); // the special keycap (third key of the action row)
+const spItem = (i, n) => ({ x: hintX(i) + 26, y: HINT_ACT_Y + HINT_DY + 25 + n * 32, w: 40, h: 32 }); // menu rows, directly under it
+const menuKey = () => ({ x: W / 2 - 60, y: H + 111, w: 120, h: 24 }); // the Menu button: a pill on the floor, centred under the online status line
+const inRect = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 function uiHit(x, y) {
     if (ui.open >= 0)
         for (let n = 0; n < SPECIALS.length; n++)
             if (inRect(spItem(ui.open, n), x, y))
                 return { type: 'item', i: ui.open, n };
-    for (const i of [0, 1])
-        if (inRect(spKey(i), x, y))
-            return { type: 'key', i };
     for (const i of [0, 1])
         if (!pickFixed && inRect(spKey(i), x, y))
             return { type: 'key', i };

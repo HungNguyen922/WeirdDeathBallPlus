@@ -3,16 +3,22 @@
 // Model (authoritative host): the server owns the real simulation, one per room. Clients send only their key presses; the server steps the sim at the game's fixed rate and
 // sends everybody a snapshot of the whole world (saveState) 30 times a second, plus the one-off events (goals, impacts, bat hits) the renderer needs for its effects.
 //
+// Teams: a connection is on Blue (team 0), on Red (team 1) or waiting / spectating (team -1). A team has at most TEAM_MAX players. Seats are player ids: Blue sits in 0 then 2, Red in
+// 1 then 3, in the order they joined the team. The first player into a room goes to Blue, the second to Red; everybody after that waits until the HOST (the player who made the room,
+// passed on if they leave) moves them. The match runs only while both teams have a player (1v1, 1v2 and 2v2 all work); any change to who is seated restarts it.
+//
 // Protocol: JSON text messages over a WebSocket.
-//   client -> server   {t:'join', room, special}          join a room (first free seat: 0 = Blue, 1 = Red; after that you watch)
+//   client -> server   {t:'join', room, special}          join a room
 //                      {t:'in', n, k}                      my keys changed. n = my input counter, k = bit mask: l1 r2 up4 dn8 z16 x32 sp64   (z = grapple, x = weight, sp = special)
-//                      {t:'sp', s}                         equip special ability s
+//                      {t:'sp', s}                         equip special ability s (ignored while pick screens are on)
+//                      {t:'fixed', v}                      host only: specials only on pick screens (true) or free swapping (false); restarts the match
+//                      {t:'assign', c, to}                 host only: move member c to team 0 (Blue), 1 (Red) or -1 (waiting); restarts the match if seats change
 //                      {t:'ping', c}                       latency probe
-//   server -> client   {t:'welcome', room, slot, tick, hz, snapEvery}   slot: 0 / 1 = a player, -1 = spectator
-//                      {t:'roster', slots:[bool, bool], spectators, running}
+//   server -> client   {t:'welcome', room, slot, cid, tick, hz, snapEvery}   slot: 0..3 = a seat, -1 = waiting / spectating; cid = your member id
+//                      {t:'slot', slot}                    your seat changed (the host moved you)
+//                      {t:'roster', slots:[bool x4], spectators, running, host, you, members:[{c, team, slot, host}]}
 //                      {t:'snap', tick, ack, s, ev}         s = saveState(), ack = my last input counter the server has applied, ev = [[name, tick, ...args], ...]
-//                      {t:'pong', c, tick}    {t:'error', msg}
-// The match runs only while both seats are filled; when someone leaves it pauses, and when the seat is filled again the match restarts.
+//                      {t:'pong', c, tick, tps}    {t:'error', msg}
 const http = require('http'), fs = require('fs'), path = require('path');
 const { attachWebSocket } = require('./ws.js');
 const { loadSim, ROOT } = require('./sim-node.js');
@@ -20,6 +26,7 @@ const { loadSim, ROOT } = require('./sim-node.js');
 const TICK_HZ = 120, DT_MS = 1000 / TICK_HZ, SNAP_EVERY = 4; // snapshots at 30 Hz
 const MAX_CATCHUP = 8; // never run more than this many ticks in one go (after a stall, drop the debt instead of spiralling)
 const MAX_ROOMS = 50, MAX_SPECTATORS = 8, MSG_PER_SEC = 400;
+const TEAM_MAX = 2; // players per team (seats 0 / 2 are Blue, 1 / 3 are Red)
 const SPECIAL_IDS = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire'];
 
 // Code that runs INSIDE a room's sandbox: it captures the game's events (the renderer's hooks) into a list, and applies input bits to a player's keys.
@@ -31,7 +38,7 @@ events.onNewRound = () => __ev.push(['nr', __tick]);
 events.onImpact = (p, x, y, ux, uy, v) => __ev.push(['im', __tick, p.id, x, y, ux, uy, v]);
 events.onBatHit = (p, b, x, y, ux, uy, k) => __ev.push(['bt', __tick, p.id, __ref(b), x, y, ux, uy, k]);
 function __setKeys(i, bits) {
-    const k = players[i].keys;
+    const k = allPlayers[i].keys;
     k.l = !!(bits & 1); k.r = !!(bits & 2); k.up = !!(bits & 4); k.dn = !!(bits & 8); k.z = !!(bits & 16); k.x = !!(bits & 32); k.sp = !!(bits & 64);
 }
 `;
@@ -41,55 +48,103 @@ class Room {
         this.name = name;
         this.sim = loadSim();
         this.sim.run(ROOM_PRELUDE);
-        this.seats = [null, null]; // connections
-        this.watchers = new Set();
-        this.bits = [0, 0]; // latest key mask per seat
-        this.seq = [0, 0]; // latest input counter per seat (echoed back as `ack`)
-        this.special = ['dash', 'dash'];
+        this.conns = new Set(); // everyone in the room. Room sets on each: cid (member id), team (0 / 1 / -1), order, slot (seat 0..3 or -1), special, moved
+        this.seats = [null, null, null, null]; // connections by seat (= player id)
+        this.bits = [0, 0, 0, 0]; // latest key mask per seat
+        this.seq = [0, 0, 0, 0]; // latest input counter per seat (echoed back as `ack`)
+        this.nextCid = 1;
+        this.nextOrder = 1;
+        this.host = null; // the connection allowed to change room settings and move players
+        this.fixed = false; // specials only on pick screens
         this.tick = 0;
         this.running = false;
         this.acc = 0;
         this.last = performance.now();
         this.tps = 0; this.tpsN = 0; this.tpsT = performance.now(); // achieved sim ticks per second (should sit at 120)
     }
-    get everyone() { return [...this.seats.filter(Boolean), ...this.watchers]; }
-    get empty() { return !this.seats[0] && !this.seats[1] && this.watchers.size === 0; }
-    join(conn, special) {
-        let slot = this.seats.findIndex(s => !s);
-        if (slot >= 0) {
-            this.seats[slot] = conn;
-            this.bits[slot] = 0;
-            this.seq[slot] = 0;
-            if (SPECIAL_IDS.includes(special))
-                this.special[slot] = special;
-        } else {
-            if (this.watchers.size >= MAX_SPECTATORS)
-                return -2;
-            this.watchers.add(conn);
+    get everyone() { return [...this.conns]; }
+    get empty() { return this.conns.size === 0; }
+    teamCount(t) { let n = 0; for (const c of this.conns) if (c.team === t) n++; return n; }
+    // Work out the seats from each connection's team: a team's members take its seats in the order they joined the team. Returns true if any seat changed.
+    reseat() {
+        const old = this.seats, seats = [null, null, null, null];
+        for (const t of [0, 1])
+            [...this.conns].filter(c => c.team === t).sort((a, b) => a.order - b.order).slice(0, TEAM_MAX).forEach((c, i) => { seats[2 * i + t] = c; });
+        let changed = false;
+        for (let i = 0; i < 4; i++)
+            if (old[i] !== seats[i]) {
+                changed = true;
+                this.bits[i] = 0;
+                this.seq[i] = 0;
+            }
+        this.seats = seats;
+        for (const c of this.conns) {
+            const was = c.slot;
+            c.slot = seats.indexOf(c); // -1 = waiting
+            c.moved = was !== undefined && was !== c.slot;
         }
-        conn.send(JSON.stringify({ t: 'welcome', room: this.name, slot, tick: this.tick, hz: TICK_HZ, snapEvery: SNAP_EVERY }));
-        if (this.seats[0] && this.seats[1] && !this.running)
+        return changed;
+    }
+    // After anything that may have changed who is seated: tell the people who moved, (re)start or pause the match, send the roster.
+    settle(changed) {
+        for (const c of this.conns)
+            if (c.moved) {
+                c.moved = false;
+                c.send(JSON.stringify({ t: 'slot', slot: c.slot }));
+            }
+        const ready = this.teamCount(0) > 0 && this.teamCount(1) > 0; // an empty team means there is nothing to play: the match waits
+        if (ready && (changed || !this.running))
             this.start();
+        else if (!ready)
+            this.running = false;
         this.roster();
         if (!this.running && this.tick > 0)
-            this.snapshot(); // a watcher joining a paused room still gets to see the board
-        return slot;
+            this.snapshot(); // someone watching a paused room still gets to see the board
+    }
+    join(conn, special) {
+        const free = [0, 1].find(t => this.teamCount(t) === 0); // a team with nobody on it: the newcomer plays there. Later arrivals wait for the host.
+        const team = free === undefined ? -1 : free;
+        if (team < 0 && [...this.conns].filter(c => c.team < 0).length >= MAX_SPECTATORS)
+            return -2;
+        conn.cid = this.nextCid++;
+        conn.team = team;
+        conn.order = this.nextOrder++;
+        conn.special = SPECIAL_IDS.includes(special) ? special : 'dash';
+        this.conns.add(conn);
+        if (!this.host)
+            this.host = conn;
+        const changed = this.reseat();
+        conn.send(JSON.stringify({ t: 'welcome', room: this.name, slot: conn.slot, cid: conn.cid, tick: this.tick, hz: TICK_HZ, snapEvery: SNAP_EVERY }));
+        this.settle(changed);
+        return conn.slot;
     }
     leave(conn) {
-        const i = this.seats.indexOf(conn);
-        if (i >= 0) {
-            this.seats[i] = null;
-            this.bits[i] = 0;
-            this.running = false; // the match waits for the seat to be filled
-        } else
-            this.watchers.delete(conn);
-        this.roster();
+        if (!this.conns.delete(conn))
+            return;
+        if (conn === this.host) // seated players first, then whoever has been waiting longest
+            this.host = [...this.conns].sort((a, b) => (b.team >= 0) - (a.team >= 0) || a.order - b.order)[0] || null;
+        this.settle(this.reseat());
+    }
+    assign(cid, to) { // the host moves a member: 0 = Blue, 1 = Red, -1 = waiting
+        const c = [...this.conns].find(x => x.cid === cid);
+        if (!c || ![0, 1, -1].includes(to) || c.team === to)
+            return;
+        if (to >= 0 && this.teamCount(to) >= TEAM_MAX)
+            return; // that team is full
+        c.team = to;
+        c.order = this.nextOrder++; // joins the end of that team's seat order
+        this.settle(this.reseat());
     }
     start() {
-        const sim = this.sim;
-        sim.run('setTeamSize(1)'); // 1v1; also restarts the match
-        for (let i = 0; i < 2; i++)
-            sim.run(`players[${i}].special = '${this.special[i]}'`);
+        const sim = this.sim, ids = [];
+        this.seats.forEach((c, i) => {
+            if (!c)
+                return;
+            ids.push(i);
+            sim.run(`allPlayers[${i}].special = '${c.special}'`); // before the restart, so a pick screen opens with the right choice highlighted
+        });
+        sim.run(`pickFixed = ${this.fixed}`);
+        sim.run(`setRoster([${ids.join(',')}])`); // exactly these players; also restarts the match (and opens the first pick screen when they are on)
         sim.ctx.__ev.length = 0;
         this.tick = 0;
         this.acc = 0;
@@ -97,16 +152,26 @@ class Room {
         this.running = true;
         this.snapshot(); // everyone sees the fresh board straight away
     }
-    setSpecial(slot, id) {
-        if (slot < 0 || !SPECIAL_IDS.includes(id))
+    setSpecial(conn, id) {
+        if (!SPECIAL_IDS.includes(id) || this.fixed)
             return;
-        this.special[slot] = id;
-        this.sim.run(`players[${slot}].special = '${id}'`);
+        conn.special = id; // remembered, so it follows the player if they are moved
+        if (conn.slot >= 0)
+            this.sim.run(`allPlayers[${conn.slot}].special = '${id}'`);
+    }
+    setFixed(v) { // the "pick screens" option: restarts the match so everyone starts from the first pick screen
+        this.fixed = !!v;
+        this.sim.run(`pickFixed = ${this.fixed}`);
+        if (this.running)
+            this.start();
     }
     roster() {
-        const m = JSON.stringify({ t: 'roster', slots: [!!this.seats[0], !!this.seats[1]], spectators: this.watchers.size, running: this.running });
-        for (const c of this.everyone)
-            c.send(m);
+        const members = [...this.conns]
+            .sort((a, b) => (a.slot < 0) - (b.slot < 0) || a.slot - b.slot || a.order - b.order) // seated by seat, then the waiting list in order
+            .map(c => ({ c: c.cid, team: c.team, slot: c.slot, host: c === this.host }));
+        const base = { t: 'roster', slots: this.seats.map(Boolean), spectators: members.filter(m => m.slot < 0).length, running: this.running, members };
+        for (const c of this.conns)
+            c.send(JSON.stringify({ ...base, host: c === this.host, you: c.cid }));
     }
     advance(now) {
         if (!this.running) {
@@ -118,8 +183,8 @@ class Room {
         const ctx = this.sim.ctx;
         let n = 0;
         while (this.acc >= DT_MS && n < MAX_CATCHUP) {
-            ctx.__setKeys(0, this.bits[0]);
-            ctx.__setKeys(1, this.bits[1]);
+            for (let i = 0; i < 4; i++)
+                ctx.__setKeys(i, this.bits[i]);
             ctx.__tick = this.tick + 1; // events are tagged with the tick count at which their effect is first visible
             ctx.update();
             this.tick++;
@@ -143,8 +208,9 @@ class Room {
         ctx.__ev.length = 0;
         const head = `{"t":"snap","tick":${this.tick},"ack":`, tail = `,"s":${s},"ev":${ev}}`;
         this.seats.forEach((c, i) => c && c.send(head + this.seq[i] + tail));
-        for (const c of this.watchers)
-            c.send(head + '0' + tail);
+        for (const c of this.conns)
+            if (c.slot < 0)
+                c.send(head + '0' + tail);
     }
 }
 
@@ -181,7 +247,7 @@ function startServer(port = 8080, host = '0.0.0.0') {
     });
 
     attachWebSocket(server, conn => {
-        let room = null, slot = -2, count = 0, since = Date.now();
+        let room = null, count = 0, since = Date.now();
         conn.on('message', str => {
             const now = Date.now();
             if (now - since > 1000) { since = now; count = 0; }
@@ -199,21 +265,24 @@ function startServer(port = 8080, host = '0.0.0.0') {
                         return conn.send(JSON.stringify({ t: 'error', msg: 'server is full' }));
                     rooms.set(name, r = new Room(name));
                 }
-                slot = r.join(conn, m.special);
-                if (slot === -2) {
+                if (r.join(conn, m.special) === -2) {
                     if (r.empty)
                         rooms.delete(name);
                     return conn.send(JSON.stringify({ t: 'error', msg: 'room is full' }));
                 }
                 room = r;
-            } else if (m.t === 'in' && room && slot >= 0) {
+            } else if (m.t === 'in' && room && conn.slot >= 0) { // (conn.slot follows the host moving people around)
                 if (Number.isInteger(m.k) && m.k >= 0 && m.k <= 127) {
-                    room.bits[slot] = m.k;
+                    room.bits[conn.slot] = m.k;
                     if (Number.isInteger(m.n))
-                        room.seq[slot] = m.n;
+                        room.seq[conn.slot] = m.n;
                 }
             } else if (m.t === 'sp' && room)
-                room.setSpecial(slot, m.s);
+                room.setSpecial(conn, m.s);
+            else if (m.t === 'fixed' && room && room.host === conn)
+                room.setFixed(m.v);
+            else if (m.t === 'assign' && room && room.host === conn)
+                room.assign(Number(m.c), Number(m.to));
             else if (m.t === 'ping')
                 conn.send(JSON.stringify({ t: 'pong', c: Number(m.c) || 0, tick: room ? room.tick : 0, tps: room ? room.tps : 0 }));
         });

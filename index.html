@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="css/style.css">
 </head><body>
 <canvas id="c" width="1302" height="740" tabindex="0"></canvas>
+<button id="menubtn" aria-label="Open menu" title="Menu (Esc)"></button>
 
 <!-- touch controls (shown on touch screens; see js/touch.js): left half = floating stick, right half = three bands, top to bottom: special, weight, grapple -->
 <div id="touchui" aria-hidden="true">
@@ -26,6 +27,7 @@
 <div class="tabs" role="tablist">
 <button class="tab on" role="tab" data-tab="game" aria-selected="true">Game</button>
 <button class="tab" role="tab" data-tab="controls" aria-selected="false">Controls</button>
+<button class="tab" role="tab" data-tab="players" aria-selected="false">Players</button>
 </div>
 <button id="menuclose" class="x" aria-label="Close menu" title="Close (Esc)">&#10005;</button>
 </div>
@@ -47,6 +49,7 @@
 <button id="mode2v2" class="mode" title="Toggle 2v2: each team gets a second player, spawned 2 player lengths from the ball and from the goal scoop (key T)">2v2: Off</button>
 </div>
 </div>
+<button id="pickmode" class="mode" title="Free swap: change your special any time. Pick screens: choose it before the first point and after every 5th point scored.">Specials: Free swap</button>
 <div class="group" id="specialgroup">
 <h3>Special ability</h3>
 <div class="row" id="specialpick"></div>
@@ -97,6 +100,7 @@
 <li><kbd>T</kbd> switch between 1v1 and 2v2</li>
 <li><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> toggle AI for Blue, Red, Blue 2, Red 2 (3 and 4 only exist in 2v2)</li>
 <li><kbd>M</kbd> music on / off</li>
+<li>On a pick screen: arrows move, grapple or special locks in, weight takes it back</li>
 </ul>
 </div>
 <div class="group">
@@ -107,6 +111,11 @@
 </ul>
 </div>
 </section>
+
+<section data-panel="players" hidden>
+<div id="roster"></div>
+</section>
+
 </div>
 </div>
 
@@ -126,6 +135,7 @@
 <script src="js/render/impact.js"></script>
 <script src="js/render/special-menu.js"></script>
 <script src="js/render/key-hints.js"></script>
+<script src="js/render/pick-screen.js"></script>
 <script src="js/render/arena.js"></script>
 <script src="js/render/entities.js"></script>
 <script src="js/render/render.js"></script>

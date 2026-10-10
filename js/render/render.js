@@ -18,6 +18,7 @@ function draw() {
     drawImpacts();
     drawArrows();
     drawMessage();
+    drawPickScreen(); // the special-ability select grid, over the playing area, when one is open
     drawSpecialMenu();
     cx.restore();
 }

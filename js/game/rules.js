@@ -1,4 +1,4 @@
-// GAME - rules and the fixed-step update loop: rounds, scoring, kills, decoy collisions.
+// GAME - rules and the fixed-step update loop: rounds, scoring, kills, decoy collisions, and the optional special-ability pick screens.
 // Drives the physics modules and never draws. The renderer subscribes through `events`.
 const WIN = 9; // points to win the match
 let score = [0, 0], pause = 0, over = false, msg = '';
@@ -12,6 +12,90 @@ const events = {
     onImpact(p, x, y, ux, uy, speed) {}, // player p hit something at (x, y) hard enough to show it; (ux, uy) points away from what it hit, speed = how hard (u/s)
     onBatHit(p, target, x, y, ux, uy, power) {}, // p's bat hit a ball / decoy / player at (x, y), launching it along (ux, uy); power 0..1
 };
+
+// ---- Special-ability pick screens (the "Specials: Pick screens" option in the menu) ----
+// With pickFixed on, a special can only be changed on a pick screen. One opens before the first point of a match and after every PICK_EVERY-th point scored.
+// The screen is part of the simulation (its state is `pick`, saved by saveState), so online play, prediction and rollback need nothing special: everybody steers it with
+// their normal keys. On the screen: left / right / up / down move the cursor over a grid PICK_COLS wide, grapple or special locks the choice in, weight takes it back.
+// The computer always takes Dash (it is the only special the AI knows how to use). When everybody is locked in, a short countdown runs and the point starts.
+const PICK_EVERY = 5, PICK_COLS = 5, PICK_GO_T = 0.9; // points between screens, icons per row, seconds of "get ready" after the last lock-in
+const PICK_LIST = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire']; // the grid, in reading order (same ids as SPECIALS in render/special-menu.js)
+let pickFixed = false; // the toggle: true = specials are only chosen on pick screens, false = swap any time from the keycap
+const pick = { on: false, t: 0, go: 0, at: -1, cur: [0, 0, 0, 0], ready: [false, false, false, false], prev: [0, 0, 0, 0] }; // on = screen open, t = seconds open, go = countdown left, at = score total it was opened at, cur / ready / prev per player id (prev = last key mask, to spot fresh presses)
+const keyBits = k => (k.l ? 1 : 0) | (k.r ? 2 : 0) | (k.up ? 4 : 0) | (k.dn ? 8 : 0) | (k.z ? 16 : 0) | (k.x ? 32 : 0) | (k.sp ? 64 : 0);
+function openPick() {
+    pick.on = true;
+    pick.t = 0;
+    pick.go = 0;
+    pick.at = score[0] + score[1];
+    for (const p of allPlayers) {
+        pick.cur[p.id] = Math.max(0, PICK_LIST.indexOf(p.special)); // the cursor starts on what you already have
+        pick.ready[p.id] = false;
+        pick.prev[p.id] = keyBits(p.keys); // a key already held when the screen opens is not a press
+    }
+}
+function closePick() {
+    pick.on = false;
+    pick.go = 0;
+    for (const p of players) { // keys still held from the screen must not start a cast / kick on the first tick of the point
+        p.prevSp = p.keys.sp;
+        p.prevX = p.keys.x;
+    }
+}
+function maybeOpenPick() { // call right after a round has been set up
+    const total = score[0] + score[1];
+    if (pickFixed && total % PICK_EVERY === 0 && pick.at !== total) // (the pick.at check stops a double KO from opening the same screen twice)
+        openPick();
+}
+function pickStep() { // one physics step of an open pick screen
+    pick.t += DT;
+    if (pick.go > 0) { // everybody is locked in: count down, then play
+        pick.go -= DT;
+        if (pick.go <= 0)
+            closePick();
+        return;
+    }
+    const n = PICK_LIST.length, rows = Math.ceil(n / PICK_COLS), rowLen = r => Math.min(PICK_COLS, n - r * PICK_COLS);
+    for (const p of players) {
+        const id = p.id, bits = keyBits(p.keys), fresh = bits & ~pick.prev[id];
+        pick.prev[id] = bits;
+        if (ai[id].on) { // the computer takes Dash after a moment
+            pick.cur[id] = 0;
+            if (!pick.ready[id] && pick.t > 0.7 + 0.2 * id) {
+                p.special = 'dash';
+                pick.ready[id] = true;
+            }
+            continue;
+        }
+        if (pick.ready[id]) {
+            if (fresh & 32)
+                pick.ready[id] = false; // weight takes the choice back
+            continue;
+        }
+        let row = Math.floor(pick.cur[id] / PICK_COLS), col = pick.cur[id] % PICK_COLS;
+        if (fresh & 1)
+            col = (col + rowLen(row) - 1) % rowLen(row);
+        if (fresh & 2)
+            col = (col + 1) % rowLen(row);
+        if (fresh & 4)
+            row = (row + rows - 1) % rows;
+        if (fresh & 8)
+            row = (row + 1) % rows;
+        col = Math.min(col, rowLen(row) - 1); // the last row is shorter
+        pick.cur[id] = row * PICK_COLS + col;
+        if (fresh & (16 | 64)) { // grapple or special locks it in
+            p.special = PICK_LIST[pick.cur[id]];
+            pick.ready[id] = true;
+        }
+    }
+    if (players.every(p => pick.ready[p.id]))
+        pick.go = PICK_GO_T;
+}
+function setPickMode(on) { // the menu toggle: restarts the match, so the first pick screen comes up straight away
+    pickFixed = !!on;
+    resetMatch();
+}
+
 function newRound() { 
     pegs.length = 0; 
     decoys.length = 0; 
@@ -34,12 +118,21 @@ function setTeamSize(size) { // 1 = 1v1, 2 = 2v2: restarts the match
     layoutTeams(size);
     resetMatch();
 }
+function setRoster(ids) { // the online server: exactly these players (0 / 2 Blue, 1 / 3 Red). A team may have one player or two; restarts the match
+    teamSize = ids.some(id => ids.some(o => o !== id && o % 2 === id % 2)) ? 2 : 1;
+    layoutRoster(ids);
+    resetMatch();
+}
 function resetMatch() { // R key
     score = [0, 0];
     over = false;
     msg = '';
     pause = 0;
     newRound();
+    pick.on = false;
+    pick.go = 0;
+    pick.at = -1;
+    maybeOpenPick(); // a new match starts with a pick screen when they are on
 }
 // Barbwire: while its owner holds the special key, their grapple rope kills any other player it touches. The rope is the segment from the owner to the hook; while the hook is
 // still in flight it is the part of the line that has reached out so far (the same line the renderer draws). A player counts as touching it when the segment passes within
@@ -84,6 +177,12 @@ function update() {
     for (let i = pegs.length - 1; i >= 0; i--)
         if (pegs[i].life <= 0)
             pegs.splice(i, 1); // fizzled out
+    if (!players.some(p => p.team === 0) || !players.some(p => p.team === 1))
+        return; // a team with nobody on it: nothing to play
+    if (pick.on) { // a pick screen is open: the world holds still until everybody has chosen
+        pickStep();
+        return;
+    }
     if (pause > 0) {
         pause -= DT;
         events.onPauseTick();
@@ -91,9 +190,11 @@ function update() {
             if (over) {
                 score = [0, 0];
                 over = false;
+                pick.at = -1;
             }
             msg = '';
             newRound();
+            maybeOpenPick(); // before the first point and after every PICK_EVERY-th point
         }
         return;
     }

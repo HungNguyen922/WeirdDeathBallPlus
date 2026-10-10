@@ -110,9 +110,11 @@ function drawCasts() { // abilities being cast: ghost pegs / decoys, marionette 
             cx.fillStyle = col; // knob
             cx.beginPath(); cx.arc(p.x + ux * (at(0) - 1), p.y + uy * (at(0) - 1), 3.4, 0, 7); cx.fill();
             cx.restore();
-        } else if (p.cast.type === 'barbwire') { // time left on the wire: a ring that drains as the key is held, turning red when nearly out
-            const left = 1 - Math.min(1, p.cast.held / BARBWIRE_MAX_T);
-            drawTimer(p.x, p.y, p.r + 6, left, left < 0.25 ? '#b36bff' : col);
+        } else if (p.cast.type === 'barbwire') { // time left on the wire: a ring that only shows (and only drains) while the rope is out, turning red when nearly spent
+            const left = 1 - Math.min(1, p.cast.roped / BARBWIRE_MAX_T);
+            if (ropeEnd(p))
+                drawTimer(p.x, p.y, p.r + 6, left, left < 0.25 ? '#000000' : col);
+            drawTimer(p.x, p.y, p.r + 6, left, left < 0.25 ? '#000000' : col);
         } else if (p.cast.type === 'arrow') { // charge ring (white and pulsing at full) and the arrow held out along the aim
             const c = p.cast, full = c.charge >= 1, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 70);
             drawTimer(p.x, p.y, p.r + 6, c.charge, full ? '#ffffff' : col);
@@ -180,13 +182,13 @@ function drawRopes() { // hook in flight, then the tether itself (barbed while t
     for (const p of players) { // hook in flight: the rope reaches out to the target during the landing delay
         if (p.alive && p.pending && p.keys.z) {
             const f = Math.min(1, 1 - p.pending.t / p.pending.t0), ex = p.x + (p.pending.p.x - p.x) * f, ey = p.y + (p.pending.p.y - p.y) * f;
-            cx.strokeStyle = isBarbed(p) ? '#ff8a80' : 'rgba(232,232,228,.8)';
+            cx.strokeStyle = isBarbed(p) ? '#e8e8e4' : 'e8e8e4';
             cx.lineWidth = 2;
             cx.beginPath();
             line(p.x, p.y, ex, ey);
             cx.stroke();
             if (isBarbed(p))
-                barbs(p.x, p.y, ex, ey, '#ff5a4d');
+                barbs(p.x, p.y, ex, ey, '#e8e8e4');
         }
     }
     for (const p of players) {
@@ -198,17 +200,17 @@ function drawRopes() { // hook in flight, then the tether itself (barbed while t
                 const slack = !p.onBall && p.ropeGround && dd < p.len - 1, barbed = isBarbed(p);
                 if (barbed) { // red glow under the wire
                     cx.save();
-                    cx.strokeStyle = 'rgba(255,60,50,.35)'; cx.lineWidth = 7; cx.lineCap = 'round';
+                    cx.strokeStyle = '#2d104b'; cx.lineWidth = 7; cx.lineCap = 'round';
                     cx.beginPath(); line(p.x, p.y, p.rope.x, p.rope.y); cx.stroke();
                     cx.restore();
                 }
-                cx.strokeStyle = barbed ? '#ffb0a8' : slack ? 'rgba(232,232,228,.45)' : '#e8e8e4';
+                cx.strokeStyle = barbed ? '#b36bff' : slack ? 'rgba(232,232,228,.45)' : '#e8e8e4';
                 cx.lineWidth = 2;
                 cx.beginPath();
                 line(p.x, p.y, p.rope.x, p.rope.y);
                 cx.stroke();
                 if (barbed)
-                    barbs(p.x, p.y, p.rope.x, p.rope.y, '#ff5a4d');
+                    barbs(p.x, p.y, p.rope.x, p.rope.y, '#000000');
             }
             {
                 cx.fillStyle = '#e8e8e4';
@@ -290,12 +292,12 @@ function drawPlayers() { // the player discs
 function drawBall(b) { // the Death Ball sprite (decoys use it too)
     const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 260); // slow glow pulse
     const bgr = cx.createRadialGradient(b.x - 4, b.y - 4, 1, b.x, b.y, b.r);
-    bgr.addColorStop(0, '#5a2a98');
-    bgr.addColorStop(1, '#1b0837');
+    bgr.addColorStop(0, '#000000');
+    bgr.addColorStop(1, '#000000');
     cx.fillStyle = bgr;
     cx.strokeStyle = '#b36bff';
     cx.lineWidth = 3;
-    cx.shadowColor = '#9333ea';
+    cx.shadowColor = '#000000';
     cx.shadowBlur = 16 + 12 * pulse;
     cx.beginPath();
     cx.arc(b.x, b.y, b.r, 0, 7);

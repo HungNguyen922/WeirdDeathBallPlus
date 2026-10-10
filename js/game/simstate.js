@@ -55,6 +55,7 @@ function saveState() {
         score: [...score], pause, over, msg, teamSize,
         saw: { t: saw.t, v: saw.v },
         padFlash: [...padFlash],
+        pick: cloneData(pick), pickFixed,
         inMatch: players.map(p => p.id), // who is in the current match, in order
         players: allPlayers.map(player),
         ball: body(ball),
@@ -74,6 +75,10 @@ function loadState(s) {
     saw.v = s.saw.v;
     padFlash[0] = s.padFlash[0];
     padFlash[1] = s.padFlash[1];
+    pickFixed = !!s.pickFixed;
+    if (s.pick)
+        for (const k in s.pick)
+            pick[k] = cloneData(s.pick[k]);
     players.length = 0;
     for (const id of s.inMatch)
         players.push(allPlayers[id]);

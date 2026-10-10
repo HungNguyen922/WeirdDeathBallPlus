@@ -134,7 +134,7 @@ function drawKeyHints() {
                 cx.fillText(label, kx, 251);
                 cx.font = 'bold 8px system-ui, sans-serif';
             }
-            if (i === 2) { // dropdown caret
+            if (i === 2 && !pickFixed) { // dropdown caret
                 const hot = ui.open === pi || (ui.hover && ui.hover.type === 'key' && ui.hover.i === pi);
                 cx.fillStyle = hot ? '#fff' : on ? '#0b0e12' : '#98a2ad';
                 cx.beginPath(); cx.moveTo(kx + 8, yy - 15); cx.lineTo(kx + 16, yy - 15); cx.lineTo(kx + 12, yy - 10); cx.closePath(); cx.fill();

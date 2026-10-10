@@ -13,9 +13,7 @@ const ui = { open: -1, hover: null }; // open = index of the player whose menu i
 const hintX = i => (i === 0 ? -OX / 2 : W + OX / 2);
 const spKey = i => ({ x: hintX(i) + 26, y: 195, w: 40, h: 40 }); // the special keycap (third key of the action row)
 const spItem = (i, n) => ({ x: hintX(i) + 26, y: 240 + n * 32, w: 40, h: 32 }); // menu rows, directly under it
-const menuKey = () => ({ x: hintX(0) - 20, y: 270, w: 40, h: 40 }); // the Menu tile: Blue's wall, directly under the weight key (the middle key of the action row)
-const menuTileShown = () => ui.open !== 0; // hidden while Blue's special list is open: that list's hover name is drawn across this spot
-const inRect = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+const menuKey = () => ({ x: W / 2 - 60, y: H + 111, w: 120, h: 24 }); // the Menu button: a pill on the floor, centred under the online status lineconst inRect = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 function uiHit(x, y) {
     if (ui.open >= 0)
         for (let n = 0; n < SPECIALS.length; n++)
@@ -24,34 +22,40 @@ function uiHit(x, y) {
     for (const i of [0, 1])
         if (inRect(spKey(i), x, y))
             return { type: 'key', i };
-    if (menuTileShown() && inRect(menuKey(), x, y))
+    for (const i of [0, 1])
+        if (!pickFixed && inRect(spKey(i), x, y))
+            return { type: 'key', i };
+    if (inRect(menuKey(), x, y))
         return { type: 'menu' };
     return null;
 }
 function closeSpecialMenu() { ui.open = -1; }
-function drawMenuTile() { // a keycap-style tile that opens the Menu panel (the panel itself is page UI, see menu.js)
-    if (!menuTileShown())
-        return;
-    const r = menuKey(), kx = r.x + r.w / 2, hot = !!(ui.hover && ui.hover.type === 'menu'), on = typeof gameMenu !== 'undefined' && gameMenu.isOpen();
-    const yy = keyCap(kx, r.y + r.h / 2, r.w, EDGE, on, false), col = on ? '#0b0e12' : hot ? '#ffffff' : '#e8e8e4';
+function drawMenuTile() { // the Menu button (the panel itself is page UI, see menu.js)
+    const r = menuKey(), hot = !!(ui.hover && ui.hover.type === 'menu'), on = typeof gameMenu !== 'undefined' && gameMenu.isOpen();
+    const col = on ? '#0b0e12' : hot ? '#ffffff' : '#e8e8e4', my = r.y + r.h / 2;
     cx.save();
-    cx.strokeStyle = col; cx.lineWidth = 2.6; cx.lineCap = 'round'; // the hamburger icon
+    cx.fillStyle = on ? EDGE : hot ? '#2e1a52' : '#1a0e30';
+    cx.strokeStyle = on ? '#fff' : hot ? '#c9b8f0' : '#a893d4';
+    cx.lineWidth = 2;
+    cx.beginPath(); cx.roundRect(r.x, r.y, r.w, r.h, 8); cx.fill(); cx.stroke();
+    cx.strokeStyle = col; cx.lineWidth = 2; cx.lineCap = 'round'; // hamburger icon
     cx.beginPath();
-    for (const dy of [-6, 0, 6])
-        line(kx - 8, yy - 2 + dy, kx + 8, yy - 2 + dy);
+    for (const dy of [-4, 0, 4])
+        line(r.x + 14, my + dy, r.x + 26, my + dy);
     cx.stroke();
-    cx.textAlign = 'center';
-    cx.font = 'bold 8px system-ui, sans-serif';
-    cx.fillStyle = on ? '#0b0e12' : '#98a2ad';
-    cx.fillText('ESC', kx + 13, yy + 15); // the key that also opens it
-    cx.fillStyle = '#98a2ad';
-    cx.fillText('MENU', kx, r.y + r.h + 16);
+    cx.textBaseline = 'middle';
+    cx.textAlign = 'left';
+    cx.font = 'bold 11px system-ui, sans-serif'; cx.fillStyle = col;
+    cx.fillText('MENU', r.x + 34, my + 1);
+    cx.textAlign = 'right';
+    cx.font = 'bold 8px system-ui, sans-serif'; cx.fillStyle = on ? '#0b0e12' : '#98a2ad';
+    cx.fillText('ESC', r.x + r.w - 10, my + 1); // the key that also opens it
     cx.restore();
 }
 function drawSpecialMenu() {
     if (ui.open < 0)
         return;
-    const i = ui.open, p = players[i], col = p.color, r0 = spItem(i, 0), hv = ui.hover;
+    const i = ui.open, p = allPlayers[i], col = p.color, r0 = spItem(i, 0), hv = ui.hover;
     cx.save();
     cx.fillStyle = '#12081f'; cx.strokeStyle = col; cx.lineWidth = 2;
     cx.beginPath(); cx.roundRect(r0.x - 3, r0.y - 2, r0.w + 6, SPECIALS.length * 32 + 4, 8); cx.fill(); cx.stroke();

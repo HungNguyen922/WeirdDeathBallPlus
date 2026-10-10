@@ -273,8 +273,8 @@ class Player {
                 this.cast = { type: 'decoy', t: DECOY_CAST, t0: DECOY_CAST, hx, hy, x: this.x, y: this.y }; // remembers the spot (and the arrows) at the press, like plinko
             else if (this.special === 'bat' && this.cd.bat <= 0) // charges while the key is held (aim read live), swings on release
                 this.cast = { type: 'bat', t: BAT_T, t0: BAT_T, charging: true, charge: 0, pow: 0, hx, hy, ang: hx || hy ? Math.atan2(hy, hx) : Math.atan2(ball.y - this.y, ball.x - this.x), hits: 0 };
-            else if (this.special === 'barbwire' && this.cd.barbwire <= 0) // active for as long as the key is held (up to BARBWIRE_MAX_T); the cooldown scales with it
-                this.cast = { type: 'barbwire', t: 1, t0: 1, held: 0, hx, hy };
+            else if (this.special === 'barbwire' && this.cd.barbwire <= 0) // the rope is lethal while the special and grapple key is held (see barbedRopeKills in rules.js); letting go or running out of time ends it
+                this.cast = { type: 'barbwire', t: 1, t0: 1, held: 0, roped: 0, hx, hy };
             else if (this.special === 'arrow' && this.cd.arrow <= 0)
                 this.cast = { type: 'arrow', t: 1, t0: 1, charge: 0, ang: this.arrowAng, noTilt: false, tap: { l: 0, r: 0, u: 0, d: 0 }, prev: { l: k.l, r: k.r, u: k.up, d: k.dn } };
 
@@ -300,9 +300,11 @@ class Player {
                     else
                         this.cast = null; // released with none: cancelled, nothing spent
                 }
-            } else if (c.type === 'barbwire') { // the rope is lethal while the key is held (see barbedRopeKills in rules.js); letting go or running out of time ends it
+            } else if (c.type === 'barbwire') {
                 c.held += DT;
-                if (!k.sp || c.held >= BARBWIRE_MAX_T)
+                if (this.rope || (this.pending && k.z))
+                    c.roped += DT; // time the wire was really out (hook in flight or tethered): only this costs cooldown
+                if (!k.sp || c.roped >= BARBWIRE_MAX_T)
                     c.t = 0;
             } else if (c.type === 'bat') {
                 if (c.charging) { // holding the key: charge up and follow the arrows; the timer does not run yet
@@ -371,7 +373,7 @@ class Player {
                         fireArrow(this, c);
                     this.cd.arrow = ARROW_COOLDOWN;
                 } else if (c.type === 'barbwire') {
-                    this.cd.barbwire = Math.min(c.held, BARBWIRE_MAX_T) * BARBWIRE_CD_RATIO; // proportional to how long it was held
+                    this.cd.barbwire = Math.min(c.roped, BARBWIRE_MAX_T) * BARBWIRE_CD_RATIO; // proportional to how long the wire was out
                 } else if (c.type === 'bat') {
                     this.cd.bat = BAT_COOLDOWN; // the cooldown starts when the swing ends
                 }

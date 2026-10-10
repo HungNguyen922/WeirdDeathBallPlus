@@ -41,6 +41,7 @@ function netMixState(a, b, u) { // two saveState() snapshots -> one in between. 
 
 const net = {
     on: false, slot: -1, ws: null, room: '', running: false, rtt: 0, status: '',
+    members: [], you: 0,
     keys: noKeys(), seq: 0, ack: 0, pendingSpecial: null,
     dtMs: 1000 / 120, snapEvery: 4,
     buf: [], evq: [], off: 0, lastSnapAt: 0, cur: null, shown: null, shape: null, skipEvent: null, jit: 0, delayMs: NET_DELAY_MS,
@@ -53,8 +54,8 @@ const net = {
     describe() {
         if (!this.ws || this.ws.readyState > 1)
             return 'Disconnected. Reload the page to reconnect.';
-        const who = this.slot === 0 ? 'you are Blue' : this.slot === 1 ? 'you are Red' : 'spectating';
-        const state = this.slot >= 0 && !this.running ? ' - waiting for an opponent...' : '';
+        const who = this.slot >= 0 ? 'you are ' + (this.slot % 2 === 0 ? 'Blue' : 'Red') + (this.slot >= 2 ? ' 2' : '') : 'spectating';
+        const state = !this.running ? (this.slot >= 0 ? ' - waiting for an opponent...' : ' - waiting for players...') : '';
         return `Online, room "${this.room}": ${who}${state}${this.rtt ? ` (ping ${Math.round(this.rtt)} ms${this.tps ? `, server ${this.tps} ticks/s` : ''}${this.extra ? ', ' + this.extra() : ''}, buffer ${Math.round(this.delayMs)} ms)` : ''}`;
     },
     join(room, server) {
@@ -84,9 +85,23 @@ const net = {
             this.dtMs = 1000 / m.hz;
             this.snapEvery = m.snapEvery;
             this.setStatus(this.describe());
+        } else if (m.t === 'slot') { // the host moved me: new seat, so forget the old seat's keys and prediction
+            this.slot = m.slot;
+            this.pendingSpecial = null;
+            Object.assign(this.keys, noKeys());
+            if (typeof pred !== 'undefined') {
+                pred.state = null;
+                pred.log = [];
+            }
+            this.setStatus(this.describe());
         } else if (m.t === 'roster') {
             this.running = m.running;
+            this.host = !!m.host;
+            this.members = m.members || [];
+            this.you = m.you;
             this.setStatus(this.describe());
+            if (typeof gameMenu !== 'undefined')
+                gameMenu.refresh();
         } else if (m.t === 'snap') {
             this.onSnapshot(m);
         } else if (m.t === 'pong') {
@@ -134,6 +149,15 @@ const net = {
         this.pendingSpecial = id;
         if (this.ws && this.ws.readyState === 1)
             this.ws.send(JSON.stringify({ t: 'sp', s: id }));
+    },
+    // you can't change you special in the middle of a match, but the server still needs to know what you want for the next match
+    setFixed(v) {
+        if (this.ws && this.ws.readyState === 1)
+            this.ws.send(JSON.stringify({ t: 'fixed', v: !!v }));
+    },
+    assign(cid, to) {
+        if (this.ws && this.ws.readyState === 1)
+            this.ws.send(JSON.stringify({ t: 'assign', c: cid, to }));
     },
     // ---- drawing: called once per rendered frame instead of update() ----
     frame(now) {

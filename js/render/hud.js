@@ -69,7 +69,7 @@ function drawNetStatus() { // online: room, seat, ping and so on (net.status is 
             cur = t;
     }
     lines.push(cur);
-    lines.slice(0, 3).forEach((l, i) => cx.fillText(l, W / 2, HUD_TOP + 72 + i * 16));
+    lines.slice(0, 2).forEach((l, i) => cx.fillText(l, W / 2, HUD_TOP + 70 + i * 16));
     cx.restore();
 }
 function drawHud() {

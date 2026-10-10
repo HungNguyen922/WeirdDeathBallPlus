@@ -22,8 +22,11 @@ section button.mode{border-color:var(--fg)}
 section button.mode.on{background:var(--fg);color:var(--bg)}
 section button.blue.on{background:#42a5f5}
 section button.red.on{background:#ef5350}
+button:disabled{opacity:.45;cursor:not-allowed}
 
 /* the menu panel */
+#menubtn{position:fixed;z-index:6;margin:0;padding:0;border:0;border-radius:8px;background:transparent;cursor:pointer;touch-action:manipulation}
+#menubtn:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;z-index:10}
 .overlay[hidden]{display:none}
 .dialog{background:var(--bg);color:var(--fg);border:2px solid var(--mut);border-radius:10px;width:100%;max-width:640px;max-height:calc(100dvh - 24px);overflow:auto;overscroll-behavior:contain;touch-action:pan-y;padding:12px 16px 16px;box-sizing:border-box}
@@ -37,7 +40,14 @@ section[hidden]{display:none}
 h3{margin:0 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .hint{margin:6px 0 0;color:var(--mut);font-size:13px}
-body:not(.touch) .touchonly,body:not(.touch) #specialgroup{display:none} /* only shown once the page knows it is on a touch screen */
+body:not(.touch) .touchonly{display:none}
+body:not(.touch):not(.online) #specialgroup{display:none}
+.team{margin-bottom:14px}
+h3.blue{color:#42a5f5}h3.red{color:#ef5350}
+.mem{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
+.mem .name{flex:1;min-width:0}
+.tag{font-size:11px;font-weight:700;letter-spacing:.05em;border:1px solid var(--mut);border-radius:4px;padding:0 5px;color:var(--mut)}
+.mem button{padding:1px 8px;font-size:13px}
 
 /* controls tab */
 .scroll{overflow-x:auto;margin-bottom:6px;touch-action:pan-x pan-y}

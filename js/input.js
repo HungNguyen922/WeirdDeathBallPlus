@@ -78,7 +78,7 @@ cv.addEventListener('click', e => {
         if (net.on)
             net.setSpecial(SPECIALS[h.n].id);
         else
-            players[h.i].special = SPECIALS[h.n].id;
+            allPlayers[h.i].special = SPECIALS[h.n].id;
         closeSpecialMenu();
     }
 });

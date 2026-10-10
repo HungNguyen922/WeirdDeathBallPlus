@@ -91,7 +91,7 @@ const WARP_COOLDOWN = 15, WARP_FX = 0.4;
 // Awakened: press the special key to power up for AWAKENED_T s; when it wears off the cooldown (AWAKENED_COOLDOWN s) starts. While awake the Player getters (grapMax, range,
 // grapLock, kickV, crashK) return boosted numbers: grapple meter (seconds of use), grapple reach, the weighted kick, the ball's gain from a crash shot, and the overcharge lockout
 // (0.5 = half as long). The grapple meter keeps its fill share across the switch (4 of 4 s becomes 6 of 6 s, and back). Pressing again while awake does nothing.
-const AWAKENED = { use: 2, range: 2, kick: 2, crash: 2, lock: 0.5 }, AWAKENED_T = 10, AWAKENED_COOLDOWN = 15;
+const AWAKENED = { use: 2, range: 1, kick: 1, crash: 3, lock: 0 }, AWAKENED_T = 10, AWAKENED_COOLDOWN = 15;
 
 const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 const START_CD = 1; // share of each ability's full cooldown still running at the start of a round (0 = ready at once, 1 = full cooldown)

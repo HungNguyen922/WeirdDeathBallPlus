@@ -95,7 +95,7 @@ class Player {
         this.kickReq = false;
         this.primeT = 0; // seconds of 'primed' left after weight is released (weight held = primed)
         this.gjN = 0; this.gjT = 99;               // grapple-jump chain: jumps so far, seconds since the last one
-        this.liftX = this.liftY = 0; this.liftT = 1e9; // the kick still being delivered (see LIFT_RAMP)
+        this.driveT = 0; this.driveAcc = 0; this.driveVmax = 0; // the grapple-jump drive still running (see GJ_DRIVE_T): seconds left, and its acceleration (u/s^2)
         this.tball = null; // the ball (the death ball or a decoy) we are tethered to while onBall
         this.taut = false;
         this.floatW = 1; // grapple-float weight 0..1: dribbling fades it out so the rope can pull you in, then it eases back
@@ -130,7 +130,7 @@ class Player {
         this.ropeBase = null;
         this.netSide = undefined; // which side of the net we were last on (0 left, 1 right); set after the first step
         this.gjN = 0; this.gjT = 99;               // grapple-jump chain: jumps so far, seconds since the last one
-        this.liftX = this.liftY = 0; this.liftT = 1e9; // the kick still being delivered (see LIFT_RAMP)
+        this.driveT = 0; this.driveAcc = 0; this.driveVmax = 0; // the grapple-jump drive still running (see GJ_DRIVE_T): seconds left, and its acceleration (u/s^2)
         this.dashReady = true; // one dash per trip off the floor
         this.tball = null;
         this.cd = { dash: 0, plinko: 0, marionette: 0, decoy: 0, arrow: 0, bat: 0, barbwire: 0, warp: 0, awakened: 0, explode: 0 }; // per-ability cooldown remaining (s)
@@ -171,6 +171,7 @@ class Player {
         this.gCool = GRAPPLE_COOLDOWN;
         this.gBurst = GRAPPLE_BURST_T;
         this.kickReq = false;
+        this.driveT = 0;
         this.rope = null;
         this.pending = null;
         this.onBall = false;
@@ -235,20 +236,19 @@ class Player {
         this.ropeBase = ground ? { x: p.x, y: p.y - sawY(p.x) } : null; // floor pivots ride the floor when it pops
         this.len = Math.max(d, MIN_LEN);
         this.taut = false;
+        this.driveT = 0;
         if (ground && this.vy <= 0) {
             const chain = Math.min(GJ_MAX, GJ_START * Math.pow(GJ_GROWTH, this.gjN)); // exponential ramp over a spammed chain
             const lift = LIFT_V * chain * (this.keys.x ? WEIGHT_M : 1);
             this.gjN++;
             this.gjT = 0;
-            let ux = d > 1 ? dx / d : 0, uy = d > 1 ? dy / d : -1;
-            ux *= HOP_AIM;
-            const m = Math.hypot(ux, uy) || 1;
-            ux /= m;
-            uy /= m; // mostly up/away, less sideways
-            this.liftX = ux * lift; // delivered over LIFT_RAMP by step(), not added all at once
-            this.liftY = uy * lift;
-            this.liftT = 0;
-            this.len += lift * (this.keys.x ? LIFT_SLACK_W : LIFT_SLACK); // extra rope from the kick (less when weighted)
+            // The rope's length becomes the reach: one more GJ_REACH_GROUND out than we are now (on a platform that is a player length off it), never past RANGE.
+            // Latching high above the pivot (already airborne) is weaker than a jump off the platform: full strength within GJ_NEAR u of the pivot, fading to GJ_AIR_SCALE by GJ_FAR u.
+            const air = 1 - (1 - GJ_AIR_SCALE) * Math.max(0, Math.min(1, (d - GJ_NEAR) / (GJ_FAR - GJ_NEAR)));
+            this.len = Math.min(RANGE, Math.max(d, MIN_LEN) + GJ_REACH_GROUND * air * (this.keys.x ? GJ_REACH_WEIGHTED : 1));
+            this.driveT = GJ_DRIVE_T;
+            this.driveVmax = lift * GJ_DRIVE_BOOST * air; // top speed away from the pivot this jump can reach
+            this.driveAcc = this.driveVmax / GJ_DRIVE_T; // delivered by step() as a pull away from the pivot, not as one kick
             this.taut = false;
         }
     }
@@ -510,13 +510,6 @@ class Player {
         this.dribT = Math.max(0, this.dribT - DT);
         if (this.gjT > GJ_CHAIN_T)
             this.gjN = 0; // chain broken
-        const ramp = Math.max(LIFT_RAMP, DT);
-        if (this.liftT < ramp) { // ease the grapple-jump kick in
-            const s = u => u * u * (3 - 2 * u), f = s(Math.min(1, (this.liftT + DT) / ramp)) - s(this.liftT / ramp);
-            this.vx += this.liftX * f;
-            this.vy += this.liftY * f;
-            this.liftT += DT;
-        }
         const dir = this.casting('arrow') ? 0 : (k.r ? 1 : 0) - (k.l ? 1 : 0);
         // Constant acceleration toward the max speed (the demo shows a steady ramp, not a hard build-up curve).
         const acc = RUN_ACC * (this.grounded ? 1 : 0.55) * (dir * this.vx < 0 ? 1.4 : 1);
@@ -621,6 +614,7 @@ class Player {
         } else if (this.gCool <= 0)
             this.gCharge = Math.min(GRAPPLE_MAX, this.gCharge + GRAPPLE_REGEN * DT);
         if (!z) {
+            this.driveT = 0;
             this.rope = null;
             this.pending = null;
             this.onBall = false;
@@ -643,12 +637,33 @@ class Player {
             const closing = (this.vx - hvx) * nx + (this.vy - hvy) * ny;
             if (this.ropeGround && !this.onBall && Math.abs(this.x - a.x) > 12)
                 this.pivotSide = Math.sign(this.x - a.x); // which side of the pivot you were last on
-            if (this.kickReq && !this.onBall) {
-                this.vx -= nx * WEIGHT_KICK;
-                this.vy -= ny * WEIGHT_KICK;
+            if (this.driveT > 0 && !this.onBall && this.ropeGround) { // grapple-jump drive: the rope accelerates you away from the pivot, out to its reach
+                this.driveT -= DT;
+                const room = this.len - d; // how far is left to the reach
+                if (room > 0) {
+                    let ux = -nx * HOP_AIM, uy = -ny;
+                    const m = Math.hypot(ux, uy) || 1;
+                    ux /= m; uy /= m;
+                    const ease = Math.min(1, room / GJ_EASE); // glide in: the pull fades over the last GJ_EASE u
+                    const out = this.vx * ux + this.vy * uy; // speed already heading away from the pivot: the drive never pushes past this jump's top speed, so a regrab on the way up cannot stack
+                    if (out < this.driveVmax) {
+                        const add = Math.min(this.driveAcc * ease * DT, this.driveVmax - out);
+                        this.vx += ux * add;
+                        this.vy += uy * add;
+                    }
+                }
+            }
+            if (this.kickReq && !this.onBall) { // weight kick: every press tries to throw you about WEIGHT_KICK_REACH u past the float point
+                const past = Math.max(0, d - this.len); // how far past the float point (the rope's length) you already are
+                const room = Math.max(0, 1 - past / WEIGHT_KICK_REACH); // 1 at the float point, fading to 0 at WEIGHT_KICK_REACH: no room left = no kick, so a second kick cannot throw you further out
+                const want = WEIGHT_KICK * room; // outward speed this press tops you up to (it tops up, it does not stack on the speed you already have)
+                const out = -(this.vx * nx + this.vy * ny); // speed already heading away from the pivot (negative = falling in toward it)
+                const add = Math.max(0, want - out);
+                this.vx -= nx * add;
+                this.vy -= ny * add;
                 this.kickReq = false;
                 if (this.ropeGround)
-                    this.dribT = DRIB_T; // weighted kick on a floor pivot = dribbling: the float steps aside
+                    this.dribT = DRIB_T; // opens the post-kick window (wider bob zone below; and DRIB_FLOAT_FADE, if you set it above 0, thins the float out)
             }
             if (d > this.len) {
                 if (this.onBall) {
@@ -689,8 +704,8 @@ class Player {
                 if (!this.taut && d >= this.len)
                     this.taut = true; // the grapple-jump slack is used up
                 // Float weight: dribbling overrides the float (fast fade out), then it settles back in slowly so there is no pop.
-                const wT = this.dribT > 0 ? 0 : 1;
-                this.floatW += (wT - this.floatW) * Math.min(1, (wT ? FLOAT_ON_RATE : FLOAT_OFF_RATE) * DT);
+                const wT = this.dribT > 0 ? 1 - DRIB_FLOAT_FADE : 1; // (0 fade = the float never steps aside, so the rope's rubber band alone brings you back)
+                this.floatW += (wT - this.floatW) * Math.min(1, (wT >= this.floatW ? FLOAT_ON_RATE : FLOAT_OFF_RATE) * DT);
                 const fw = this.floatW * s;
                 if (this.taut && fw > 0.001) {
                     if (d < this.len) { // closer than the rope's length: below the neutral float point

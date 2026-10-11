@@ -65,6 +65,16 @@ const DECOY_CAST = 1, DECOY_COOLDOWN = 20, DECOY_BOUNCE_PLAYER = 0.75, DECOY_BOU
 const ARROW_CHARGE_T = 1.2, ARROW_V_MIN = 300, ARROW_V_MAX = 1200, ARROW_G = G, ARROW_TURN = 2.2, ARROW_DBL_T = 0.25, ARROW_COOLDOWN = 2;
 const ARROW_R = PL/4, ARROW_BALL_K = 0.6, ARROW_KNOCK = 0.75, ARROW_KILLS = false, ARROW_LIFE = 10, ARROW_STICK_T = 5;
 const ARROW_LEN = PL, ARROW_HALF_W = PL/6, ARROW_SPENT_K = 0.15; // drawn length, half the drawn width (= collision thickness), share of speed a spent arrow keeps
+// Arrows as bodies: loose arrows can be pushed by an Explode blast, swatted by a bat and bumped by players (see arrowKnock / arrowBumpPlayers in physics/arrows.js).
+const ARROW_DEFLECT_TEAM = true; // a batted arrow becomes the batter's team's arrow (it can now hit the player who fired it)
+const ARROW_REARM = true; // a spent arrow that is knocked by a bat or a blast can hit an enemy again
+const ARROW_IMMUNE_T = 0.3; // s a knocked arrow cannot be hit by another bat / blast (stops a swing hitting it on several ticks)
+const ARROW_GHOST_T = 0.05; // s a dislodged arrow ignores terrain, so it can leave the wall it was stuck in
+const ARROW_KNOCK_LIFE = 4; // a knocked arrow lives at least this long (s)
+const ARROW_VCAP = 1800; // top speed of an arrow after any impulse (u/s)
+const ARROW_BUMP_E = 0.6, ARROW_BUMP_GRACE = 0.2; // player bump: restitution; the shooter cannot bump their own arrow for this long after firing (s)
+const BAT_ARROW_V = 500, BAT_ARROW_KEEP = 1, BAT_ARROW_VMAX = 1600; // bat vs arrow: flat speed added, share of its own speed kept, cap (+ BAT_VMAX_CHARGE at full charge)
+const BAT_HITS_STUCK_ARROWS = true;
 
 // Bat: hold the special key to charge (BAT_CHARGE_T s to full; a tap is a weak swing), release to swing. The swing is a SEMICIRCLE (BAT_ARC rad) centred on the direction held
 // (read live while charging, the last one held counts; none ever held = toward the death ball), so it can be tilted anywhere round the player. The bat starts at one end of the
@@ -74,10 +84,10 @@ const ARROW_LEN = PL, ARROW_HALF_W = PL/6, ARROW_SPENT_K = 0.15; // drawn length
 // (BAT_AIM_W: 1 = exactly the direction held, 0 = straight away from the batter), plus BAT_CARRY x the batter's velocity. Big hits raise the ball's speed cap like a hatchet hit.
 // Player hit: the same with BAT_PLAYER_V / BAT_PLAYER_KEEP / BAT_PLAYER_VMAX.
 const BAT_T = 0.2, BAT_COOLDOWN = 4, BAT_REACH = PL * 2, BAT_ARC = Math.PI, BAT_HIT_MARGIN = 0.08; // swing time (s), cooldown (s), bat tip distance from the player's centre, total swept arc (rad, PI = semicircle), extra angular forgiveness on each sweep step (rad)
-const BAT_WIND = 0.35, BAT_CHARGE_T = 1, BAT_CHARGE_BONUS = 0.5; // extra pull-back at full charge (rad, drawn only: the hit arc stays BAT_ARC), time to full charge (s), power added at full charge (0.5 = +50%)
+const BAT_WIND = 0.35, BAT_CHARGE_T = 2, BAT_CHARGE_BONUS = 1; // extra pull-back at full charge (rad, drawn only: the hit arc stays BAT_ARC), time to full charge (s), power added at full charge (0.5 = +50%)
 const BAT_V = 700, BAT_KEEP = 1.15, BAT_CARRY = 0.6, BAT_VMAX = 1500, BAT_VMAX_CHARGE = 300, BAT_AIM_W = 1, BAT_FX = 0.6; // ball: flat speed added, share of its own speed kept, share of the batter's velocity added, speed cap (+ extra at full charge), aim vs away blend (1 = pure aim direction), streak length (s)
 const IMPACT_V0 = 260, IMPACT_V1 = 1000;
-const BAT_PLAYER_V = 550, BAT_PLAYER_KEEP = 0.5, BAT_PLAYER_VMAX = 1100, BAT_HITS_TEAMMATES = true;
+const BAT_PLAYER_V = 500, BAT_PLAYER_KEEP = 0.5, BAT_PLAYER_VMAX = 1800, BAT_HITS_TEAMMATES = true;
 
 // Barbwire: hold the special key to make your grapple rope (the hook in flight, then the tether) lethal: any other player whose body touches it dies (teammates too if
 // BARBWIRE_HITS_TEAMMATES). It only does anything while a rope is out, but the clock runs the whole time the key is held. Letting go (or BARBWIRE_MAX_T s, whichever comes first)
@@ -104,7 +114,7 @@ const AWAKENED_CRASH = 3, AWAKENED_T = 10, AWAKENED_COOLDOWN = 15;
 // round (always the case in 1v1) would be lost: with EXPLODE_CARRY on, you start the next round with Explode ready.
 // EXPLODE_FX = how long the blast is drawn (crisp zone circle, shock rings, motion lines).
 const EXPLODE_R = 3 * PL, EXPLODE_COOLDOWN = 10, EXPLODE_WINDOW = 5, EXPLODE_CARRY = true, EXPLODE_FX = 0.6;
-const EXPLODE_KICK_MIN = 600, EXPLODE_KICK_MAX = 1800, EXPLODE_FALLOFF = 1.2;
+const EXPLODE_KICK_MIN = 400, EXPLODE_KICK_MAX = 1600, EXPLODE_FALLOFF = 1.2;
 const EXPLODE_AMP_BLEND = 0.5, EXPLODE_AMP_SPEED = 900, EXPLODE_AMP_GAIN = 0.5;
 
 const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)

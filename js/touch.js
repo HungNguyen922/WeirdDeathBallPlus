@@ -11,9 +11,9 @@
 // Taps on the canvas's own buttons (the Menu tile, the special keycaps and their list) are left to the canvas click handler in input.js.
 const touch = (() => {
     const TOUCH_SEAT = 0; // offline: which player the touch controls drive (0 = Blue, 1 = Red). Online they always drive your own seat.
-    const BANDS = ['sp', 'x', 'z']; // right half, top to bottom: special, weight, grapple
+    const BANDS = () => (twoSpecials ? ['sp', 'sp2', 'x', 'z'] : ['sp', 'x', 'z']); // right half, top to bottom
+    const ACTS = ['l', 'r', 'up', 'dn', 'z', 'x', 'sp', 'sp2'];
     const SECTOR_KEYS = [['r'], ['r', 'dn'], ['dn'], ['l', 'dn'], ['l'], ['l', 'up'], ['up'], ['r', 'up']]; // 8 sectors, clockwise from "right" (screen y points down)
-    const ACTS = ['l', 'r', 'up', 'dn', 'z', 'x', 'sp'];
     const REUSE_MS = 700; // how long the stick keeps its centre after the thumb lifts
     const HINT_MS = 6000; // how long the zone labels show after the touch controls first appear
     const HYST = 0.12; // radians of stickiness at the edge of a sector, so the direction does not flicker when the thumb sits on a boundary
@@ -60,12 +60,12 @@ const touch = (() => {
         return (Math.round(a / (Math.PI / 4)) + 8) % 8;
     }
     function zoneActs(y) { // which of the right-half bands a finger at height y is pressing (two when it is on the line between them)
-        const h = innerHeight, b = h / 3, seam = Math.max(14, Math.min(40, h * 0.05));
-        const i = Math.max(0, Math.min(2, Math.floor(y / b))), acts = new Set([BANDS[i]]);
+        const B = BANDS(), n = B.length, h = innerHeight, b = h / n, seam = Math.max(14, Math.min(40, h * 0.05));
+        const i = Math.max(0, Math.min(n - 1, Math.floor(y / b))), acts = new Set([B[i]]);
         if (i > 0 && y - i * b < seam)
-            acts.add(BANDS[i - 1]);
-        if (i < 2 && (i + 1) * b - y < seam)
-            acts.add(BANDS[i + 1]);
+            acts.add(B[i - 1]);
+        if (i < n - 1 && (i + 1) * b - y < seam)
+            acts.add(B[i + 1]);
         return acts;
     }
     function moveStick(x, y) {
@@ -137,11 +137,15 @@ const touch = (() => {
             state[k] = want[k];
         if (changed.length)
             apply(changed);
+        const bands = BANDS();
         for (const z of zoneEls)
-            z.classList.toggle('down', state[z.dataset.act]);
+            z.style.display = bands.includes(z.dataset.act) ? '' : 'none';
         const p = seat() >= 0 ? allPlayers[seat()] : null, sp = p && typeof SPECIALS !== 'undefined' ? SPECIALS.find(a => a.id === p.special) : null;
         if (spLabel)
             spLabel.textContent = sp ? sp.name : 'SPECIAL';
+        const sp2Label = root.querySelector('.zone[data-act=sp2] span'), sp2 = p && twoSpecials && typeof SPECIALS !== 'undefined' ? SPECIALS.find(a => a.id === p.special2) : null;
+        if (sp2Label)
+            sp2Label.textContent = sp2 ? sp2.name : 'SPECIAL 2';
     }
     function releaseAll() {
         pointers.clear();

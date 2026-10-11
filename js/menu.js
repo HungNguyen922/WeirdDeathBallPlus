@@ -101,6 +101,32 @@ const gameMenu = (() => {
         pickBtn.disabled = locked;
         pickBtn.title = locked ? 'Only the host (the player who created the room) can change this.' : pickTitle;
     }
+    const twoBtn = document.getElementById('twomode'), twoTitle = twoBtn ? twoBtn.title : '';
+    function labelTwo() {
+        if (!twoBtn || typeof twoSpecials === 'undefined')
+            return;
+        twoBtn.textContent = 'Specials per player: ' + (twoSpecials ? '2' : '1');
+        twoBtn.classList.toggle('on', twoSpecials);
+        const locked = net.on && !net.host;
+        twoBtn.disabled = locked;
+        twoBtn.title = locked ? 'Only the host (the player who created the room) can change this.' : twoTitle;
+        if (typeof touch !== 'undefined')
+            touch.releaseAll(); // re-lays the touch bands for the new count
+    }
+    if (twoBtn)
+        twoBtn.addEventListener('click', () => {
+            if (net.on && !net.host)
+                return;
+            const want = !twoSpecials;
+            if (net.on) {
+                net.setTwoSpecials(want);
+                setTimeout(() => { labelTwo(); renderPicker(); }, 300);
+            } else {
+                setTwoSpecials(want); // restarts the match
+                labelTwo();
+                renderPicker();
+            }
+        });
     // "Switch sides" toggle: teams trade sides every SWAP_EVERY points. Offline it is just a variable; online the server owns it, only the host may change it, and the label follows
     // the game state (it catches up a moment after the click).
     const swapBtn = document.getElementById('swapmode'), swapTitle = swapBtn ? swapBtn.title : '';
@@ -147,18 +173,26 @@ const gameMenu = (() => {
             pickEl.textContent = 'Specials are chosen on the pick screens (before the first point and after every ' + PICK_EVERY + 'th point).';
             return;
         }
-        const addButtons = (parent, p, setSpecial) => {
-            const cur = (net.on && net.pendingSpecial) || p.special;
+        const addRow = (parent, p, slot, label, color) => {
+            const row = document.createElement('div'), name = document.createElement('span'), cur = slot ? ((net.on && net.pendingSpecial2) || p.special2) : ((net.on && net.pendingSpecial) || p.special);
+            row.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;align-items:center;width:100%';
+            name.textContent = label;
+            name.style.cssText = 'font-weight:700;min-width:64px;color:' + color;
+            row.appendChild(name);
             for (const s of SPECIALS) {
                 const b = document.createElement('button');
                 b.className = 'mode' + (s.id === cur ? ' on' : '');
                 b.textContent = s.name.charAt(0) + s.name.slice(1).toLowerCase();
                 b.addEventListener('click', () => {
-                    setSpecial(s.id);
+                    if (net.on)
+                        net.setSpecial(s.id, slot);
+                    else
+                        equipSpecial(p, slot, s.id);
                     renderPicker();
                 });
-                parent.appendChild(b);
+                row.appendChild(b);
             }
+            parent.appendChild(row);
         };
         if (net.on) {
             const seat = touch.seat(), p = seat >= 0 ? allPlayers[seat] : null;
@@ -166,7 +200,10 @@ const gameMenu = (() => {
                 pickEl.textContent = 'You are spectating: there is no player to change.';
                 return;
             }
-            addButtons(pickEl, p, id => net.setSpecial(id));
+            const color = seat % 2 === 0 ? '#42a5f5' : '#ef5350';
+            addRow(pickEl, p, 0, twoSpecials ? 'Special 1' : 'Special', color);
+            if (twoSpecials)
+                addRow(pickEl, p, 1, 'Special 2', color);
             return;
         }
         const humans = [0, 1].map(i => allPlayers[i]).filter(p => players.includes(p) && !ai[p.id].on);
@@ -175,13 +212,10 @@ const gameMenu = (() => {
             return;
         }
         for (const p of humans) {
-            const row = document.createElement('div'), name = document.createElement('span');
-            row.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;align-items:center;width:100%';
-            name.textContent = p.id === 0 ? 'Blue' : 'Red';
-            name.style.cssText = 'font-weight:700;min-width:44px;color:' + (p.id === 0 ? '#42a5f5' : '#ef5350');
-            row.appendChild(name);
-            addButtons(row, p, id => { p.special = id; });
-            pickEl.appendChild(row);
+            const nm = p.id === 0 ? 'Blue' : 'Red', color = p.id === 0 ? '#42a5f5' : '#ef5350';
+            addRow(pickEl, p, 0, twoSpecials ? nm + ' 1' : nm, color);
+            if (twoSpecials)
+                addRow(pickEl, p, 1, nm + ' 2', color);
         }
     }
     // Players tab (online): Blue, Red and the waiting list. The host gets buttons to move people; a team holds two players at most, and the match waits while a team is empty.
@@ -255,15 +289,16 @@ const gameMenu = (() => {
                 closeSpecialMenu();
             if (net.on) { // the server restarts the match with the new setting and the next snapshots carry it back
                 net.setFixed(want);
-                setTimeout(() => { labelPick(); renderPicker(); }, 300);
+                setTimeout(() => { labelPick(); labelTwo(); renderPicker(); }, 300);
             } else {
                 setPickMode(want); // restarts the match
                 labelPick();
+                labelTwo();
                 labelSwap();
                 renderPicker();
             }
         });
-    for (const id of ['ai0', 'ai1', 'ai2', 'ai3', 'mode2v2']) { // changing who plays changes which players get a row
+    for (const id of ['ai0', 'ai1', 'ai2', 'ai3', 'mode2v2', 'twomode']) { // changing who plays changes which players get a row
         const el = document.getElementById(id);
         if (el)
             el.addEventListener('click', () => setTimeout(renderPicker, 0)); // after input.js has applied the change
@@ -272,6 +307,7 @@ const gameMenu = (() => {
         if (!isOpen())
             return;
         labelPick();
+        labelTwo();
         labelSwap();
         labelTeams();
         renderPicker();
@@ -284,6 +320,7 @@ const gameMenu = (() => {
             showTab(tab);
         document.body.classList.toggle('online', !!net.on); // shows the special picker online even without a touch screen
         labelPick();
+        labelTwo();
         labelSwap();
         labelTeams();
         renderPicker();
@@ -310,6 +347,7 @@ const gameMenu = (() => {
             open();
     }, true);
     labelPick();
+    labelTwo();
     labelSwap();
         // The Menu button's real, clickable element: an invisible <button> placed exactly over the pill that special-menu.js draws on the floor. A real button gets mouse, touch
     // and keyboard handling for free, and it does not depend on the canvas hit-test. It is repositioned whenever the canvas changes size.

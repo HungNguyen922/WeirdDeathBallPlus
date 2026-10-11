@@ -4,13 +4,13 @@
 // numpad ('Numpad4'), so the numpad and the top row never get mixed up.
 // The bindings live in this browser (localStorage), like the music setting: nothing about them goes to the server, so it works the same on any host, including one with no storage.
 // Load before input.js. input.js and net/client.js rebuild their key -> action tables whenever `keybinds.listeners` fire.
-const KEY_ACTIONS = ['l', 'r', 'up', 'dn', 'z', 'x', 'sp'];
-const KEY_ACTION_NAMES = { l: 'Left', r: 'Right', up: 'Jump', dn: 'Drop', z: 'Grapple', x: 'Weight', sp: 'Special' };
+const KEY_ACTIONS = ['l', 'r', 'up', 'dn', 'z', 'x', 'sp', 'sp2'];
+const KEY_ACTION_NAMES = { l: 'Left', r: 'Right', up: 'Jump', dn: 'Drop', z: 'Grapple', x: 'Weight', sp: 'Special', sp2: 'Special 2' };
 const KEY_DEFAULTS = [
-    { l: 'ArrowLeft', r: 'ArrowRight', up: 'ArrowUp', dn: 'ArrowDown', z: 'x', x: 'c', sp: 'z' }, // Blue
-    { l: 'a', r: 'd', up: 'w', dn: 's', z: 'f', x: 'g', sp: 'h' }, // Red
-    { l: 'j', r: 'l', up: 'i', dn: 'k', z: 'u', x: 'o', sp: 'p' }, // Blue's teammate (2v2)
-    { l: 'Numpad4', r: 'Numpad6', up: 'Numpad8', dn: 'Numpad5', z: 'Numpad7', x: 'Numpad9', sp: 'Numpad0' }, // Red's teammate (2v2)
+    { l: 'ArrowLeft', r: 'ArrowRight', up: 'ArrowUp', dn: 'ArrowDown', z: 'c', x: 'v', sp: 'x', sp2: 'z' }, // Blue
+    { l: 'a', r: 'd', up: 'w', dn: 's', z: 'f', x: 'g', sp: 'h', sp2: 'y' }, // Red
+    { l: 'j', r: 'l', up: 'i', dn: 'k', z: 'u', x: 'o', sp: 'p', sp2: ';' }, // Blue's teammate (2v2)
+    { l: 'Numpad4', r: 'Numpad6', up: 'Numpad8', dn: 'Numpad5', z: 'Numpad7', x: 'Numpad9', sp: 'Numpad0', sp2: 'NumpadDecimal' }, // Red's teammate (2v2)
 ];
 const KEY_STORE = 'wdb-keybinds';
 const KEY_RESERVED = { Escape: 'Esc closes menus', r: 'R restarts the match', t: 'T switches 1v1 / 2v2', m: 'M turns the music on / off', 1: '1-4 toggle the AI', 2: '1-4 toggle the AI', 3: '1-4 toggle the AI', 4: '1-4 toggle the AI' }; // keys the game itself uses
@@ -107,7 +107,9 @@ function saveKeybinds() {
         for (let s = 0; s < 4; s++) {
             const m = {};
             for (const a of KEY_ACTIONS) {
-                const t = o && o[s] && o[s][a];
+                let t = o && o[s] && o[s][a];
+                if (t === undefined && a === 'sp2')
+                    t = KEY_DEFAULTS[s].sp2; // saved before the second special existed
                 if (typeof t !== 'string' || !t || t.length > 16 || seen.has(t) || KEY_REFUSED.includes(t) || (KEY_RESERVED[t] && !t.startsWith('Numpad')))
                     return; // anything odd (an old or hand-edited value, a clash): ignore the whole thing and keep the defaults
                 seen.add(t);

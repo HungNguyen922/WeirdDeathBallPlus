@@ -57,7 +57,12 @@ function drawPickPanel(p, x, y, w, h, compact) { // one player's panel: badge, n
     (PICK_DESC[sp.id] || []).forEach((l, i) => cx.fillText(l, mid, y + L.desc + i * L.ds));
     cx.font = 'bold ' + (compact ? 11 : 12) + 'px system-ui, sans-serif';
     cx.fillStyle = ready ? '#7ee787' : col;
-    cx.fillText(ready ? 'LOCKED IN' : ai[p.id].on && !net.on ? 'AI' : 'CHOOSING...', mid, y + L.status);
+    if (twoSpecials && (pick.stage[p.id] === 1 || ready)) { // the first pick, small, to the left of the big icon
+        cx.save(); cx.translate(x + 30, y + L.icon); cx.scale(L.is * 0.4, L.is * 0.4); iconGlyph(pickSp(p.special).icon, 0, 0, '#98a2ad'); cx.restore();
+        cx.font = 'bold 9px system-ui, sans-serif'; cx.fillStyle = '#98a2ad'; cx.textAlign = 'center';
+        cx.fillText('1ST', x + 30, y + L.icon + 26);
+    }
+    cx.fillText(ready ? 'LOCKED IN' : ai[p.id].on && !net.on ? 'AI' : twoSpecials ? 'CHOOSING ' + (pick.stage[p.id] + 1) + ' / 2' : 'CHOOSING...', mid, y + L.status);
     cx.restore();
 }
 const pickBadges = []; // where each player's badge is drawn right now ({ x, y } per player id): it eases toward the icon the player is on, so it glides from icon to icon. Screen-only state.

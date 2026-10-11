@@ -6,6 +6,7 @@ let swapAt = -1; // the score total the last swap happened at, so one total can 
 let score = [0, 0], pause = 0, over = false, msg = '';
 let teamSize = 1; // 1 = 1v1, 2 = 2v2
 let swapOn = true; // the menu toggle: sides trade places every SWAP_EVERY points (set to false here to make it off by default)
+let twoSpecials = false; // the menu toggle: every player has two specials (keys sp and sp2) instead of one
 // Hooks the renderer fills in (see main.js). They default to no-ops so the simulation runs headless.
 const events = {
     onPoint(team, why) {}, // a point was awarded
@@ -24,8 +25,8 @@ const events = {
 const PICK_EVERY = 5, PICK_COLS = 5, PICK_GO_T = 0.9; // points between screens, icons per row, seconds of "get ready" after the last lock-in
 const PICK_LIST = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened', 'explode']; // the grid, in reading order (same ids as SPECIALS in render/special-menu.js)
 let pickFixed = false; // the toggle: true = specials are only chosen on pick screens, false = swap any time from the keycap
-const pick = { on: false, t: 0, go: 0, at: -1, cur: [0, 0, 0, 0], ready: [false, false, false, false], prev: [0, 0, 0, 0] }; // on = screen open, t = seconds open, go = countdown left, at = score total it was opened at, cur / ready / prev per player id (prev = last key mask, to spot fresh presses)
-const keyBits = k => (k.l ? 1 : 0) | (k.r ? 2 : 0) | (k.up ? 4 : 0) | (k.dn ? 8 : 0) | (k.z ? 16 : 0) | (k.x ? 32 : 0) | (k.sp ? 64 : 0);
+const pick = { on: false, t: 0, go: 0, at: -1, cur: [0, 0, 0, 0], ready: [false, false, false, false], prev: [0, 0, 0, 0], stage: [0, 0, 0, 0] };
+const keyBits = k => (k.l ? 1 : 0) | (k.r ? 2 : 0) | (k.up ? 4 : 0) | (k.dn ? 8 : 0) | (k.z ? 16 : 0) | (k.x ? 32 : 0) | (k.sp ? 64 : 0) | (k.sp2 ? 128 : 0);
 function openPick() {
     pick.on = true;
     pick.t = 0;
@@ -35,6 +36,7 @@ function openPick() {
         pick.cur[p.id] = Math.max(0, PICK_LIST.indexOf(p.special)); // the cursor starts on what you already have
         pick.ready[p.id] = false;
         pick.prev[p.id] = keyBits(p.keys); // a key already held when the screen opens is not a press
+        pick.stage[p.id] = 0;
     }
 }
 function closePick() {
@@ -42,6 +44,7 @@ function closePick() {
     pick.go = 0;
     for (const p of players) { // keys still held from the screen must not start a cast / kick on the first tick of the point
         p.prevSp = p.keys.sp;
+        p.prevSp2 = p.keys.sp2;
         p.prevX = p.keys.x;
     }
 }
@@ -79,7 +82,12 @@ function pickStep() { // one physics step of an open pick screen
         }
         if (pick.ready[id]) {
             if (fresh & 32)
-                pick.ready[id] = false; // weight takes the choice back
+                pick.ready[id] = false; // weight takes the choice back (with two specials you are back on your second one)
+            continue;
+        }
+        if (twoSpecials && pick.stage[id] === 1 && (fresh & 32)) { // weight on the second choice: back to the first
+            pick.stage[id] = 0;
+            pick.cur[id] = Math.max(0, PICK_LIST.indexOf(p.special));
             continue;
         }
         let row = Math.floor(pick.cur[id] / PICK_COLS), col = pick.cur[id] % PICK_COLS;
@@ -93,9 +101,21 @@ function pickStep() { // one physics step of an open pick screen
             row = (row + 1) % rows;
         col = Math.min(col, rowLen(row) - 1); // the last row is shorter
         pick.cur[id] = row * PICK_COLS + col;
-        if (fresh & (16 | 64)) { // grapple or special locks it in
-            p.special = PICK_LIST[pick.cur[id]];
-            pick.ready[id] = true;
+        if (fresh & (16 | 64 | 128)) { // grapple or either special key locks it in
+            const choice = PICK_LIST[pick.cur[id]];
+            if (!twoSpecials) {
+                p.special = choice;
+                pick.ready[id] = true;
+            } else if (pick.stage[id] === 0) { // first choice made: now pick the second
+                p.special = choice;
+                pick.stage[id] = 1;
+                if (p.special2 === choice)
+                    p.special2 = PICK_LIST.find(s => s !== choice);
+                pick.cur[id] = Math.max(0, PICK_LIST.indexOf(p.special2));
+            } else if (choice !== p.special) { // (the second one cannot be the same as the first: the press does nothing)
+                p.special2 = choice;
+                pick.ready[id] = true;
+            }
         }
     }
     if (players.every(p => pick.ready[p.id]))
@@ -103,6 +123,20 @@ function pickStep() { // one physics step of an open pick screen
 }
 function setPickMode(on) { // the menu toggle: restarts the match, so the first pick screen comes up straight away
     pickFixed = !!on;
+    resetMatch();
+}
+// Equip a special in slot 0 (first) or 1 (second). No ability can be in both slots: picking the one the other slot has swaps them.
+function equipSpecial(p, slot, id) {
+    const a = slot ? 'special2' : 'special', b = slot ? 'special' : 'special2';
+    if (p[b] === id)
+        p[b] = p[a];
+    p[a] = id;
+}
+function setTwoSpecials(on) { // the menu toggle: restarts the match
+    twoSpecials = !!on;
+    for (const p of allPlayers)
+        if (p.special2 === p.special)
+            p.special2 = PICK_LIST.find(s => s !== p.special);
     resetMatch();
 }
 function setSwapMode(on) { // the menu toggle: restarts the match so the sides start the right way round
@@ -169,7 +203,7 @@ function distToSeg(px, py, ax, ay, bx, by) {
 }
 function barbedRopeKills() {
     for (const p of players) {
-        if (!p.alive || !p.cast || p.cast.type !== 'barbwire')
+        if (!p.alive || !p.casting('barbwire'))
             continue;
         const e = ropeEnd(p);
         if (!e)

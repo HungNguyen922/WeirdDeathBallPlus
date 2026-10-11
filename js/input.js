@@ -90,13 +90,16 @@ cv.addEventListener('click', e => {
         closeSpecialMenu();
         gameMenu.open();
     } else if (h.type === 'key') {
-        if (!net.on || h.i === net.slot) // NET: online you can only change your own special
-            ui.open = ui.open === h.i ? -1 : h.i;
+        if (!net.on || h.i === net.slot) { // NET: online you can only change your own special
+            const same = ui.open === h.i && ui.slot === h.slot;
+            ui.open = same ? -1 : h.i;
+            ui.slot = h.slot;
+        }
     } else if (!SPECIALS[h.n].locked) {
         if (net.on)
-            net.setSpecial(SPECIALS[h.n].id);
+            net.setSpecial(SPECIALS[h.n].id, h.slot);
         else
-            allPlayers[h.i].special = SPECIALS[h.n].id;
+            equipSpecial(allPlayers[h.i], h.slot, SPECIALS[h.n].id);
         closeSpecialMenu();
     }
 });

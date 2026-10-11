@@ -123,24 +123,24 @@ function drawAITags() { // "AI" tag over a computer-controlled player
     }
 }
 function drawCasts() { // abilities being cast: ghost pegs / decoys, marionette aim, cast timers
-    for (const p of players) { // casts in progress
-        if (!p.alive || !p.cast)
+    for (const p of players) for (const cast of p.casts || []) { // casts in progress (a player can have two at once)
+        if (!p.alive)
             continue;
-        const col = p.team === 0 ? '#42a5f5' : '#ef5350', prog = 1 - p.cast.t / p.cast.t0;
-        if (p.cast.type === 'plinko') { // ghost peg at the spot, filling as the cast completes
+        const col = p.team === 0 ? '#42a5f5' : '#ef5350', prog = 1 - cast.t / cast.t0;
+        if (cast.type === 'plinko') { // ghost peg at the spot, filling as the cast completes
             cx.globalAlpha = 0.55; cx.strokeStyle = col; cx.lineWidth = 2; cx.setLineDash([3, 3]);
-            cx.beginPath(); cx.arc(p.cast.x, p.cast.y, PEG_R - 1, 0, 7); cx.stroke();
+            cx.beginPath(); cx.arc(cast.x, cast.y, PEG_R - 1, 0, 7); cx.stroke();
             cx.setLineDash([]);
             cx.globalAlpha = 1;
-            drawTimer(p.cast.x, p.cast.y, PEG_R + 5, prog, col);
-        } else if (p.cast.type === 'decoy') { // ghost ball at the spot, filling as the cast completes
+            drawTimer(cast.x, cast.y, PEG_R + 5, prog, col);
+        } else if (cast.type === 'decoy') { // ghost ball at the spot, filling as the cast completes
             cx.globalAlpha = 0.55; cx.strokeStyle = '#b36bff'; cx.lineWidth = 2; cx.setLineDash([3, 3]);
-            cx.beginPath(); cx.arc(p.cast.x, p.cast.y, BALL_R, 0, 7); cx.stroke();
+            cx.beginPath(); cx.arc(cast.x, cast.y, BALL_R, 0, 7); cx.stroke();
             cx.setLineDash([]);
             cx.globalAlpha = 1;
-            drawTimer(p.cast.x, p.cast.y, BALL_R + 5, prog, col);
-        } else if (p.cast.type === 'bat') { // the bat: purely cosmetic. Held back opposite the aim while charging, then over the top and down through the aim, leaving streaks like the player trails
-            const c = p.cast, f = c.charging ? 0 : prog, fade = f > 0.8 ? (1 - f) / 0.2 : 1, r0 = p.r + 3, len = BAT_REACH - r0;
+            drawTimer(cast.x, cast.y, BALL_R + 5, prog, col);
+        } else if (cast.type === 'bat') { // the bat: purely cosmetic. Held back opposite the aim while charging, then over the top and down through the aim, leaving streaks like the player trails
+            const c = cast, f = c.charging ? 0 : prog, fade = f > 0.8 ? (1 - f) / 0.2 : 1, r0 = p.r + 3, len = BAT_REACH - r0;
             if (c.charging)
                 drawTimer(p.x, p.y, p.r + 6, c.charge, c.charge >= 1 ? '#ffffff' : col);
             cx.save();
@@ -189,8 +189,8 @@ function drawCasts() { // abilities being cast: ghost pegs / decoys, marionette 
             cx.fillStyle = col; // knob
             cx.beginPath(); cx.arc(p.x + ux * (at(0) - 1), p.y + uy * (at(0) - 1), 3.4, 0, 7); cx.fill();
             cx.restore();
-        } else if (p.cast.type === 'arrow') { // charge ring (white and pulsing at full), a drawn bow, and the arrow nocked on it along the aim
-            const c = p.cast, full = c.charge >= 1, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 70);
+        } else if (cast.type === 'arrow') { // charge ring (white and pulsing at full), a drawn bow, and the arrow nocked on it along the aim
+            const c = cast, full = c.charge >= 1, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 70);
             drawTimer(p.x, p.y, p.r + 6, c.charge, full ? '#ffffff' : col);
             const ux = Math.cos(c.ang), uy = Math.sin(c.ang), nx = -uy, ny = ux;
             const gd = p.r + 34, len = 12 + 26 * c.charge; // distance of the grip from the player, arrow length (as before)
@@ -213,14 +213,14 @@ function drawCasts() { // abilities being cast: ghost pegs / decoys, marionette 
             cx.beginPath(); cx.moveTo(t1x, t1y); cx.lineTo(tx, ty); cx.lineTo(t2x, t2y); cx.stroke();
             cx.restore();
             arrowShape(hx, hy, c.ang, len, col, full ? 0.7 + 0.3 * pulse : 1);
-        } else if (p.cast.type === 'barbwire') { // time left on the wire: a ring that only shows (and only drains) while the rope is out, turning red when nearly spent
-            const left = 1 - Math.min(1, p.cast.roped / BARBWIRE_MAX_T);
+        } else if (cast.type === 'barbwire') { // time left on the wire: a ring that only shows (and only drains) while the rope is out, turning red when nearly spent
+            const left = 1 - Math.min(1, cast.roped / BARBWIRE_MAX_T);
             if (ropeEnd(p))
                 drawTimer(p.x, p.y, p.r + 6, left, left < 0.25 ? '#000000' : col);
             drawTimer(p.x, p.y, p.r + 6, left, left < 0.25 ? '#000000' : col);
         } else {
-            if (p.cast.type === 'marionette') { // aiming: a string from the caster to the ball, and an arrow on the ball showing where the shove will go
-                const c = p.cast, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 110), dirOn = c.hx || c.hy;
+            if (cast.type === 'marionette') { // aiming: a string from the caster to the ball, and an arrow on the ball showing where the shove will go
+                const c = cast, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 110), dirOn = c.hx || c.hy;
                 cx.globalAlpha = 0.45; cx.strokeStyle = col; cx.lineWidth = 1.5; cx.setLineDash([4, 5]);
                 cx.beginPath(); line(p.x, p.y, ball.x, ball.y); cx.stroke();
                 cx.setLineDash([]);
@@ -426,7 +426,7 @@ function barbs(x1, y1, x2, y2, col) { // little X-shaped barbs along a lethal ro
     cx.stroke();
     cx.restore();
 }
-const isBarbed = p => !!(p.cast && p.cast.type === 'barbwire');
+const isBarbed = p => !!p.casting('barbwire');
 function drawRopes() { // hook in flight, then the tether itself (barbed while the owner holds Barbwire)
     for (const p of players) { // hook in flight: the rope reaches out to the target during the landing delay
         if (p.alive && p.pending && p.keys.z) {
@@ -541,7 +541,7 @@ function drawPlayers() { // the player discs
         cx.globalAlpha = 1;
         if (p.alive)
             drawGrappleRing(p);
-        if (p.alive && p.arrowQueued && !p.cast) { // queued arrow: pulsing dashed ring
+        if (p.alive && p.arrowQueued && !p.casting('arrow')) { // queued arrow: pulsing dashed ring
             cx.globalAlpha = 0.45 + 0.4 * (0.5 + 0.5 * Math.sin(performance.now() / 90));
             cx.strokeStyle = p.color; cx.lineWidth = 2; cx.setLineDash([4, 4]);
             cx.beginPath(); cx.arc(p.x, p.y, p.r + 6, 0, 7); cx.stroke();

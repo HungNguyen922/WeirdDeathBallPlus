@@ -1,6 +1,7 @@
 // PHYSICS - Player: movement, grapple rope, and special abilities (dash / plinko / marionette / decoy / arrow / bat / barbwire / warp / awakened / explode).
 // step(ball) advances one fixed timestep. Reads this.keys; never draws.
-const noKeys = () => ({ l: false, r: false, up: false, z: false, x: false, sp: false, dn: false }); // sp = special ability, dn = down, z = grapple, x = weight
+const noKeys = () => ({ l: false, r: false, up: false, z: false, x: false, sp: false, sp2: false, dn: false }); // sp = first special, sp2 = second special (only when twoSpecials), dn = down, z = grapple, x = weight
+const AIMING = ['arrow', 'marionette', 'bat']; // casts that read the arrow keys live to aim: only one of them can run at a time
 // Bat special. Angle of the bat at swing progress f (0..1). The swing is a semicircle (BAT_ARC) centred on the aim c.ang: it starts BAT_ARC/2 to one side of the aim (pulled back a
 // little further the more it is charged), sweeps through the aim and ends BAT_ARC/2 on the other side, easing in and out (smoothstep). Clockwise when aiming right, anticlockwise when
 // aiming left. The renderer draws the bat at this angle (and earlier ones for the motion blur); the physics uses the same angle to sweep the hit area.
@@ -21,13 +22,16 @@ function batStep(p, c, ball) {
         for (const q of players)
             if (q !== p && q.alive && (BAT_HITS_TEAMMATES || q.team !== p.team))
                 targets.push(q);
+        for (const a of arrows) // arrows last: they are not tracked in the c.hits mask (their own immunity timer stops a second hit instead)
+            if (BAT_HITS_STUCK_ARROWS || !a.stuck)
+                targets.push(a);
     }
     const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
     const ax = Math.cos(c.ang), ay = Math.sin(c.ang); // the way the bat was aimed (the direction held)
     const s = ax >= 0 ? 1 : -1, stepAng = Math.abs(wrap(th - prev)); // s: swing direction, stepAng: how far the bat moved this step
     for (let i = 0; i < targets.length; i++) {
-        const b = targets[i], bit = 1 << i;
-        if (c.hits & bit)
+        const b = targets[i], isArrow = b.stuck !== undefined, bit = isArrow ? 0 : 1 << i; // (only arrows have a `stuck` field)
+        if (isArrow ? b.immune > 0 : c.hits & bit)
             continue;
         const dx = b.x - p.x, dy = b.y - p.y, d = Math.hypot(dx, dy);
         if (d > BAT_REACH + b.r)
@@ -46,9 +50,15 @@ function batStep(p, c, ball) {
         ux /= m;
         uy /= m;
         const pow = 1 + BAT_CHARGE_BONUS * c.pow, sp = Math.hypot(b.vx, b.vy); // what it had, plus some; a still target still goes
-        const out = isPlayer ? Math.min(BAT_PLAYER_VMAX * pow, (BAT_PLAYER_V + BAT_PLAYER_KEEP * sp) * pow) : Math.min(BAT_VMAX + BAT_VMAX_CHARGE * c.pow, (BAT_V + BAT_KEEP * sp) * pow);
-        b.vx = ux * out + p.vx * BAT_CARRY;
-        b.vy = uy * out + p.vy * BAT_CARRY;
+        const out = isArrow ? Math.min(BAT_ARROW_VMAX + BAT_VMAX_CHARGE * c.pow, (BAT_ARROW_V + BAT_ARROW_KEEP * sp) * pow)
+            : isPlayer ? Math.min(BAT_PLAYER_VMAX * pow, (BAT_PLAYER_V + BAT_PLAYER_KEEP * sp) * pow) : Math.min(BAT_VMAX + BAT_VMAX_CHARGE * c.pow, (BAT_V + BAT_KEEP * sp) * pow);
+        const nvx = ux * out + p.vx * BAT_CARRY, nvy = uy * out + p.vy * BAT_CARRY;
+        if (isArrow)
+            arrowKnock(b, nvx, nvy, ARROW_DEFLECT_TEAM ? p.team : null, ARROW_DEFLECT_TEAM ? p : null);
+        else {
+            b.vx = nvx;
+            b.vy = nvy;
+        }
         if (b.boost !== undefined) { // balls: big hits raise the speed cap briefly, like a hatchet hit
             const sp2 = Math.hypot(b.vx, b.vy);
             if (sp2 > BALL_VMAX)
@@ -93,6 +103,8 @@ class Player {
         this.sim = false; // true on the AI planner's throwaway copies: they must not touch the real game (spawn decoys / pegs)
         this.keys = noKeys();
         this.special = 'dash'; // chosen special ability (see SPECIALS)
+        this.special2 = 'plinko'; // second special (only used while twoSpecials is on; never the same as `special`)
+        this.prevSp2 = false;
         this.warp = null; // Warp: the placed marker { x, y }, or null (replaced, never edited in place, so the AI's shallow copies are safe)
         this.awakeT = 0; // Awakened: seconds of power-up left (0 = not awake)
         this.exploT = 0; // Explode: seconds left in which a death refunds the cooldown (0 = no blast to reward)
@@ -131,14 +143,24 @@ class Player {
         this.exploCarry = false;
         this.exploT = 0;
         this.explodeFx = null;
-        this.cast = null; // ability being cast: { type, t, t0, hx, hy, x, y }
+        this.casts = []; // abilities being cast right now, at most one per special key: { type, key, t, t0, hx, hy, x, y, ... }
         this.dashT = 0;
         this.dashDir = [0, 0];
         this.prevSp = false;
+        this.prevSp2 = false;
         this.arrowQueued = false;
         this.gBurst = 0;
     }
     get grounded() { return this.ground; }
+    // The specials that are active right now, as [key, ability id]: the first always, the second only when the match uses two and it is not the same ability.
+    slots() { return twoSpecials && this.special2 && this.special2 !== this.special ? [['sp', this.special], ['sp2', this.special2]] : [['sp', this.special]]; }
+    has(id) { return this.slots().some(s => s[1] === id); }
+    casting(type) { return this.casts.find(c => c.type === type) || null; } // the running cast of this kind, or null
+    endCast(c) {
+        const i = this.casts.indexOf(c);
+        if (i >= 0)
+            this.casts.splice(i, 1);
+    }
     get crashK() { return this.awakeT > 0 ? AWAKENED_CRASH : 1; } // Awakened: multiplier on the push your crashes give to balls, decoys and players
     // Overcharge: the meter is emptied, the grapple is locked out for GRAPPLE_COOLDOWN and the grip is torn away (purple ripple). Happens when the meter runs out, or when a
     // player with their grapple active (rope out, or hook in flight) touches an enemy (see update() in rules.js).
@@ -273,8 +295,11 @@ class Player {
         this.exploDead = players.filter(q => !q.alive).length;
         if (this.sim)
             return;
-        const blast = q => { // push one body (player, ball or decoy) if it is touching the blast radius
-            const dx = q.x - this.x, dy = q.y - this.y, d = Math.hypot(dx, dy), reach = EXPLODE_R + q.r;
+        const blast = q => { // push one body (player, ball, decoy or arrow) if it is touching the blast radius
+            const isArrow = q.stuck !== undefined, qr = q.r === undefined ? ARROW_R : q.r;
+            if (isArrow && q.immune > 0)
+                return;
+            const dx = q.x - this.x, dy = q.y - this.y, d = Math.hypot(dx, dy), reach = EXPLODE_R + qr;
             if (d > reach)
                 return;
             const nx = d > 1e-6 ? dx / d : 0, ny = d > 1e-6 ? dy / d : -1; // (exactly on top of us: straight up)
@@ -292,9 +317,13 @@ class Player {
                 uy /= m;
                 kick += ms * EXPLODE_AMP_GAIN; // extra speed on top of what it already has
             }
-            hits.push({ x: q.x, y: q.y, r: q.r, ux, uy, k: Math.min(1, kick / EXPLODE_KICK_MAX) });
-            q.vx += ux * kick;
-            q.vy += uy * kick;
+            hits.push({ x: q.x, y: q.y, r: qr, ux, uy, k: Math.min(1, kick / EXPLODE_KICK_MAX) });
+            if (isArrow)
+                arrowKnock(q, q.vx + ux * kick, q.vy + uy * kick);
+            else {
+                q.vx += ux * kick;
+                q.vy += uy * kick;
+            }
             if (q.boost !== undefined) { // a ball already flying fast: lift its speed cap for a moment (like a crash shot or a hatchet hit) so the push is not clipped
                 const s = Math.hypot(q.vx, q.vy);
                 if (s > BALL_VMAX)
@@ -308,6 +337,8 @@ class Player {
         for (const d of decoys)
             if (!d.dead)
                 blast(d);
+        for (const a of arrows)
+            blast(a);
     }
 
     // A death happened within the window: the cooldown is refunded (and, if EXPLODE_CARRY, kept through the round reset that a kill ending the round is followed by).
@@ -333,6 +364,146 @@ class Player {
         this.cd.warp = WARP_COOLDOWN;
         this.netSide = this.x < NETX ? 0 : 1;
     }
+    // A special key went down (or a queued arrow came off cooldown): start that ability. Returns true if it started or fired.
+    startAbility(id, key, ball) {
+        const k = this.keys, hx = (k.r ? 1 : 0) - (k.l ? 1 : 0), hy = (k.dn ? 1 : 0) - (k.up ? 1 : 0);
+        if (AIMING.includes(id) && this.casts.some(c => AIMING.includes(c.type)))
+            return false; // two aiming casts would fight over the same arrow keys
+        let c = null;
+        if (id === 'dash' && this.dashReady && this.cd.dash <= 0 && (hx || hy) && !(this.ground && !hx && hy > 0)) // pushing straight down into the floor does not use it up
+            c = { type: 'dash', t: DASH_CAST, t0: DASH_CAST, hx, hy };
+        else if (id === 'plinko' && this.cd.plinko <= 0)
+            c = { type: 'plinko', t: PLINKO_CAST, t0: PLINKO_CAST, hx, hy, x: this.x, y: this.y };
+        else if (id === 'marionette' && this.cd.marionette <= 0) // starts aiming: no timer, it lasts as long as the key is held
+            c = { type: 'marionette', aim: true, t: 1, t0: 1, hx, hy, grace: hx || hy ? MARIONETTE_GRACE : 0 };
+        else if (id === 'decoy' && this.cd.decoy <= 0)
+            c = { type: 'decoy', t: DECOY_CAST, t0: DECOY_CAST, hx, hy, x: this.x, y: this.y };
+        else if (id === 'bat' && this.cd.bat <= 0) // charges while the key is held (aim read live), swings on release
+            c = { type: 'bat', t: BAT_T, t0: BAT_T, charging: true, charge: 0, pow: 0, hx, hy, ang: hx || hy ? Math.atan2(hy, hx) : Math.atan2(ball.y - this.y, ball.x - this.x), hits: 0 };
+        else if (id === 'barbwire' && this.cd.barbwire <= 0)
+            c = { type: 'barbwire', t: 1, t0: 1, held: 0, roped: 0, hx, hy };
+        else if (id === 'arrow' && this.cd.arrow <= 0)
+            c = { type: 'arrow', t: 1, t0: 1, charge: 0, ang: this.arrowAng, noTilt: false, tap: { l: 0, r: 0, u: 0, d: 0 }, prev: { l: k.l, r: k.r, u: k.up, d: k.dn } };
+        else if (id === 'awakened') { // instant, no cast: power up if ready and not already awake
+            if (this.cd.awakened <= 0 && this.awakeT <= 0) {
+                this.setAwake(true);
+                return true;
+            }
+        } else if (id === 'explode') { // instant, no cast
+            if (this.cd.explode <= 0) {
+                this.explode();
+                return true;
+            }
+        } else if (id === 'warp') { // instant: no cast, no timer (see warpPress)
+            this.warpPress();
+            return true;
+        }
+        if (!c)
+            return false;
+        c.key = key; // the key that started it is the key that ends it
+        this.casts.push(c);
+        return true;
+    }
+    stepCast(c, k, ball) {
+        const held = k[c.key || 'sp']; // the key that started this cast
+        if (c.type === 'arrow') {
+            arrowAimStep(c, k);
+            this.arrowAng = c.ang;
+            if (!held)
+                c.t = 0; // released: fire (below)
+        } else if (c.aim) { // marionette: follow the arrows while the key is held; letting go fires (or cancels if there is no direction)
+            const ax = (k.r ? 1 : 0) - (k.l ? 1 : 0), ay = (k.dn ? 1 : 0) - (k.up ? 1 : 0);
+            if (ax || ay) {
+                c.hx = ax;
+                c.hy = ay;
+                c.grace = MARIONETTE_GRACE;
+            } else
+                c.grace = Math.max(0, c.grace - DT);
+            if (!held) {
+                if ((c.hx || c.hy) && c.grace > 0)
+                    c.t = 0; // released with a direction: fire (below)
+                else
+                    this.endCast(c); // released with none: cancelled, nothing spent
+            }
+        } else if (c.type === 'barbwire') {
+            c.held += DT;
+            if (this.rope || (this.pending && k.z))
+                c.roped += DT; // time the wire was really out (hook in flight or tethered): only this costs cooldown
+            if (!held || c.roped >= BARBWIRE_MAX_T)
+                c.t = 0;
+        } else if (c.type === 'bat') {
+            if (c.charging) { // holding the key: charge up and follow the arrows; the timer does not run yet
+                const ax = (k.r ? 1 : 0) - (k.l ? 1 : 0), ay = (k.dn ? 1 : 0) - (k.up ? 1 : 0);
+                if (ax || ay) {
+                    c.hx = ax;
+                    c.hy = ay;
+                }
+                c.ang = c.hx || c.hy ? Math.atan2(c.hy, c.hx) : Math.atan2(ball.y - this.y, ball.x - this.x); // last direction held, or the death ball if none ever was
+                c.charge = Math.min(1, c.charge + DT / BAT_CHARGE_T);
+                if (!held) { // released: swing
+                    c.charging = false;
+                    c.pow = c.charge;
+                }
+            } else {
+                batStep(this, c, ball);
+                c.t -= DT;
+            }
+        } else
+            c.t -= DT;
+        if (this.casts.includes(c) && c.t <= 0) {
+            this.endCast(c);
+            if (c.type === 'dash' && this.dashReady) {
+                const m = Math.hypot(c.hx, c.hy), ux = c.hx / m, uy = c.hy / m;
+                if (ux && this.vx * ux < 0)
+                    this.vx = 0; // cancel what we were doing against the dash
+                if (uy && this.vy * uy < 0)
+                    this.vy = 0;
+                this.vx += ux * DASH_V;
+                this.vy += uy * DASH_V;
+                this.dashReady = false;
+                this.cd.dash = DASH_COOLDOWN;
+                this.dashT = DASH_FX;
+                this.dashDir = [ux, uy];
+            } else if (c.type === 'plinko') {
+                // The peg appears at the spot where the cast began. If we are still overlapping it we get pushed out in the direction of the arrow(s)
+                // held at the press; with none held: up if we are on the floor, otherwise back against our motion.
+                const peg = { x: c.x, y: c.y, vx: 0, vy: 0, r: PEG_R, team: this.team, owner: this, flash: 1, life: PEG_LIFE };
+                if (!this.sim) { // (the AI's planning copies must not leave pegs in the real game)
+                    pegs.push(peg);
+                    if (pegs.filter(q => q.owner === this).length > PEG_MAX)
+                        pegs.splice(pegs.findIndex(q => q.owner === this), 1);
+                }
+                this.pushOutOf(peg.x, peg.y, PEG_R, c);
+                this.cd.plinko = PLINKO_COOLDOWN;
+            } else if (c.type === 'marionette') {
+                // An impulse on the death ball along the arrow(s) held when the key was released. Motion against the shove is cancelled first, so it always goes the way you pointed.
+                const m = Math.hypot(c.hx, c.hy), ux = c.hx / m, uy = c.hy / m;
+                if (ux && ball.vx * ux < 0)
+                    ball.vx = 0;
+                if (uy && ball.vy * uy < 0)
+                    ball.vy = 0;
+                ball.vx += ux * MARIONETTE_V;
+                ball.vy += uy * MARIONETTE_V;
+                ball.pull = { t: MARIONETTE_FX, ux, uy, col: this.color };
+                this.cd.marionette = MARIONETTE_COOLDOWN;
+            } else if (c.type === 'decoy') {
+                // The lookalike appears where the cast began (replacing this team's previous one). If we are still standing in it we are pushed out the way the
+                // arrow(s) pointed at the press, exactly like plinko.
+                if (!this.sim)
+                    spawnDecoy(this, c.x, c.y);
+                this.pushOutOf(c.x, c.y, BALL_R, c);
+                this.cd.decoy = DECOY_COOLDOWN;
+            } else if (c.type === 'arrow') {
+                if (!this.sim)
+                    fireArrow(this, c);
+                this.cd.arrow = ARROW_COOLDOWN;
+            } else if (c.type === 'barbwire') {
+                this.cd.barbwire = Math.min(c.roped, BARBWIRE_MAX_T) * BARBWIRE_CD_RATIO; // proportional to how long the wire was out
+            } else if (c.type === 'bat') {
+                this.cd.bat = BAT_COOLDOWN; // the cooldown starts when the swing ends
+            }
+        }
+    }
     step(ball) {
         const k = this.keys, heavy = k.x;
         this.gjT += DT;
@@ -346,7 +517,7 @@ class Player {
             this.vy += this.liftY * f;
             this.liftT += DT;
         }
-        const dir = this.cast && this.cast.type === 'arrow' ? 0 : (k.r ? 1 : 0) - (k.l ? 1 : 0);
+        const dir = this.casting('arrow') ? 0 : (k.r ? 1 : 0) - (k.l ? 1 : 0);
         // Constant acceleration toward the max speed (the demo shows a steady ramp, not a hard build-up curve).
         const acc = RUN_ACC * (this.grounded ? 1 : 0.55) * (dir * this.vx < 0 ? 1.4 : 1);
         if (dir && dir * this.vx < 330)
@@ -359,10 +530,10 @@ class Player {
         for (const id in this.cd)
             this.cd[id] = Math.max(0, this.cd[id] - DT);
         this.dashT = Math.max(0, this.dashT - DT);
-        if (this.special !== 'warp')
+        if (!this.has('warp'))
             this.warp = null; // swapped to another special: the marker goes with it
         if (this.awakeT > 0) {
-            if (this.special !== 'awakened')
+            if (!this.has('awakened'))
                 this.setAwake(false, false); // swapped to another special: the power-up ends, no cooldown
             else if ((this.awakeT -= DT) <= 0)
                 this.setAwake(false); // wore off: the cooldown starts now
@@ -374,139 +545,27 @@ class Player {
         if (this.explodeFx && (this.explodeFx = { ...this.explodeFx, t: this.explodeFx.t - DT }).t <= 0)
             this.explodeFx = null;
         this.gBurst = Math.max(0, this.gBurst - DT);
-        // Start a cast. The arrow(s) held at the press are remembered (dash direction / plinko displacement); plinko also remembers the spot.
-        if (this.special === 'arrow' && k.sp && this.cd.arrow > 0)
-            this.arrowQueued = true; // held during cooldown: queue the next cast
-        if (!k.sp)
+        // Start a cast. Each active special has its own key; a press of either starts that ability, unless a cast is already running (then it is ignored, like today).
+        // To let the instant abilities (warp, awakened, explode) fire mid-cast, test them here before the `!this.cast` check.
+        const slots = this.slots(), prev = { sp: this.prevSp, sp2: this.prevSp2 };
+        for (const [key, id] of slots)
+            if (id === 'arrow' && k[key] && this.cd.arrow > 0)
+                this.arrowQueued = key; // held during cooldown: queue the next cast (arrowQueued holds the key it was queued on)
+        if (this.arrowQueued && !k[this.arrowQueued])
             this.arrowQueued = false;
-        if (!this.cast && ((k.sp && !this.prevSp) || (this.arrowQueued && this.special === 'arrow' && this.cd.arrow <= 0))) {
-            this.arrowQueued = false;
-            const hx = (k.r ? 1 : 0) - (k.l ? 1 : 0), hy = (k.dn ? 1 : 0) - (k.up ? 1 : 0);
-            if (this.special === 'dash' && this.dashReady && this.cd.dash <= 0 && (hx || hy) && !(this.ground && !hx && hy > 0)) // pushing straight down into the floor does not use it up
-                this.cast = { type: 'dash', t: DASH_CAST, t0: DASH_CAST, hx, hy };
-            else if (this.special === 'plinko' && this.cd.plinko <= 0)
-                this.cast = { type: 'plinko', t: PLINKO_CAST, t0: PLINKO_CAST, hx, hy, x: this.x, y: this.y };
-            else if (this.special === 'marionette' && this.cd.marionette <= 0) // starts aiming: no timer, it lasts as long as the key is held
-                this.cast = { type: 'marionette', aim: true, t: 1, t0: 1, hx, hy, grace: hx || hy ? MARIONETTE_GRACE : 0 };
-            else if (this.special === 'decoy' && this.cd.decoy <= 0)
-                this.cast = { type: 'decoy', t: DECOY_CAST, t0: DECOY_CAST, hx, hy, x: this.x, y: this.y }; // remembers the spot (and the arrows) at the press, like plinko
-            else if (this.special === 'bat' && this.cd.bat <= 0) // charges while the key is held (aim read live), swings on release
-                this.cast = { type: 'bat', t: BAT_T, t0: BAT_T, charging: true, charge: 0, pow: 0, hx, hy, ang: hx || hy ? Math.atan2(hy, hx) : Math.atan2(ball.y - this.y, ball.x - this.x), hits: 0 };
-            else if (this.special === 'barbwire' && this.cd.barbwire <= 0) // the rope is lethal while the special and grapple key is held (see barbedRopeKills in rules.js); letting go or running out of time ends it
-                this.cast = { type: 'barbwire', t: 1, t0: 1, held: 0, roped: 0, hx, hy };
-            else if (this.special === 'awakened') { // instant, no cast: power up if ready and not already awake
-                if (this.cd.awakened <= 0 && this.awakeT <= 0)
-                    this.setAwake(true);
-            } else if (this.special === 'explode') { // instant, no cast
-                if (this.cd.explode <= 0)
-                    this.explode();
-            } else if (this.special === 'warp') // instant: no cast, no timer (see warpPress)
-                this.warpPress();
-            else if (this.special === 'arrow' && this.cd.arrow <= 0)
-                this.cast = { type: 'arrow', t: 1, t0: 1, charge: 0, ang: this.arrowAng, noTilt: false, tap: { l: 0, r: 0, u: 0, d: 0 }, prev: { l: k.l, r: k.r, u: k.up, d: k.dn } };
-
+        for (const [key, id] of slots) {
+            if (this.casts.some(c => c.key === key))
+                continue; // that key already has a cast running
+            const pressed = k[key] && !prev[key], queued = id === 'arrow' && this.arrowQueued === key && this.cd.arrow <= 0;
+            if (!pressed && !queued)
+                continue;
+            if (this.startAbility(id, key, ball) && queued)
+                this.arrowQueued = false; // (if the aiming rule refused it, the queue stays and tries again)
         }
-        if (this.cast) {
-            const c = this.cast;
-            if (c.type === 'arrow') {
-                arrowAimStep(c, k);
-                this.arrowAng = c.ang;
-                if (!k.sp)
-                    c.t = 0; // released: fire (below)
-            } else if (c.aim) { // marionette: follow the arrows while the key is held; letting go fires (or cancels if there is no direction)
-                const ax = (k.r ? 1 : 0) - (k.l ? 1 : 0), ay = (k.dn ? 1 : 0) - (k.up ? 1 : 0);
-                if (ax || ay) {
-                    c.hx = ax;
-                    c.hy = ay;
-                    c.grace = MARIONETTE_GRACE;
-                } else
-                    c.grace = Math.max(0, c.grace - DT);
-                if (!k.sp) {
-                    if ((c.hx || c.hy) && c.grace > 0)
-                        c.t = 0; // released with a direction: fire (below)
-                    else
-                        this.cast = null; // released with none: cancelled, nothing spent
-                }
-            } else if (c.type === 'barbwire') {
-                c.held += DT;
-                if (this.rope || (this.pending && k.z))
-                    c.roped += DT; // time the wire was really out (hook in flight or tethered): only this costs cooldown
-                if (!k.sp || c.roped >= BARBWIRE_MAX_T)
-                    c.t = 0;
-            } else if (c.type === 'bat') {
-                if (c.charging) { // holding the key: charge up and follow the arrows; the timer does not run yet
-                    const ax = (k.r ? 1 : 0) - (k.l ? 1 : 0), ay = (k.dn ? 1 : 0) - (k.up ? 1 : 0);
-                    if (ax || ay) {
-                        c.hx = ax;
-                        c.hy = ay;
-                    }
-                    c.ang = c.hx || c.hy ? Math.atan2(c.hy, c.hx) : Math.atan2(ball.y - this.y, ball.x - this.x); // last direction held, or the death ball if none ever was
-                    c.charge = Math.min(1, c.charge + DT / BAT_CHARGE_T);
-                    if (!k.sp) { // released: swing
-                        c.charging = false;
-                        c.pow = c.charge;
-                    }
-                } else {
-                    batStep(this, c, ball);
-                    c.t -= DT;
-                }
-            } else
-                c.t -= DT;
-            if (this.cast && c.t <= 0) {
-                this.cast = null;
-                if (c.type === 'dash' && this.dashReady) {
-                    const m = Math.hypot(c.hx, c.hy), ux = c.hx / m, uy = c.hy / m;
-                    if (ux && this.vx * ux < 0)
-                        this.vx = 0; // cancel what we were doing against the dash
-                    if (uy && this.vy * uy < 0)
-                        this.vy = 0;
-                    this.vx += ux * DASH_V;
-                    this.vy += uy * DASH_V;
-                    this.dashReady = false;
-                    this.cd.dash = DASH_COOLDOWN;
-                    this.dashT = DASH_FX;
-                    this.dashDir = [ux, uy];
-                } else if (c.type === 'plinko') {
-                    // The peg appears at the spot where the cast began. If we are still overlapping it we get pushed out in the direction of the arrow(s)
-                    // held at the press; with none held: up if we are on the floor, otherwise back against our motion.
-                    const peg = { x: c.x, y: c.y, vx: 0, vy: 0, r: PEG_R, team: this.team, owner: this, flash: 1, life: PEG_LIFE };
-                    if (!this.sim) { // (the AI's planning copies must not leave pegs in the real game)
-                        pegs.push(peg);
-                        if (pegs.filter(q => q.owner === this).length > PEG_MAX)
-                            pegs.splice(pegs.findIndex(q => q.owner === this), 1);
-                    }
-                    this.pushOutOf(peg.x, peg.y, PEG_R, c);
-                    this.cd.plinko = PLINKO_COOLDOWN;
-                } else if (c.type === 'marionette') {
-                    // An impulse on the death ball along the arrow(s) held when the key was released. Motion against the shove is cancelled first, so it always goes the way you pointed.
-                    const m = Math.hypot(c.hx, c.hy), ux = c.hx / m, uy = c.hy / m;
-                    if (ux && ball.vx * ux < 0)
-                        ball.vx = 0;
-                    if (uy && ball.vy * uy < 0)
-                        ball.vy = 0;
-                    ball.vx += ux * MARIONETTE_V;
-                    ball.vy += uy * MARIONETTE_V;
-                    ball.pull = { t: MARIONETTE_FX, ux, uy, col: this.color };
-                    this.cd.marionette = MARIONETTE_COOLDOWN;
-                } else if (c.type === 'decoy') {
-                    // The lookalike appears where the cast began (replacing this team's previous one). If we are still standing in it we are pushed out the way the
-                    // arrow(s) pointed at the press, exactly like plinko.
-                    if (!this.sim)
-                        spawnDecoy(this, c.x, c.y);
-                    this.pushOutOf(c.x, c.y, BALL_R, c);
-                    this.cd.decoy = DECOY_COOLDOWN;
-                } else if (c.type === 'arrow') {
-                    if (!this.sim)
-                        fireArrow(this, c);
-                    this.cd.arrow = ARROW_COOLDOWN;
-                } else if (c.type === 'barbwire') {
-                    this.cd.barbwire = Math.min(c.roped, BARBWIRE_MAX_T) * BARBWIRE_CD_RATIO; // proportional to how long the wire was out
-                } else if (c.type === 'bat') {
-                    this.cd.bat = BAT_COOLDOWN; // the cooldown starts when the swing ends
-                }
-            }
-        }
+        for (const c of this.casts.slice()) // (a copy: a cast removes itself from the list when it ends)
+            this.stepCast(c, k, ball);
         this.prevSp = k.sp;
+        this.prevSp2 = k.sp2;
         // Jump: pressing UP on the ground launches at JUMP_V. While UP stays held in the air, gravity drops to G_FLOAT, which
         // gives the long, symmetric float seen in the demo; releasing UP restores full gravity G. While tethered and
         // holding UP, a floaty arc keeps swings and floats working.

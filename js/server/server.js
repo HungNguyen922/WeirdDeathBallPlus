@@ -9,9 +9,11 @@
 //
 // Protocol: JSON text messages over a WebSocket.
 //   client -> server   {t:'join', room, special, lobby2v2}  join a room; lobby2v2 = true only counts for the player who creates the room (they become the host)
-//                      {t:'in', n, k}                      my keys changed. n = my input counter, k = bit mask: l1 r2 up4 dn8 z16 x32 sp64   (z = grapple, x = weight, sp = special)
+//                      {t:'in', n, k}                      my keys changed. n = my input counter, k = bit mask: l1 r2 up4 dn8 z16 x32 sp64 sp2 128.   (z = grapple, x = weight, sp = special)
 //                      {t:'sp', s}                         equip special ability s (ignored while pick screens are on)
 //                      {t:'fixed', v}                      host only: specials only on pick screens (true) or free swapping (false); restarts the match
+//                      {t:'sp', s, slot}                   (slot 1 = second special) and 
+//                      {t:'two', shift}                        (host only)
 //                      {t:'swap', v}                       host only: switch sides every 5 points (true) or never (false); restarts the match
 //                      {t:'lobby2v2', v}                   host only: 2v2 lobby on (newcomers fill Blue, Red, Blue 2, Red 2 and the match waits for all four seats) or off
 //                      {t:'assign', c, to}                 host only: move member c to team 0 (Blue), 1 (Red) or -1 (waiting); restarts the match if seats change
@@ -41,7 +43,7 @@ events.onImpact = (p, x, y, ux, uy, v) => __ev.push(['im', __tick, p.id, x, y, u
 events.onBatHit = (p, b, x, y, ux, uy, k) => __ev.push(['bt', __tick, p.id, __ref(b), x, y, ux, uy, k]);
 function __setKeys(i, bits) {
     const k = allPlayers[i].keys;
-    k.l = !!(bits & 1); k.r = !!(bits & 2); k.up = !!(bits & 4); k.dn = !!(bits & 8); k.z = !!(bits & 16); k.x = !!(bits & 32); k.sp = !!(bits & 64);
+    k.l = !!(bits & 1); k.r = !!(bits & 2); k.up = !!(bits & 4); k.dn = !!(bits & 8); k.z = !!(bits & 16); k.x = !!(bits & 32); k.sp = !!(bits & 64); k.sp2 = !!(bits & 128);
 }
 `;
 
@@ -58,6 +60,7 @@ class Room {
         this.nextOrder = 1;
         this.host = null; // the connection allowed to change room settings and move players
         this.fixed = false; // specials only on pick screens
+        this.twoSpecials = false; // the host's "two specials per player" option
         this.swapSides = true; // the host's "switch sides every 5 points" option
         this.lobby2v2 = false; // 2v2 lobby: newcomers fill all four seats automatically and the match waits until every seat is taken
         this.tick = 0;
@@ -121,7 +124,7 @@ class Room {
         if (!this.running && this.tick > 0)
             this.snapshot(); // someone watching a paused room still gets to see the board
     }
-    join(conn, special) {
+    join(conn, special, special2) {
         let team = this.lobby2v2 ? this.openTeam() : [0, 1].find(t => this.teamCount(t) === 0); // a 2v2 lobby seats newcomers anywhere there is room; otherwise a team with nobody on it, and later arrivals wait for the host
         if (team === undefined)
             team = -1;
@@ -131,6 +134,7 @@ class Room {
         conn.team = team;
         conn.order = this.nextOrder++;
         conn.special = SPECIAL_IDS.includes(special) ? special : 'dash';
+        conn.special2 = SPECIAL_IDS.includes(special2) && special2 !== conn.special ? special2 : SPECIAL_IDS.find(s => s !== conn.special);
         this.conns.add(conn);
         if (!this.host)
             this.host = conn;
@@ -166,6 +170,7 @@ class Room {
             sim.run(`allPlayers[${i}].special = '${c.special}'`); // before the restart, so a pick screen opens with the right choice highlighted
         });
         sim.run(`pickFixed = ${this.fixed}`);
+        sim.run(`twoSpecials = ${this.twoSpecials}`);
         sim.run(`swapOn = ${this.swapSides}`);
         sim.run(`setRoster([${ids.join(',')}])`); // exactly these players; also restarts the match (and opens the first pick screen when they are on)
         sim.ctx.__ev.length = 0;
@@ -175,12 +180,23 @@ class Room {
         this.running = true;
         this.snapshot(); // everyone sees the fresh board straight away
     }
-    setSpecial(conn, id) {
+    setSpecial(conn, id, slot = 0) {
         if (!SPECIAL_IDS.includes(id) || this.fixed)
             return;
-        conn.special = id; // remembered, so it follows the player if they are moved
-        if (conn.slot >= 0)
-            this.sim.run(`allPlayers[${conn.slot}].special = '${id}'`);
+        const a = slot === 1 ? 'special2' : 'special', b = slot === 1 ? 'special' : 'special2';
+        if (this.twoSpecials && conn[b] === id)
+            conn[b] = conn[a]; // picking the one in the other slot swaps them
+        conn[a] = id;
+        if (conn.special2 === conn.special) // (two specials off: keep the invariant anyway)
+            conn.special2 = SPECIAL_IDS.find(s => s !== conn.special);
+        if (conn.slot >= 0) // remembered on the connection, so it follows the player if they are moved
+            this.sim.run(`allPlayers[${conn.slot}].special = '${conn.special}'; allPlayers[${conn.slot}].special2 = '${conn.special2}'`);
+    }
+    setTwoSpecials(v) { // restarts the match
+        this.twoSpecials = !!v;
+        this.sim.run(`twoSpecials = ${this.twoSpecials}`);
+        if (this.running)
+            this.start();
     }
     setFixed(v) { // the "pick screens" option: restarts the match so everyone starts from the first pick screen
         this.fixed = !!v;
@@ -300,20 +316,22 @@ function startServer(port = 8080, host = '0.0.0.0') {
                     rooms.set(name, r = new Room(name));
                     r.lobby2v2 = m.lobby2v2 === true; // the creator can open the room as a 2v2 lobby from the start
                 }
-                if (r.join(conn, m.special) === -2) {
+                if (r.join(conn, m.special, m.special2) === -2) {
                     if (r.empty)
                         rooms.delete(name);
                     return conn.send(JSON.stringify({ t: 'error', msg: 'room is full' }));
                 }
                 room = r;
             } else if (m.t === 'in' && room && conn.slot >= 0) { // (conn.slot follows the host moving people around)
-                if (Number.isInteger(m.k) && m.k >= 0 && m.k <= 127) {
+                if (Number.isInteger(m.k) && m.k >= 0 && m.k <= 255) {
                     room.bits[conn.slot] = m.k;
                     if (Number.isInteger(m.n))
                         room.seq[conn.slot] = m.n;
                 }
             } else if (m.t === 'sp' && room)
-                room.setSpecial(conn, m.s);
+                room.setSpecial(conn, m.s, m.slot === 1 ? 1 : 0);
+            else if (m.t === 'two' && room && room.host === conn)
+                room.setTwoSpecials(m.v);
             else if (m.t === 'fixed' && room && room.host === conn)
                 room.setFixed(m.v);
             else if (m.t === 'swap' && room && room.host === conn)

@@ -147,34 +147,39 @@ function drawKeyHints() {
         cx.fillStyle = '#98a2ad';
         cx.fillText('MOVE / JUMP / DROP', x, 174);
         const sp = SPECIALS.find(a => a.id === p.special) || SPECIALS[0];
-        const actions = [['grapple', 'GRAPPLE', k.z], ['weight', 'WEIGHT', k.x], [sp.icon, sp.name, k.sp]]; // main inputs; the third is the equipped special
-        actions.forEach(([kind, label, on], i) => {
-            const kx = x + (i - 1) * 46, yy = keyCap(kx, HINT_ACT_Y, 40, col, on, false);
-            cx.globalAlpha = i === 2 && sp.id === 'dash' && !p.dashReady && p.cd.dash <= 0 ? 0.3 : 1; // the dash icon dims while its once-per-trip charge is used up
+        const sp2 = twoSpecials ? (SPECIALS.find(a => a.id === p.special2) || SPECIALS[1]) : null;
+        const actions = [['grapple', 'GRAPPLE', k.z, null], ['weight', 'WEIGHT', k.x, null], [sp.icon, sp.name, k.sp, sp]]; // main inputs, then the equipped special(s)
+        if (sp2)
+            actions.push([sp2.icon, sp2.name, k.sp2, sp2]);
+        const n = actions.length, S = n === 4 ? 36 : 40, step = n === 4 ? 42 : 46, h = S / 2; // four caps are a little smaller so they still fit on the wall
+        actions.forEach(([kind, label, on, spec], i) => {
+            const kx = x + (i - (n - 1) / 2) * step, yy = keyCap(kx, HINT_ACT_Y, S, col, on, false);
+            const slotOf = spec === sp ? 0 : 1; // which of the player's specials this cap is (only meaningful when spec is set)
+            cx.globalAlpha = spec && spec.id === 'dash' && !p.dashReady && p.cd.dash <= 0 ? 0.3 : 1; // the dash icon dims while its once-per-trip charge is used up
             iconGlyph(kind, kx, yy - 2, on ? '#0b0e12' : '#e8e8e4');
             cx.globalAlpha = 1;
-            const ab = i === 2 ? ABILITY[sp.id] : null, cf = i === 0 ? (p.gCool > 0 ? p.gCool / GRAPPLE_COOLDOWN : 1 - p.gCharge / GRAPPLE_MAX) : ab && ab.cd ? p.cd[sp.id] / ab.cd : 0; // the grapple key tints as its meter is spent, and the whole lockout
+            const ab = spec ? ABILITY[spec.id] : null, cf = i === 0 ? (p.gCool > 0 ? p.gCool / GRAPPLE_COOLDOWN : 1 - p.gCharge / GRAPPLE_MAX) : ab && ab.cd ? p.cd[spec.id] / ab.cd : 0; // the grapple key tints as its meter is spent, and the whole lockout
             if (cf > 0) { // cooldown: a light gray tint over the icon whose top edge moves downward until the normal icon shows
                 cx.save();
-                cx.beginPath(); cx.roundRect(kx - 20, yy - 20, 40, 40, 7); cx.clip();
+                cx.beginPath(); cx.roundRect(kx - h, yy - h, S, S, 7); cx.clip();
                 cx.fillStyle = 'rgba(205,210,220,.65)';
-                cx.fillRect(kx - 20, yy - 20 + 40 * (1 - cf), 40, 40 * cf);
+                cx.fillRect(kx - h, yy - h + S * (1 - cf), S, S * cf);
                 cx.restore();
             }
             cx.font = 'bold 8px system-ui, sans-serif';
             cx.fillStyle = on ? '#0b0e12' : '#98a2ad';
-            cx.fillText(act[i], kx + 13, yy + 15);
+            cx.fillText(i < 3 ? act[i] : keyLabel(keybinds.map[pi].sp2, false), kx + h - 7, yy + h - 5);
             cx.fillStyle = '#98a2ad';
-            if (!(i === 2 && hasMenu && ui.open === pi)) { // the open menu covers the label
+            if (!(spec && hasMenu && ui.open === pi && ui.slot === slotOf)) { // the open menu covers the label
                 if (label.length > 8)
                     cx.font = 'bold 6.5px system-ui, sans-serif'; // long names (MARIONETTE) shrink to stay clear of the neighbouring labels
                 cx.fillText(label, kx, HINT_LABEL_Y);
                 cx.font = 'bold 8px system-ui, sans-serif';
             }
-            if (i === 2 && hasMenu && !pickFixed) { // dropdown caret
-                const hot = ui.open === pi || (ui.hover && ui.hover.type === 'key' && ui.hover.i === pi);
+            if (spec && hasMenu && !pickFixed) { // dropdown caret on each special
+                const hot = (ui.open === pi && ui.slot === slotOf) || (ui.hover && ui.hover.type === 'key' && ui.hover.i === pi && ui.hover.slot === slotOf);
                 cx.fillStyle = hot ? '#fff' : on ? '#0b0e12' : '#98a2ad';
-                cx.beginPath(); cx.moveTo(kx + 8, yy - 15); cx.lineTo(kx + 16, yy - 15); cx.lineTo(kx + 12, yy - 10); cx.closePath(); cx.fill();
+                cx.beginPath(); cx.moveTo(kx + h - 12, yy - h + 5); cx.lineTo(kx + h - 4, yy - h + 5); cx.lineTo(kx + h - 8, yy - h + 10); cx.closePath(); cx.fill();
             }
         });
         cx.restore();

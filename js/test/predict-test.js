@@ -9,7 +9,7 @@ const { loadSim, ROOT } = require('../server/sim-node.js');
 
 let fails = 0;
 const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FAIL ') + msg); if (!ok) fails++; };
-const NET_BITS = { l: 1, r: 2, up: 4, dn: 8, z: 16, x: 32, sp: 64 };
+const NET_BITS = { l: 1, r: 2, up: 4, dn: 8, z: 16, x: 32, sp: 64, sp2: 128 };
 const SPECIALS = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat'];
 const rng = seed => { let s = seed >>> 0; return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; }; };
 

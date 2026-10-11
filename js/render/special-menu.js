@@ -12,20 +12,23 @@ const SPECIALS = [
     { id: 'awakened', name: 'AWAKENED', icon: 'awakened' },
     { id: 'explode', name: 'EXPLODE', icon: 'explode' },
 ];
-const ui = { open: -1, hover: null }; // open = index of the player whose menu is open (-1 = none)
+const ui = { open: -1, slot: 0, hover: null }; // open = index of the player whose menu is open (-1 = none), slot = which of their specials it edits (0 first, 1 second)
 const hintX = i => (sideSwap(i) === 0 ? -OX / 2 : W + OX / 2); // i is 0 (Blue) or 1 (Red) here, which is also the team
-const spKey = i => ({ x: hintX(i) + 26, y: HINT_ACT_Y + HINT_DY - 20, w: 40, h: 40 }); // the special keycap (third key of the action row)
-const spItem = (i, n) => ({ x: hintX(i) + 26, y: HINT_ACT_Y + HINT_DY + 25 + n * 32, w: 40, h: 32 }); // menu rows, directly under it
+const spCx = slot => (twoSpecials ? (slot ? 63 : 21) : 46); // centre of a special's cap, from the block's centre (the caps move when there are four)
+const spSz = () => (twoSpecials ? 36 : 40);
+const spKey = (i, slot = 0) => ({ x: hintX(i) + spCx(slot) - spSz() / 2, y: HINT_ACT_Y + HINT_DY - spSz() / 2, w: spSz(), h: spSz() }); // a special's keycap
+const spItem = (i, n, slot = 0) => ({ x: hintX(i) + spCx(slot) - 20, y: HINT_ACT_Y + HINT_DY + 25 + n * 32, w: 40, h: 32 }); // menu rows, directly under it
 const menuKey = () => ({ x: W / 2 - 60, y: H + 111, w: 120, h: 24 }); // the Menu button: a pill on the floor, centred under the online status line
 const inRect = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 function uiHit(x, y) {
     if (ui.open >= 0)
         for (let n = 0; n < SPECIALS.length; n++)
-            if (inRect(spItem(ui.open, n), x, y))
-                return { type: 'item', i: ui.open, n };
+            if (inRect(spItem(ui.open, n, ui.slot), x, y))
+                return { type: 'item', i: ui.open, n, slot: ui.slot };
     for (const i of [0, 1])
-        if (!pickFixed && inRect(spKey(i), x, y))
-            return { type: 'key', i };
+        for (const slot of twoSpecials ? [0, 1] : [0])
+            if (!pickFixed && inRect(spKey(i, slot), x, y))
+                return { type: 'key', i, slot };
     if (inRect(menuKey(), x, y))
         return { type: 'menu' };
     return null;
@@ -56,12 +59,12 @@ function drawMenuTile() { // the Menu button (the panel itself is page UI, see m
 function drawSpecialMenu() {
     if (ui.open < 0)
         return;
-    const i = ui.open, p = allPlayers[i], col = p.color, r0 = spItem(i, 0), hv = ui.hover;
+    const i = ui.open, p = allPlayers[i], col = p.color, r0 = spItem(i, 0, ui.slot), hv = ui.hover, cur = ui.slot ? p.special2 : p.special;
     cx.save();
     cx.fillStyle = '#12081f'; cx.strokeStyle = col; cx.lineWidth = 2;
     cx.beginPath(); cx.roundRect(r0.x - 3, r0.y - 2, r0.w + 6, SPECIALS.length * 32 + 4, 8); cx.fill(); cx.stroke();
     SPECIALS.forEach((a, n) => {
-        const r = spItem(i, n), hot = hv && hv.type === 'item' && hv.i === i && hv.n === n, sel = p.special === a.id;
+        const r = spItem(i, n, ui.slot), hot = hv && hv.type === 'item' && hv.i === i && hv.n === n, sel = cur === a.id;
         if (hot || sel) {
             cx.fillStyle = sel ? col + '66' : 'rgba(255,255,255,.12)';
             cx.beginPath(); cx.roundRect(r.x, r.y + 1, r.w, r.h - 2, 6); cx.fill();

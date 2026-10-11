@@ -34,7 +34,7 @@ function aiClone(p) {
     c.rope = p.rope ? { ...p.rope } : null;
     c.ropeBase = p.ropeBase ? { ...p.ropeBase } : null;
     c.pending = p.pending ? { ...p.pending, p: { ...p.pending.p } } : null;
-    c.cast = p.cast ? { ...p.cast } : null;
+    c.casts = p.casts.map(x => ({ ...x }));
     c.cd = { ...p.cd };
     c.dashDir = [...p.dashDir];
     c.sim = true; // a planning copy: it must never add pegs / decoys to the real game
@@ -184,7 +184,7 @@ const AI_JUMP_STEPS = 120, AI_SAFE_STEPS = 36, AI_HELD_STEPS = 96, AI_AFTER_STEP
 const AI_WAIT_FRAC = 0.5; // where the AI waits when the ball is not its business: 0 = against the net, 0.5 = the midline of its half (the book's Midline Defense), 1 = at its goal. (The old spot was 90 u from the net, about 0.19.)
 const aiMid = me => NETX - aiSide(me) * AI_WAIT_FRAC * NETX;
 const aiSide = me => (sideSwap(me.team) === 0 ? 1 : -1);
-const aiNoKeys = () => ({ l: false, r: false, up: false, dn: false, z: false, x: false, sp: false });
+const aiNoKeys = () => ({ l: false, r: false, up: false, dn: false, z: false, x: false, sp: false, sp2: false });
 const aiNearest = (me, b) => me.candidates(b).reduce((m, o) => (!m || o.d < m.d ? o : m), null);
 const aiCanDash = me => me.special === 'dash' && me.dashReady && me.cd.dash <= 0;
 const aiCanGrip = me => me.gCool <= 0 && me.gCharge > AI_GRIP_MIN; // the grapple meter: enough left to latch on and do something with it

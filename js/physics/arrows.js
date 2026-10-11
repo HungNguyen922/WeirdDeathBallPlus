@@ -36,7 +36,7 @@ function arrowAimStep(c, k) {
 // The key was released: loose the arrow along the aim, at a speed that grows with the charge.
 function fireArrow(p, c) {
     const ux = Math.cos(c.ang), uy = Math.sin(c.ang), v = ARROW_V_MIN + (ARROW_V_MAX - ARROW_V_MIN) * c.charge, d = p.r + ARROW_R + 2;
-    arrows.push({ x: p.x + ux * d, y: p.y + uy * d, vx: ux * v, vy: uy * v, ang: c.ang, team: p.team, owner: p, stuck: false, life: ARROW_LIFE });
+    arrows.push({ x: p.x + ux * d, y: p.y + uy * d, vx: ux * v, vy: uy * v, ang: c.ang, team: p.team, owner: p, stuck: false, life: ARROW_LIFE, r: ARROW_R, immune: 0, ghost: 0 });
 }
 
 function arrowHitsTerrain(a) {
@@ -79,10 +79,63 @@ function arrowStrike(a) {
     return false;
 }
 
+// An impulse (bat, blast) sets a loose arrow's velocity: it is dislodged if stuck, flies again, and cannot be hit again for ARROW_IMMUNE_T s.
+// team / owner: pass them to hand the arrow to another team (a batted arrow).
+function arrowKnock(a, vx, vy, team = null, owner = null) {
+    const s = Math.hypot(vx, vy), k = s > ARROW_VCAP ? ARROW_VCAP / s : 1;
+    a.vx = vx * k;
+    a.vy = vy * k;
+    if (a.stuck) {
+        a.stuck = false;
+        a.ghost = ARROW_GHOST_T;
+    }
+    if (ARROW_REARM)
+        a.spent = false;
+    a.life = Math.max(a.life, ARROW_KNOCK_LIFE);
+    a.ang = Math.atan2(a.vy, a.vx);
+    a.immune = ARROW_IMMUNE_T;
+    if (team !== null) {
+        a.team = team;
+        a.owner = owner;
+    }
+}
+
+// Players are solid for a loose arrow that cannot strike them: teammates, the shooter (after a short grace) and any spent arrow. The arrow is light, so it takes almost all of the
+// change in relative velocity along the contact line. A live enemy arrow is not handled here: arrowStrike hits them instead.
+function arrowBumpPlayers(a) {
+    for (const p of players) {
+        if (!p.alive || (!a.spent && p.team !== a.team))
+            continue;
+        if (p === a.owner && ARROW_LIFE - a.life < ARROW_BUMP_GRACE)
+            continue;
+        const dx = a.x - p.x, dy = a.y - p.y, d = Math.hypot(dx, dy), min = p.r + ARROW_R;
+        if (d >= min || d === 0)
+            continue;
+        const nx = dx / d, ny = dy / d, vn = (a.vx - p.vx) * nx + (a.vy - p.vy) * ny;
+        a.x = p.x + nx * min; // out of the player
+        a.y = p.y + ny * min;
+        if (vn >= 0)
+            continue; // already moving apart
+        const vx0 = a.vx, vy0 = a.vy, j = -(1 + ARROW_BUMP_E) * vn;
+        a.vx += j * nx;
+        a.vy += j * ny;
+        crashPush(p.crashK, a, vx0, vy0); // Awakened: the push you give is multiplied
+        const s = Math.hypot(a.vx, a.vy);
+        if (s > ARROW_VCAP) {
+            a.vx *= ARROW_VCAP / s;
+            a.vy *= ARROW_VCAP / s;
+        }
+        if (!a.spent)
+            a.ang = Math.atan2(a.vy, a.vx);
+    }
+}
+
 function stepArrows() {
     for (let i = arrows.length - 1; i >= 0; i--) {
         const a = arrows[i];
         a.life -= DT;
+        a.immune = Math.max(0, (a.immune || 0) - DT);
+        a.ghost = Math.max(0, (a.ghost || 0) - DT);
         if (a.life <= 0 || a.x < -OUT_D || a.x > W + OUT_D || a.y > H + PIT) {
             arrows.splice(i, 1); // timed out, or left the world
             continue;
@@ -95,12 +148,13 @@ function stepArrows() {
             a.x += a.vx * DT / n;
             a.y += a.vy * DT / n;
             if (!a.spent && arrowStrike(a)) { // it has done its one hit: it bounces off limp and keeps falling, still a solid thing that can stick in the terrain
+                arrowBumpPlayers(a);
                 a.spent = true;
                 a.vx *= -ARROW_SPENT_K;
                 a.vy *= -ARROW_SPENT_K;
                 break;
             }
-            if (arrowHitsTerrain(a)) {
+            if (!(a.ghost > 0) && arrowHitsTerrain(a)) {
                 a.stuck = true;
                 a.vx = a.vy = 0;
                 a.life = ARROW_STICK_T;

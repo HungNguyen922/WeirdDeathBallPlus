@@ -5,7 +5,7 @@
 // The price of that is a little delay: you see the world NET_DELAY_MS late, and your own moves show up after a round trip. Client-side prediction is the later fix for that.
 //
 // Start it with  ?room=NAME  in the page URL, or the "Play online" button. Optional  &server=host:port  points at a different game server.
-const NET_BITS = { l: 1, r: 2, up: 4, dn: 8, z: 16, x: 32, sp: 64 }; // must match server/server.js
+const NET_BITS = { l: 1, r: 2, up: 4, dn: 8, z: 16, x: 32, sp: 64, sp2: 128 }; // must match server/server.js
 const NET_DELAY_MS = 100; // how far in the past we draw to start with; it then adapts to the connection (below)
 const NET_DELAY_MIN = 70, NET_DELAY_MAX = 260; // limits for the adaptive delay (ms): about two snapshots at the least, a quarter second at the most
 const NET_PING_MS = 500; // how often we measure the round trip
@@ -52,7 +52,7 @@ function netClearAI() { // online every seat is a person: the offline AI flags m
 const net = {
     on: false, slot: -1, ws: null, room: '', running: false, rtt: 0, status: '', lobby2v2: false,
     members: [], you: 0,
-    keys: noKeys(), seq: 0, ack: 0, pendingSpecial: null,
+    keys: noKeys(), seq: 0, ack: 0, pendingSpecial: null, pendingSpecial2: null,
     dtMs: 1000 / 120, snapEvery: 4,
     buf: [], evq: [], off: 0, lastSnapAt: 0, cur: null, shown: null, shape: null, skipEvent: null, jit: 0, delayMs: NET_DELAY_MS,
     setStatus(t) {
@@ -80,7 +80,7 @@ const net = {
         const ws = this.ws = new WebSocket(url);
         ws.onopen = () => {
             const want2v2 = typeof location !== 'undefined' && new URLSearchParams(location.search).get('2v2') === '1'; // ?room=NAME&2v2=1 opens a new room as a 2v2 lobby
-            ws.send(JSON.stringify({ t: 'join', room, special: (allPlayers[0] || {}).special, lobby2v2: want2v2 }));
+            ws.send(JSON.stringify({ t: 'join', room, special: (allPlayers[0] || {}).special, special2: (allPlayers[0] || {}).special2, lobby2v2: want2v2 }));
             this.pingTimer = setInterval(() => this.ws && this.ws.readyState === 1 && this.ws.send(JSON.stringify({ t: 'ping', c: performance.now() })), NET_PING_MS);
         };
         ws.onmessage = e => { try { this.onMessage(JSON.parse(e.data)); } catch (err) { console.error('bad message', err); } };
@@ -101,6 +101,7 @@ const net = {
         } else if (m.t === 'slot') { // the host moved me: new seat, so forget the old seat's keys and prediction
             this.slot = m.slot;
             this.pendingSpecial = null;
+            this.pendingSpecial2 = null;
             Object.assign(this.keys, noKeys());
             if (typeof pred !== 'undefined') {
                 pred.state = null;
@@ -159,10 +160,17 @@ const net = {
         if (this.ws && this.ws.readyState === 1 && this.slot >= 0)
             this.ws.send(JSON.stringify({ t: 'in', n: ++this.seq, k: bits }));
     },
-    setSpecial(id) {
-        this.pendingSpecial = id;
+    setSpecial(id, slot = 0) { // slot 0 = first special, 1 = second
+        if (slot)
+            this.pendingSpecial2 = id;
+        else
+            this.pendingSpecial = id;
         if (this.ws && this.ws.readyState === 1)
-            this.ws.send(JSON.stringify({ t: 'sp', s: id }));
+            this.ws.send(JSON.stringify({ t: 'sp', s: id, slot }));
+    },
+    setTwoSpecials(v) { // host only (the server checks)
+        if (this.ws && this.ws.readyState === 1)
+            this.ws.send(JSON.stringify({ t: 'two', v: !!v }));
     },
     // you can't change you special in the middle of a match, but the server still needs to know what you want for the next match
     setFixed(v) {
@@ -207,6 +215,12 @@ const net = {
                     this.pendingSpecial = null;
                 else
                     allPlayers[this.slot].special = this.pendingSpecial;
+            }
+            if (this.pendingSpecial2) {
+                if (allPlayers[this.slot].special2 === this.pendingSpecial2)
+                    this.pendingSpecial2 = null;
+                else
+                    allPlayers[this.slot].special2 = this.pendingSpecial2;
             }
         }
     },

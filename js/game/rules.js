@@ -1,6 +1,8 @@
 // GAME - rules and the fixed-step update loop: rounds, scoring, kills, decoy collisions, and the optional special-ability pick screens.
 // Drives the physics modules and never draws. The renderer subscribes through `events`.
 const WIN = 9; // points to win the match
+const SWAP_EVERY = 5; // points between side swaps (0 = never)
+let swapAt = -1; // the score total the last swap happened at, so one total can only swap once (a double KO must not swap twice)
 let score = [0, 0], pause = 0, over = false, msg = '';
 let teamSize = 1; // 1 = 1v1, 2 = 2v2
 // Hooks the renderer fills in (see main.js). They default to no-ops so the simulation runs headless.
@@ -46,6 +48,13 @@ function maybeOpenPick() { // call right after a round has been set up
     const total = score[0] + score[1];
     if (pickFixed && total % PICK_EVERY === 0 && pick.at !== total) // (the pick.at check stops a double KO from opening the same screen twice)
         openPick();
+}
+function maybeSwapSides() { // call right before a round is set up
+    const total = score[0] + score[1];
+    if (SWAP_EVERY > 0 && total > 0 && total % SWAP_EVERY === 0 && swapAt !== total) {
+        sidesSwapped = !sidesSwapped;
+        swapAt = total;
+    }
 }
 function pickStep() { // one physics step of an open pick screen
     pick.t += DT;
@@ -128,6 +137,8 @@ function resetMatch() { // R key
     over = false;
     msg = '';
     pause = 0;
+    sidesSwapped = false;
+    swapAt = -1;
     allPlayers.forEach(p => { p.exploCarry = false; }); // a refund carries into the next ROUND, never into a new match
     newRound();
     pick.on = false;
@@ -192,8 +203,11 @@ function update() {
                 score = [0, 0];
                 over = false;
                 pick.at = -1;
+                sidesSwapped = false; // a new match starts on the normal sides
+                swapAt = -1;
             }
             msg = '';
+            maybeSwapSides(); // before newRound, so the players spawn on their new sides
             newRound();
             maybeOpenPick(); // before the first point and after every PICK_EVERY-th point
         }

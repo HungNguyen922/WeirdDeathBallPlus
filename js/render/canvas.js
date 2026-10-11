@@ -9,3 +9,6 @@ const HUD = 0, TINT = 0.16; // HUD = height of a strip above the arena (0 now: t
 // Size the canvas from the constants so it can never drift from the layout (index.html's width / height attributes are only a first guess).
 cv.width = CW;
 cv.height = HUD + H + PIT;
+
+const teamColor = t => (t === 0 ? '#42a5f5' : '#ef5350');
+const sideRgb = s => (sideSwap(s) === 0 ? '66,165,245' : '239,83,80'); // rgb of the team that defends side s (0 left, 1 right)

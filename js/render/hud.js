@@ -79,8 +79,8 @@ function drawHud() {
         padFlash[t] *= 0.9; // physics sets it on a hatchet hit; we fade it
         hud.line[t] *= 0.96;
     }
-    drawBar(0, '#42a5f5', hud.shown[0], hud.flash[0]);
-    drawBar(1, '#ef5350', hud.shown[1], hud.flash[1]);
+    drawBar(sideSwap(0), '#42a5f5', hud.shown[0], hud.flash[0]);
+    drawBar(sideSwap(1), '#ef5350', hud.shown[1], hud.flash[1]);
     const cw = 128, ch = 50, x = W / 2 - cw / 2, y = HUD_TOP, mid = W / 2; // center plaque
     cx.fillStyle = '#0b0e12'; cx.strokeStyle = '#d5dbe1'; cx.lineWidth = 3;
     cx.beginPath(); cx.roundRect(x, y, cw, ch, 6); cx.fill(); cx.stroke();
@@ -89,8 +89,9 @@ function drawHud() {
     cx.fillStyle = '#98a2ad';
     cx.fillText('FIRST TO ' + WIN, mid, y + 15);
     cx.font = 'bold 28px system-ui, sans-serif';
-    cx.fillStyle = '#42a5f5'; cx.fillText(String(score[0]), mid - 32, y + 43);
+    const tl = sideSwap(0), tr = sideSwap(1); // the teams on the left and right right now
+    cx.fillStyle = teamColor(tl); cx.fillText(String(score[tl]), mid - 32, y + 43);
     cx.fillStyle = '#e8e8e4'; cx.fillText('-', mid, y + 41);
-    cx.fillStyle = '#ef5350'; cx.fillText(String(score[1]), mid + 32, y + 43);
+    cx.fillStyle = teamColor(tr); cx.fillText(String(score[tr]), mid + 32, y + 43);
     drawNetStatus();
 }

@@ -3,7 +3,7 @@
 events.onPoint = (team, why) => {
     hud.flash[team] = 1;
     if (why === 'scores!')
-        hud.line[1 - team] = 1; // the threshold line that was crossed lights up
+        hud.line[1 - sideSwap(team)] = 1; // the threshold line that was crossed lights up
 };
 events.onBodyStep = trailPush;
 events.onPauseTick = trailMelt;

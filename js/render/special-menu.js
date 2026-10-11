@@ -13,7 +13,7 @@ const SPECIALS = [
     { id: 'explode', name: 'EXPLODE', icon: 'explode' },
 ];
 const ui = { open: -1, hover: null }; // open = index of the player whose menu is open (-1 = none)
-const hintX = i => (i === 0 ? -OX / 2 : W + OX / 2);
+const hintX = i => (sideSwap(i) === 0 ? -OX / 2 : W + OX / 2); // i is 0 (Blue) or 1 (Red) here, which is also the team
 const spKey = i => ({ x: hintX(i) + 26, y: HINT_ACT_Y + HINT_DY - 20, w: 40, h: 40 }); // the special keycap (third key of the action row)
 const spItem = (i, n) => ({ x: hintX(i) + 26, y: HINT_ACT_Y + HINT_DY + 25 + n * 32, w: 40, h: 32 }); // menu rows, directly under it
 const menuKey = () => ({ x: W / 2 - 60, y: H + 111, w: 120, h: 24 }); // the Menu button: a pill on the floor, centred under the online status line

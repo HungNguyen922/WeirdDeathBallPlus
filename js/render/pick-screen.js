@@ -76,8 +76,8 @@ function drawPickScreen() {
     cx.fillStyle = 'rgba(9,5,18,.93)'; // backdrop over the playing area, with a wash of each team's colour at its edge
     cx.fillRect(0, 0, W, H);
     const wash = cx.createLinearGradient(0, 0, W, 0);
-    wash.addColorStop(0, 'rgba(66,165,245,.22)'); wash.addColorStop(0.4, 'rgba(66,165,245,0)');
-    wash.addColorStop(0.6, 'rgba(239,83,80,0)'); wash.addColorStop(1, 'rgba(239,83,80,.22)');
+    wash.addColorStop(0, 'rgba(' + sideRgb(0) + ',.22)'); wash.addColorStop(0.4, 'rgba(' + sideRgb(0) + ',0)');
+    wash.addColorStop(0.6, 'rgba(' + sideRgb(1) + ',0)'); wash.addColorStop(1, 'rgba(' + sideRgb(1) + ',.22)');
     cx.fillStyle = wash;
     cx.fillRect(0, 0, W, H);
     cx.textAlign = 'center';
@@ -106,7 +106,7 @@ function drawPickScreen() {
         drawPickBadge(b.x, b.y, p, pick.ready[p.id], tm);
     }
     for (const t of [0, 1]) { // the side panels: a team of one gets the big panel, a team of two gets two small ones (first player on top)
-        const list = players.filter(q => q.team === t), x = t === 0 ? 24 : W - 24 - 190;
+        const list = players.filter(q => q.team === t), x = sideSwap(t) === 0 ? 24 : W - 24 - 190;
         if (list.length === 1)
             drawPickPanel(list[0], x, 120, 190, 250, false);
         else

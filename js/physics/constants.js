@@ -119,3 +119,8 @@ const PLAYER_BOUNCE = 0.9; // restitution when two players collide: 1 = attacker
 // Original values were 5 and 0.4; lower = more slippery.
 const GROUND_BRAKE = 2, BALL_ROLL_DRAG = 0.15;
 const BALL_R = 14, BALL_I = 3 * BALL_M * BALL_R * BALL_R, BALL_W_MAX = 60; // spin inertia (was 6x: lower = spins up easier) and top spin speed (rad/s, was a hardcoded 45)
+
+// Sides: normally team 0 (Blue) defends the left goal and team 1 (Red) the right. Every SWAP_EVERY points they trade places (see maybeSwapSides in game/rules.js).
+// sideSwap(n) turns a team into the side it is on (0 left, 1 right) and a side into the team on it: swapping is its own inverse, so one function does both.
+let sidesSwapped = false;
+const sideSwap = n => (sidesSwapped ? 1 - n : n);

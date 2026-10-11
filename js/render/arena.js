@@ -6,7 +6,7 @@ function drawOutside() { // tunnels, threshold lines and hatchets, mirrored on b
     cx.fillRect(0, H, W, PIT); // base under the arena floor
     for (const side of [0, 1]) {
         const s = side === 0 ? -1 : 1, base = side === 0 ? 0 : W, X = d => base + s * d, lift = sawY(base);
-        const col = side === 0 ? '#42a5f5' : '#ef5350', far = slopeY(OUT_D) + lift, fp = [0, PAD_D0, OUT_D].map(d => [X(d), slopeY(d) + lift]);
+        col = teamColor(sideSwap(side)), far = slopeY(OUT_D) + lift, fp = [0, PAD_D0, OUT_D].map(d => [X(d), slopeY(d) + lift]);
         cx.fillStyle = TERRAIN; // solid mass over the tunnel...
         cx.fillRect(side === 0 ? -OX : W, 0, OX, GOAL_Y0);
         cx.beginPath(); // ...and under its sloped floor (it carries on past the threshold)
@@ -63,9 +63,9 @@ function drawArena() { // background, terrain, goals, net line
     cx.fillRect(-OX, 0, CW, H + PIT);
     cx.fillStyle = '#14181d';
     cx.fillRect(0, 0, W, H);
-    cx.fillStyle = 'rgba(66,165,245,' + TINT + ')'; // each side is lightly tinted in its team color
+    cx.fillStyle = 'rgba(' + sideRgb(0) + ',' + TINT + ')'; // each side is lightly tinted in its team color
     cx.fillRect(0, 0, NETX, H);
-    cx.fillStyle = 'rgba(239,83,80,' + TINT + ')';
+    cx.fillStyle = 'rgba(' + sideRgb(1) + ',' + TINT + ')';
     cx.fillRect(NETX, 0, NETX, H);
     drawOutside();
     cx.fillStyle = TERRAIN;
@@ -101,9 +101,9 @@ function drawArena() { // background, terrain, goals, net line
     cx.fillRect(0, 0, PL, GOAL_Y0);
     cx.fillRect(W - PL, 0, PL, GOAL_Y0);
     drawKeyHints();
-    cx.fillStyle = 'rgba(66,165,245,.35)';
+    cx.fillStyle = 'rgba(' + sideRgb(0) + ',.35)'
     cx.fillRect(0, GOAL_Y0, 10, GOAL_Y1 - GOAL_Y0);
-    cx.fillStyle = 'rgba(239,83,80,.35)';
+    cx.fillStyle = 'rgba(' + sideRgb(1) + ',.35)'
     cx.fillRect(W - 10, GOAL_Y0, 10, GOAL_Y1 - GOAL_Y0);
     cx.strokeStyle = EDGE;
     cx.lineWidth = 6;

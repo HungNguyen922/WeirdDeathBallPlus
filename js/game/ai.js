@@ -183,7 +183,7 @@ const AI_SLICE_H = 48, AI_PRE_H = 24;      // held-plan jobs: bigger, because th
 const AI_JUMP_STEPS = 120, AI_SAFE_STEPS = 36, AI_HELD_STEPS = 96, AI_AFTER_STEPS = 72, AI_LOOP_STEPS = 180, AI_LOOP_MAX = 2.4; // look-ahead lengths (steps): a jump, the safe time after latching, a held plan, the time after a release
 const AI_WAIT_FRAC = 0.5; // where the AI waits when the ball is not its business: 0 = against the net, 0.5 = the midline of its half (the book's Midline Defense), 1 = at its goal. (The old spot was 90 u from the net, about 0.19.)
 const aiMid = me => NETX - aiSide(me) * AI_WAIT_FRAC * NETX;
-const aiSide = me => (me.team === 0 ? 1 : -1);
+const aiSide = me => (sideSwap(me.team) === 0 ? 1 : -1);
 const aiNoKeys = () => ({ l: false, r: false, up: false, dn: false, z: false, x: false, sp: false });
 const aiNearest = (me, b) => me.candidates(b).reduce((m, o) => (!m || o.d < m.d ? o : m), null);
 const aiCanDash = me => me.special === 'dash' && me.dashReady && me.cd.dash <= 0;
@@ -260,7 +260,8 @@ function aiSimStep(S, k) { // one physics step; returns the scoring team if the 
     for (const f of S.foes)
         f.step(S.b);
     S.me.step(S.b);
-    return S.b.step();
+    const sc = S.b.step();
+    return sc === null ? null : sideSwap(sc);
 }
 const aiGap = S => Math.hypot(S.me.x - S.b.x, S.me.y - S.b.y);
 const aiDead = S => aiGap(S) < S.me.r + S.b.r + 2;
@@ -396,7 +397,7 @@ function aiAdvance(A) { // run one slice of the current job
 }
 
 function aiFree(i, me, A, k) { // keys for an AI that is not tethered
-    const s = aiSide(me), b = ball, dx = b.x - me.x, lo = me.team === 0 ? me.r : NETX + me.r, hi = me.team === 0 ? NETX - me.r : W - me.r;
+    const s = aiSide(me), b = ball, dx = b.x - me.x, lo = s > 0 ? me.r : NETX + me.r, hi = s > 0 ? NETX - me.r : W - me.r;
     const mine = (b.x - NETX) * s < 40;        // the ball is on our half (or right at the net)
     if (A.E) {                                 // in an engage jump: carry it out
         aiEngageKeys(me, b, A.E, k);

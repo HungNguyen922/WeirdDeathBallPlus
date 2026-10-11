@@ -10,7 +10,7 @@ const DT = 1 / 120; // fixed physics timestep (120 Hz)
 const G = 410; // free-fall gravity (u/s^2): big arcs in the demo fall at ~320 px/s^2
 const G_FLOAT = 90; // gravity while UP is held in the air: plain jumps are long, symmetric, floaty arcs
 const JUMP_V = 150; // launch speed of a plain jump (u/s): ~88 u apex, ~2 s airtime with G_FLOAT
-const DASH_V = 420, DASH_FX = 0.25; // dash impulse (u/s), streak lifetime (s)
+const DASH_V = 420, DASH_FX = 0.6; // dash impulse (u/s), streak lifetime (s)
 const DOWN_G = 2.2; // gravity multiplier while DOWN is held (drop / fast-fall)
 const RUN_ACC = 185; // ground acceleration (u/s^2): ~0 -> 270 u/s in ~1.5 s, roughly constant (no hard ramp)
 const BALL_G = 170; // ball gravity (u/s^2): ~140 px/s^2 in the demo
@@ -44,7 +44,7 @@ const GRAPPLE_MAX = 4, GRAPPLE_COOLDOWN = 6, GRAPPLE_REGEN = 1; // grapple meter
 const GROUND_DELAY = 0.1, HOOK_DELAY = 0.1; // the hook lands ~3 frames after the press, on the ground too (measured)
 const HEAVY_KS = 1.0, STRETCH_X0 = 120, HOP_AIM = 0.5; // weight = a firmer rope; the rope stiffens as it stretches (x0 = stretch that doubles it); HOP_AIM = horizontal share of the grapple-jump kick // airborne surface grapples take ~3 video frames to land (measured), then kick away from the pivot
 
-const PEG_R = PL/4, PEG_MAX = 2; // plinko peg: half a player's size (r 8 vs 16), bounce strength = the hatchet's (PAD_*), cooldown (s), pegs per player (placing a new one removes the oldest)
+const PEG_R = PL/3, PEG_MAX = 2; // plinko peg: half a player's size (r 8 vs 16), bounce strength = the hatchet's (PAD_*), cooldown (s), pegs per player (placing a new one removes the oldest)
 // Ability timing: cast = seconds from pressing the key until the effect happens; cd = cooldown (s) that starts when the effect happens, on top of each
 // ability's own reset rule (dash: once per trip off the floor). PEG_LIFE = seconds a peg lasts before it fizzles out.
 const DASH_CAST = 0.1, DASH_COOLDOWN = 5, PLINKO_CAST = DASH_CAST, PLINKO_COOLDOWN = 5, PEG_LIFE = 10;
@@ -56,7 +56,7 @@ const DASH_CAST = 0.1, DASH_COOLDOWN = 5, PLINKO_CAST = DASH_CAST, PLINKO_COOLDO
 // never kills. Unlike the death ball it is also a solid body: it collides with players, the death ball and other decoys (DECOY_BOUNCE_*: 0 = dead stop, 1 = perfectly bouncy; the
 // ball is light, BALL_M against a player's 1, so players knock it around). One per player: casting again (once DECOY_COOLDOWN has run out) removes the old one and puts a new
 // one at the new spot. The cooldown starts when the decoy appears.
-const MARIONETTE_GRACE = 0.1, MARIONETTE_COOLDOWN = 10, MARIONETTE_V = 500, MARIONETTE_FX = 0.3; // shove speed (u/s) added to the ball, length (s) of its streak effect
+const MARIONETTE_GRACE = 0.1, MARIONETTE_COOLDOWN = 10, MARIONETTE_V = 500, MARIONETTE_FX = 0.6; // shove speed (u/s) added to the ball, length (s) of its streak effect
 
 const DECOY_CAST = 1, DECOY_COOLDOWN = 20, DECOY_BOUNCE_PLAYER = 0.75, DECOY_BOUNCE_BALL = 0.8, DECOY_TELL = false; // DECOY_TELL: draw a dashed ring in the caster's color around the decoy (false = a perfect lookalike)
 
@@ -75,7 +75,7 @@ const ARROW_LEN = PL, ARROW_HALF_W = PL/6, ARROW_SPENT_K = 0.15; // drawn length
 // Player hit: the same with BAT_PLAYER_V / BAT_PLAYER_KEEP / BAT_PLAYER_VMAX.
 const BAT_T = 0.2, BAT_COOLDOWN = 4, BAT_REACH = PL * 2, BAT_ARC = Math.PI, BAT_HIT_MARGIN = 0.08; // swing time (s), cooldown (s), bat tip distance from the player's centre, total swept arc (rad, PI = semicircle), extra angular forgiveness on each sweep step (rad)
 const BAT_WIND = 0.35, BAT_CHARGE_T = 1, BAT_CHARGE_BONUS = 0.5; // extra pull-back at full charge (rad, drawn only: the hit arc stays BAT_ARC), time to full charge (s), power added at full charge (0.5 = +50%)
-const BAT_V = 700, BAT_KEEP = 1.15, BAT_CARRY = 0.6, BAT_VMAX = 1500, BAT_VMAX_CHARGE = 300, BAT_AIM_W = 1, BAT_FX = 0.3; // ball: flat speed added, share of its own speed kept, share of the batter's velocity added, speed cap (+ extra at full charge), aim vs away blend (1 = pure aim direction), streak length (s)
+const BAT_V = 700, BAT_KEEP = 1.15, BAT_CARRY = 0.6, BAT_VMAX = 1500, BAT_VMAX_CHARGE = 300, BAT_AIM_W = 1, BAT_FX = 0.6; // ball: flat speed added, share of its own speed kept, share of the batter's velocity added, speed cap (+ extra at full charge), aim vs away blend (1 = pure aim direction), streak length (s)
 const IMPACT_V0 = 260, IMPACT_V1 = 1000;
 const BAT_PLAYER_V = 550, BAT_PLAYER_KEEP = 0.5, BAT_PLAYER_VMAX = 1100, BAT_HITS_TEAMMATES = true;
 
@@ -103,7 +103,7 @@ const AWAKENED_CRASH = 3, AWAKENED_T = 10, AWAKENED_COOLDOWN = 15;
 // If anyone dies within EXPLODE_WINDOW s of the blast, Explode's cooldown drops to zero at once. Every new round resets all cooldowns, so a refund earned by the death that ENDS the
 // round (always the case in 1v1) would be lost: with EXPLODE_CARRY on, you start the next round with Explode ready.
 // EXPLODE_FX = how long the blast is drawn (crisp zone circle, shock rings, motion lines).
-const EXPLODE_R = 3 * PL, EXPLODE_COOLDOWN = 10, EXPLODE_WINDOW = 5, EXPLODE_CARRY = true, EXPLODE_FX = 0.65;
+const EXPLODE_R = 3 * PL, EXPLODE_COOLDOWN = 10, EXPLODE_WINDOW = 5, EXPLODE_CARRY = true, EXPLODE_FX = 0.6;
 const EXPLODE_KICK_MIN = 600, EXPLODE_KICK_MAX = 1800, EXPLODE_FALLOFF = 1.2;
 const EXPLODE_AMP_BLEND = 0.5, EXPLODE_AMP_SPEED = 900, EXPLODE_AMP_GAIN = 0.5;
 

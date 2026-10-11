@@ -72,9 +72,43 @@ function arrowShape(x, y, ang, len, col, alpha) { // a plain rectangle: its lead
     cx.beginPath(); cx.rect(-len, -ARROW_HALF_W, len, 2 * ARROW_HALF_W); cx.fill(); cx.stroke();
     cx.restore();
 }
+function arrowStreak(a, col) { // a curved streak behind an arrow in flight, following the real arc (position s seconds ago = pos - v*s + G*s^2/2)
+    const sp = Math.hypot(a.vx, a.vy), k = clamp01((sp - 250) / 950); // 0 = slow, 1 = full-charge speed
+    if (k <= 0.02)
+        return;
+    const rgb = [1, 3, 5].map(i => parseInt(col.slice(i, i + 2), 16)), white = rgb.map(v => Math.round(v + (255 - v) * 0.85));
+    const N = 12, s0 = ARROW_LEN / sp, span = 0.05 + 0.1 * k, nx = -a.vy / sp, ny = a.vx / sp, pts = []; // the streak starts at the tail of the shaft
+    for (let n = 0; n <= N; n++) {
+        const s = s0 + span * n / N;
+        pts.push({ x: a.x - a.vx * s, y: a.y - a.vy * s + 0.5 * ARROW_G * s * s });
+    }
+    cx.save();
+    cx.globalCompositeOperation = 'lighter';
+    cx.lineCap = 'round';
+    for (const off of k > 0.5 ? [0, -1, 1] : [0]) { // thin side lanes at speed, converging toward the tail
+        for (let n = 0; n < N; n++) {
+            const age = n / N, t = Math.pow(1 - age, 1.3) * k, o = off * ARROW_HALF_W * 1.6 * (1 - age * 0.6), p0 = pts[n], p1 = pts[n + 1];
+            const x1 = p0.x + nx * o, y1 = p0.y + ny * o, x2 = p1.x + nx * o, y2 = p1.y + ny * o;
+            if (off === 0) { // soft wide glow under the main streak
+                cx.strokeStyle = `rgba(${rgb},${0.3 * t})`;
+                cx.lineWidth = (8 + 8 * k) * (1 - age * 0.8);
+                cx.beginPath(); line(x1, y1, x2, y2); cx.stroke();
+            }
+            const m = k * (1 - age * 0.5), c = rgb.map((v, i) => Math.round(v + (white[i] - v) * m)); // team colour -> white-hot with speed
+            cx.strokeStyle = `rgba(${c},${(off === 0 ? 0.85 : 0.5) * t})`;
+            cx.lineWidth = (off === 0 ? 1.5 + 2.5 * k : 0.8 + 0.8 * k) * (1 - age * 0.85);
+            cx.beginPath(); line(x1, y1, x2, y2); cx.stroke();
+        }
+    }
+    cx.restore();
+}
 function drawArrows() {
-    for (const a of arrows)
-        arrowShape(a.x, a.y, a.ang, ARROW_LEN, a.team === 0 ? '#42a5f5' : '#ef5350', a.stuck ? Math.min(1, a.life / 0.5) : 1);
+    for (const a of arrows) {
+        const col = a.team === 0 ? '#42a5f5' : '#ef5350';
+        if (!a.stuck && !a.spent)
+            arrowStreak(a, col);
+        arrowShape(a.x, a.y, a.ang, ARROW_LEN, col, a.stuck ? Math.min(1, a.life / 0.5) : 1);
+    }
 }
 function drawAITags() { // "AI" tag over a computer-controlled player
     if (net.on) // online every seat is a person (the ai flags are offline-only state)
@@ -155,15 +189,35 @@ function drawCasts() { // abilities being cast: ghost pegs / decoys, marionette 
             cx.fillStyle = col; // knob
             cx.beginPath(); cx.arc(p.x + ux * (at(0) - 1), p.y + uy * (at(0) - 1), 3.4, 0, 7); cx.fill();
             cx.restore();
+        } else if (p.cast.type === 'arrow') { // charge ring (white and pulsing at full), a drawn bow, and the arrow nocked on it along the aim
+            const c = p.cast, full = c.charge >= 1, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 70);
+            drawTimer(p.x, p.y, p.r + 6, c.charge, full ? '#ffffff' : col);
+            const ux = Math.cos(c.ang), uy = Math.sin(c.ang), nx = -uy, ny = ux;
+            const gd = p.r + 34, len = 12 + 26 * c.charge; // distance of the grip from the player, arrow length (as before)
+            const gx = p.x + ux * gd, gy = p.y + uy * gd; // the grip: the bow's middle, the point nearest the target
+            const back = 4 + 10 * c.charge, H = 26; // how far the limb tips sit behind the grip (more bend as it charges), and the bow's half-height
+            const t1x = gx + nx * H - ux * back, t1y = gy + ny * H - uy * back, t2x = gx - nx * H - ux * back, t2y = gy - ny * H - uy * back;
+            const ctx_ = gx + ux * back, cty_ = gy + uy * back; // quadratic control point chosen so the curve passes exactly through the grip
+            const hx = gx + ux * 8, hy = gy + uy * 8, tx = hx - ux * len, ty = hy - uy * len; // arrow head (fixed, just past the grip) and its tail = the nock
+            cx.save();
+            cx.lineCap = 'round'; cx.lineJoin = 'round';
+            if (full) { cx.shadowColor = '#ffffff'; cx.shadowBlur = 8 + 6 * pulse; }
+            cx.strokeStyle = '#7a4d22'; cx.lineWidth = 5.4; // bow outline, then the wood on top
+            cx.beginPath(); cx.moveTo(t1x, t1y); cx.quadraticCurveTo(ctx_, cty_, t2x, t2y); cx.stroke();
+            cx.strokeStyle = full ? '#fff0d6' : '#d9a066'; cx.lineWidth = 3.4;
+            cx.beginPath(); cx.moveTo(t1x, t1y); cx.quadraticCurveTo(ctx_, cty_, t2x, t2y); cx.stroke();
+            cx.shadowBlur = 0;
+            cx.strokeStyle = col; cx.lineWidth = 5; // grip wrap in the team colour
+            cx.beginPath(); line(gx - nx * 4, gy - ny * 4, gx + nx * 4, gy + ny * 4); cx.stroke();
+            cx.strokeStyle = '#e8e8e4'; cx.lineWidth = 1.3; // the string, pulled back to the nock
+            cx.beginPath(); cx.moveTo(t1x, t1y); cx.lineTo(tx, ty); cx.lineTo(t2x, t2y); cx.stroke();
+            cx.restore();
+            arrowShape(hx, hy, c.ang, len, col, full ? 0.7 + 0.3 * pulse : 1);
         } else if (p.cast.type === 'barbwire') { // time left on the wire: a ring that only shows (and only drains) while the rope is out, turning red when nearly spent
             const left = 1 - Math.min(1, p.cast.roped / BARBWIRE_MAX_T);
             if (ropeEnd(p))
                 drawTimer(p.x, p.y, p.r + 6, left, left < 0.25 ? '#000000' : col);
             drawTimer(p.x, p.y, p.r + 6, left, left < 0.25 ? '#000000' : col);
-        } else if (p.cast.type === 'arrow') { // charge ring (white and pulsing at full) and the arrow held out along the aim
-            const c = p.cast, full = c.charge >= 1, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 70);
-            drawTimer(p.x, p.y, p.r + 6, c.charge, full ? '#ffffff' : col);
-            arrowShape(p.x + Math.cos(c.ang) * (p.r + 40), p.y + Math.sin(c.ang) * (p.r + 40), c.ang, 12 + 26 * c.charge, col, full ? 0.7 + 0.3 * pulse : 1);
         } else {
             if (p.cast.type === 'marionette') { // aiming: a string from the caster to the ball, and an arrow on the ball showing where the shove will go
                 const c = p.cast, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 110), dirOn = c.hx || c.hy;

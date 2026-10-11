@@ -44,10 +44,10 @@ const GRAPPLE_MAX = 4, GRAPPLE_COOLDOWN = 6, GRAPPLE_REGEN = 1; // grapple meter
 const GROUND_DELAY = 0.1, HOOK_DELAY = 0.1; // the hook lands ~3 frames after the press, on the ground too (measured)
 const HEAVY_KS = 1.0, STRETCH_X0 = 120, HOP_AIM = 0.5; // weight = a firmer rope; the rope stiffens as it stretches (x0 = stretch that doubles it); HOP_AIM = horizontal share of the grapple-jump kick // airborne surface grapples take ~3 video frames to land (measured), then kick away from the pivot
 
-const PEG_R = 8, PEG_MAX = 2; // plinko peg: half a player's size (r 8 vs 16), bounce strength = the hatchet's (PAD_*), cooldown (s), pegs per player (placing a new one removes the oldest)
+const PEG_R = PL/2, PEG_MAX = 2; // plinko peg: half a player's size (r 8 vs 16), bounce strength = the hatchet's (PAD_*), cooldown (s), pegs per player (placing a new one removes the oldest)
 // Ability timing: cast = seconds from pressing the key until the effect happens; cd = cooldown (s) that starts when the effect happens, on top of each
 // ability's own reset rule (dash: once per trip off the floor). PEG_LIFE = seconds a peg lasts before it fizzles out.
-const DASH_CAST = 0.12, DASH_COOLDOWN = 5, PLINKO_CAST = DASH_CAST, PLINKO_COOLDOWN = 5, PEG_LIFE = 10;
+const DASH_CAST = 0.1, DASH_COOLDOWN = 5, PLINKO_CAST = DASH_CAST, PLINKO_COOLDOWN = 5, PEG_LIFE = 10;
 
 // Marionette: hold the special key to aim (the arrow(s) are read live while it is held), release to shove the death ball that way. Releasing with no direction cancels it and spends
 // nothing; letting go of the arrows up to MARIONETTE_GRACE s before the key still counts (so releasing both together does not lose your aim). A tap with an arrow held fires at
@@ -63,8 +63,8 @@ const DECOY_CAST = 1, DECOY_COOLDOWN = 20, DECOY_BOUNCE_PLAYER = 0.75, DECOY_BOU
 // Arrow: hold the special key to charge (ARROW_CHARGE_T s to full), release to fire along the aim. LEFT / RIGHT turn it at ARROW_TURN rad/s; a double tap within ARROW_DBL_T s snaps it.
 // The death ball / decoys gain ARROW_BALL_K x the arrow's velocity; an enemy is knocked back by ARROW_KNOCK x it (ARROW_KILLS = true kills instead).
 const ARROW_CHARGE_T = 1.2, ARROW_V_MIN = 300, ARROW_V_MAX = 1200, ARROW_G = G, ARROW_TURN = 2.2, ARROW_DBL_T = 0.25, ARROW_COOLDOWN = 2;
-const ARROW_R = 3, ARROW_BALL_K = 0.6, ARROW_KNOCK = 0.75, ARROW_KILLS = false, ARROW_LIFE = 10, ARROW_STICK_T = 5;
-const ARROW_LEN = 22, ARROW_HALF_W = 2.5, ARROW_SPENT_K = 0.15; // drawn length, half the drawn width (= collision thickness), share of speed a spent arrow keeps
+const ARROW_R = PL/4, ARROW_BALL_K = 0.6, ARROW_KNOCK = 0.75, ARROW_KILLS = false, ARROW_LIFE = 10, ARROW_STICK_T = 5;
+const ARROW_LEN = PL, ARROW_HALF_W = PL/6, ARROW_SPENT_K = 0.15; // drawn length, half the drawn width (= collision thickness), share of speed a spent arrow keeps
 
 // Bat: hold the special key to charge (BAT_CHARGE_T s to full; a tap is a weak swing), release to swing. The swing is a SEMICIRCLE (BAT_ARC rad) centred on the direction held
 // (read live while charging, the last one held counts; none ever held = toward the death ball), so it can be tilted anywhere round the player. The bat starts at one end of the
@@ -74,7 +74,7 @@ const ARROW_LEN = 22, ARROW_HALF_W = 2.5, ARROW_SPENT_K = 0.15; // drawn length,
 // (BAT_AIM_W: 1 = exactly the direction held, 0 = straight away from the batter), plus BAT_CARRY x the batter's velocity. Big hits raise the ball's speed cap like a hatchet hit.
 // Player hit: the same with BAT_PLAYER_V / BAT_PLAYER_KEEP / BAT_PLAYER_VMAX.
 const BAT_T = 0.2, BAT_COOLDOWN = 4, BAT_REACH = PL * 2, BAT_ARC = Math.PI, BAT_HIT_MARGIN = 0.08; // swing time (s), cooldown (s), bat tip distance from the player's centre, total swept arc (rad, PI = semicircle), extra angular forgiveness on each sweep step (rad)
-const BAT_WIND = 0.35, BAT_CHARGE_T = 0.6, BAT_CHARGE_BONUS = 0.5; // extra pull-back at full charge (rad, drawn only: the hit arc stays BAT_ARC), time to full charge (s), power added at full charge (0.5 = +50%)
+const BAT_WIND = 0.35, BAT_CHARGE_T = 1, BAT_CHARGE_BONUS = 0.5; // extra pull-back at full charge (rad, drawn only: the hit arc stays BAT_ARC), time to full charge (s), power added at full charge (0.5 = +50%)
 const BAT_V = 700, BAT_KEEP = 1.15, BAT_CARRY = 0.6, BAT_VMAX = 1500, BAT_VMAX_CHARGE = 300, BAT_AIM_W = 1, BAT_FX = 0.3; // ball: flat speed added, share of its own speed kept, share of the batter's velocity added, speed cap (+ extra at full charge), aim vs away blend (1 = pure aim direction), streak length (s)
 const IMPACT_V0 = 260, IMPACT_V1 = 1000;
 const BAT_PLAYER_V = 550, BAT_PLAYER_KEEP = 0.5, BAT_PLAYER_VMAX = 1100, BAT_HITS_TEAMMATES = true;
@@ -86,12 +86,12 @@ const BARBWIRE_MAX_T = 4, BARBWIRE_CD_RATIO = 2, BARBWIRE_HALF_W = 2, BARBWIRE_H
 
 // Warp: press the special key to drop a marker where you stand (placing is free and instant, and a marker stays until it is used or the round ends). A dashed line is drawn from you to
 // it. Press again to teleport to the marker: position only, so velocity (all your momentum) is kept. Your grapple stays attached (the rope's normal leash rules apply from the new spot). The cooldown (WARP_COOLDOWN s) starts at the teleport; a second press while it runs does nothing, and the marker waits. WARP_FX = how long the arrival / departure rings last.
-const WARP_COOLDOWN = 15, WARP_FX = 0.4;
+const WARP_COOLDOWN = 12, WARP_FX = 0.4;
 
 // Awakened: press the special key to power up for AWAKENED_T s; when it wears off the cooldown (AWAKENED_COOLDOWN s) starts. While awake the Player getters (grapMax, range,
 // grapLock, kickV, crashK) return boosted numbers: grapple meter (seconds of use), grapple reach, the weighted kick, the ball's gain from a crash shot, and the overcharge lockout
 // (0.5 = half as long). The grapple meter keeps its fill share across the switch (4 of 4 s becomes 6 of 6 s, and back). Pressing again while awake does nothing.
-const AWAKENED = { use: 2, range: 1, kick: 1, crash: 3, lock: 0 }, AWAKENED_T = 10, AWAKENED_COOLDOWN = 15;
+const AWAKENED = { use: 2, range: 1, kick: 1, crash: 5, lock: 0 }, AWAKENED_T = 10, AWAKENED_COOLDOWN = 15;
 
 const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 const START_CD = 1; // share of each ability's full cooldown still running at the start of a round (0 = ready at once, 1 = full cooldown)

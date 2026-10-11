@@ -7,9 +7,10 @@
 //              shootU / shootF  dash toward their goal (up-and-over / flat) so the rope whips the ball along, and let go the moment the ball would end up in their goal
 //              pull             run back toward our own side, dragging the ball out of the middle to somewhere with room for a shot
 //              push             carry it upfield when it is stuck far back in our own half
+//              loopO / loopU    swing the ball around us (over the top / underneath) and let go when a release would score or hit an enemy (the book's osL / usL)
 //              hold             hang on
 //   DODGE    otherwise, if the ball is going to reach us: try each way of steering (left / right / still, jump / not) on a rough model and take the one that keeps us furthest from it.
-//   WAIT     far away or ball on their side: wait near the net.
+//   WAIT     far away or ball on their side: wait on the midline of our half (the book's Midline Defense: nothing blocks the grapple circle, and the ball can come from anywhere).
 // The grapple has a meter (4 s of grip, then a 6 s lockout; letting go refills it), so the AI only goes for a grab with enough left, and never holds on for ever.
 // Playing things forward costs ~17 us per physics step, so those look-aheads are written as generators and run a few steps per tick (AI_SLICE), never all at once.
 // A job first plays forward the ticks it is itself going to take (AI_PRE, keys frozen), so its answer is about the moment it arrives, not the moment it started.
@@ -69,6 +70,55 @@ function aiFlight(b, team) {
     }
     return false;
 }
+// ---- aiming zones (from the notes): if the ball is let go now, does it run into an enemy, and how likely is that hit to land? ----
+// The Death Ball kills whatever it touches. Enemies are predicted ballistically and never react, so every value is a discount, not a promise.
+//   Aerial Point Range  an enemy already in the air can barely steer out of the way: the best hit.
+//   Plunge Path Range   a steep ball catches a defender who hops to receive it.
+//   Sweep Path Range    a hard ball along the floor traps a grounded defender against it.
+// Returns 0 for no hit, else roughly 90..220 (a goal is worth 200 in aiHeldJob). A late hit is worth a little less: they have longer to react.
+const AI_HIT_STEPS = 90, AI_HIT_MIN = 110;
+function aiBallHit(b, me) {
+    const foes = [];
+    for (const q of players)
+        if (q.team !== me.team && q.alive)
+            foes.push({ x: q.x, y: q.y, vx: q.vx, vy: q.vy, r: q.r, air: !q.ground && !q.onBall, g: q.keys && q.keys.up ? G_FLOAT : G });
+    if (!foes.length)
+        return 0;
+    const dt = 1 / 60, r = BALL_R;
+    let x = b.x, y = b.y, vx = b.vx, vy = b.vy;
+    for (let n = 0; n < AI_HIT_STEPS; n++) {
+        vy += BALL_G * dt;
+        vx *= 1 - 0.05 * dt;
+        vy *= 1 - 0.05 * dt;
+        x += vx * dt;
+        y += vy * dt;
+        if (y < r) { y = r; if (vy < 0) vy = 0; }
+        if (x < 0 || x > W)
+            return 0;
+        const fl = aiFloorY(x) - r;
+        let rolling = false;
+        if (y >= fl) { y = fl; vy = 0; vx *= 1 - BALL_ROLL_DRAG * dt; rolling = true; if (Math.abs(vx) < 40) return 0; }
+        for (const e of foes) {
+            if (e.air) {
+                e.vy += e.g * dt;
+                e.x += e.vx * dt;
+                e.y += e.vy * dt;
+                const ef = aiFloorY(e.x) - e.r;
+                if (e.y >= ef) { e.y = ef; e.vy = 0; e.vx = 0; e.air = false; }
+            }
+            if (Math.hypot(x - e.x, y - e.y) < r + e.r) {
+                let v = e.air ? 150 : 90;
+                if (vy > 0.8 * Math.abs(vx))
+                    v += 30;                   // steep
+                else if (rolling && !e.air && Math.abs(vx) > 300)
+                    v += 40;                   // hard and low against a grounded enemy
+                return v - n * 0.4;
+            }
+        }
+    }
+    return 0;
+}
+
 // The closest we and the free ball get over the next 0.6 s if we hold this steering (dir -1/0/1, up = jump / float). Both move ballistically (cheap and rough): this is what
 // lets the AI see that it is about to fall onto a ball lying on the floor, or that a rolling ball will reach it, and pick the way out.
 function aiPathMin(me, b, dir, up, lo, hi) {
@@ -129,8 +179,10 @@ function aiArrival(me) {
 // ---- tactics ----
 const AI_GRIP_MIN = 1.6, AI_FLOAT_T = 0.8, AI_JUMP_HOLD = 0.6, AI_STAND = 90, AI_STANDS = [90, 130, 70, 160, 110], AI_HOLD_MAX = 1.6;
 const AI_SLICE = 16, AI_PRE = 16;          // jump jobs: physics steps per tick, and the ticks of latency they plan around
-const AI_SLICE_H = 32, AI_PRE_H = 24;      // held-plan jobs: bigger, because they must finish within their latency window (AI_PRE_H ticks) to be about the moment they land
-const AI_JUMP_STEPS = 120, AI_SAFE_STEPS = 36, AI_HELD_STEPS = 96, AI_AFTER_STEPS = 72; // look-ahead lengths (steps): a jump, the safe time after latching, a held plan, the time after a release
+const AI_SLICE_H = 48, AI_PRE_H = 24;      // held-plan jobs: bigger, because they must finish within their latency window (AI_PRE_H ticks) to be about the moment they land
+const AI_JUMP_STEPS = 120, AI_SAFE_STEPS = 36, AI_HELD_STEPS = 96, AI_AFTER_STEPS = 72, AI_LOOP_STEPS = 180, AI_LOOP_MAX = 2.4; // look-ahead lengths (steps): a jump, the safe time after latching, a held plan, the time after a release
+const AI_WAIT_FRAC = 0.5; // where the AI waits when the ball is not its business: 0 = against the net, 0.5 = the midline of its half (the book's Midline Defense), 1 = at its goal. (The old spot was 90 u from the net, about 0.19.)
+const aiMid = me => NETX - aiSide(me) * AI_WAIT_FRAC * NETX;
 const aiSide = me => (me.team === 0 ? 1 : -1);
 const aiNoKeys = () => ({ l: false, r: false, up: false, dn: false, z: false, x: false, sp: false });
 const aiNearest = (me, b) => me.candidates(b).reduce((m, o) => (!m || o.d < m.d ? o : m), null);
@@ -139,7 +191,7 @@ const aiCanGrip = me => me.gCool <= 0 && me.gCharge > AI_GRIP_MIN; // the grappl
 
 // Keys for a tethered AI. hs = { t: seconds since the latch, plan, dashT: when we dashed (or null), n: tick counter }.
 function aiHeldKeys(me, b, hs, k) {
-    const s = aiSide(me), tb = me.tball || b, plan = hs.plan || 'hold', shoot = plan === 'shootF' || plan === 'shootU';
+    const s = aiSide(me), tb = me.tball || b, plan = hs.plan || 'hold', shoot = plan === 'shootF' || plan === 'shootU', loop = plan === 'loopO' || plan === 'loopU';
     hs.t += DT;
     hs.n = (hs.n || 0) + 1;
     k.z = true;
@@ -147,6 +199,13 @@ function aiHeldKeys(me, b, hs, k) {
     k.r = dir > 0;
     k.l = dir < 0;
     k.up = shoot ? hs.t < 0.15 && hs.dashT === null && plan === 'shootF' : hs.t < AI_FLOAT_T; // otherwise float (jump held) just after the latch, so we stay up over the ball while the rope drags it about; then come down (the dash only recharges on the ground)
+    if (loop) { // orbit the ball: keep moving along the circle we are on (osL = over the top, usL = underneath), floating whenever the circle is going up
+        const rx = me.x - tb.x, ry = me.y - tb.y, d = Math.hypot(rx, ry) || 1, sp = plan === 'loopO' ? s : -s;
+        const tx = sp * -ry / d, ty = sp * rx / d; // unit tangent: which way we have to move to keep going round
+        k.r = tx > 0.3;
+        k.l = tx < -0.3;
+        k.up = ty < 0.3;
+    }
     if (shoot && hs.dashT === null && hs.t >= 0.04 && aiCanDash(me)) { // the dash direction is whatever arrows are held when the key goes down
         k.sp = true;
         k.up = plan === 'shootU';
@@ -154,9 +213,9 @@ function aiHeldKeys(me, b, hs, k) {
         k.l = s < 0;
         hs.dashT = hs.t;
     }
-    if (shoot && hs.n % 2 === 0 && (hs.dashT !== null ? hs.t - hs.dashT > 0.14 : hs.t > 0.4) && aiFlight(tb, me.team))
-        k.z = false;                           // it will score: let go
-    else if (hs.t > AI_HOLD_MAX && plan !== 'pull' && plan !== 'push')
+    if ((shoot || loop) && hs.n % 2 === 0 && (hs.dashT !== null ? hs.t - hs.dashT > 0.14 : hs.t > (loop ? 0.35 : 0.4)) && (aiFlight(tb, me.team) || aiBallHit(tb, me) >= AI_HIT_MIN))
+        k.z = false;                           // it will score (or hit an enemy that cannot get out of the way): let go
+    else if (hs.t > (loop ? AI_LOOP_MAX : AI_HOLD_MAX) && plan !== 'pull' && plan !== 'push')
         k.z = false;                           // could not line it up: give it up
     else if (me.gCharge < 0.15)
         k.z = false;                           // the meter is about to tear it away anyway: let go on our own terms
@@ -258,7 +317,7 @@ function* aiJumpJob(me0, frozen, delays, modes, out) { // do we latch onto the b
     }
 }
 function* aiHeldJob(me0, hs0, out) { // the best held plan from here (after the ticks this job takes)
-    const S = aiSimNew(me0), hs = { ...hs0 }, plans = aiCanDash(me0) ? ['shootU', 'shootF', 'pull', 'push', 'hold'] : ['shootF', 'pull', 'push', 'hold'], s = aiSide(me0), x0 = S.b.x;
+    const S = aiSimNew(me0), hs = { ...hs0 }, plans = aiCanDash(me0) ? ['shootU', 'shootF', 'loopO', 'loopU', 'pull', 'push', 'hold'] : ['shootF', 'loopO', 'loopU', 'pull', 'push', 'hold'], s = aiSide(me0), x0 = S.b.x;
     let n = 0;
     for (let i = 0; i < AI_PRE_H; i++) {       // we carry on with the current plan meanwhile
         const k = aiNoKeys();
@@ -273,10 +332,11 @@ function* aiHeldJob(me0, hs0, out) { // the best held plan from here (after the 
     for (const plan of plans) {
         const V = aiSimFork(S), h = { ...hs, plan };
         let minD = 1e9, v = null;
-        for (let i = 0; i < AI_HELD_STEPS && v === null; i++) {
+        const steps = plan === 'loopO' || plan === 'loopU' ? AI_LOOP_STEPS : AI_HELD_STEPS; // a loop needs time to come round
+        for (let i = 0; i < steps && v === null; i++) {
             const k = aiNoKeys();
             if (!V.me.onBall) {                // let go: where does it go, and does it then hit us?
-                v = (aiFlight(V.b, V.me.team) ? 200 - i * 0.05 : -40) - (aiFlight(V.b, 1 - V.me.team) ? 300 : 0);
+                v = Math.max(aiFlight(V.b, V.me.team) ? 200 - i * 0.05 : -40, aiBallHit(V.b, V.me) - 40) - (aiFlight(V.b, 1 - V.me.team) ? 300 : 0);
                 for (let j = 0; j < AI_AFTER_STEPS; j++) {
                     const sc = aiSimStep(V, aiNoKeys());
                     minD = Math.min(minD, aiGap(V));
@@ -313,7 +373,7 @@ function* aiHeldJob(me0, hs0, out) { // the best held plan from here (after the 
             else if (plan === 'push')
                 v += room > 150 ? Math.min(45, (V.b.x - x0) * s * 0.12) : -30; // carry it upfield when it is stuck far back
             else if (plan !== 'hold')
-                v -= 30;                       // never got to shoot (shootF / shootU)
+                v -= 30;                       // never got to shoot (shootF / shootU / loops)
             if (V.b.vx * s < -60 && (V.b.x - (s > 0 ? 0 : W)) * s < 260)
                 v -= 120;                      // heading for our own goal
         }
@@ -387,7 +447,7 @@ function aiFree(i, me, A, k) { // keys for an AI that is not tethered
         if (closing > 90 && Math.abs(dx) < 220)
             tx = me.x;                         // it is rolling at us: hold, it will be grabbed or dodged
     } else
-        tx = NETX - s * 90;                    // otherwise wait near the net
+        tx = aiMid(me);                        // otherwise wait on the midline of our half (Midline Defense), not up against the net (Quell Rank Range)
     const gap = tx - me.x, toward = me.vx * Math.sign(gap);
     if (Math.abs(gap) > 12) {
         const brake = toward > 0 && Math.abs(gap) < toward * 0.5; // too fast to stop in time: back off the throttle
@@ -467,3 +527,5 @@ function aiDrive(i) {
     }
     Object.assign(me.keys, k);
 }
+
+

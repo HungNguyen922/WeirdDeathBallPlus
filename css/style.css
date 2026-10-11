@@ -41,7 +41,6 @@ h3{margin:0 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;c
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .hint{margin:6px 0 0;color:var(--mut);font-size:13px}
 body:not(.touch) .touchonly{display:none}
-body:not(.touch):not(.online) #specialgroup{display:none}
 body.online .team2{display:none !important} /* the Blue 2 / Red 2 AI toggles only mean something offline */
 .team{margin-bottom:14px}
 h3.blue{color:#42a5f5}h3.red{color:#ef5350}

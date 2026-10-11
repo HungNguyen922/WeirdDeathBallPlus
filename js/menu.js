@@ -112,34 +112,51 @@ const gameMenu = (() => {
         teamBtn.disabled = !net.host;
         teamBtn.title = net.host ? 'On: new players fill Blue, Red, Blue 2 and Red 2 automatically, and the match starts once all four seats are taken (restarts the match). Off: new players wait for you to place them.' : 'Only the host (the player who created the room) can change this.';
     }
-    // Special ability picker: big buttons, for touch screens where the keycaps on the wall are tiny, and for online seats that have no keycap (the second player on a team).
-    // It changes the player you control (touch.seat()).
+        // Special ability picker: big buttons for every special. Online it drives your own seat. Offline it gets one row per human-controlled player in the match (Blue, Red), so
+    // free-swap works from the menu without the keycaps on the wall; computer players always use Dash, and 2v2 teammates always use Dash, so they get no row.
     function renderPicker() {
         if (!pickEl || typeof touch === 'undefined' || typeof SPECIALS === 'undefined')
             return;
-        const seat = touch.seat(), p = seat >= 0 ? allPlayers[seat] : null;
         pickEl.textContent = '';
         if (pickFixed) {
             pickEl.textContent = 'Specials are chosen on the pick screens (before the first point and after every ' + PICK_EVERY + 'th point).';
             return;
         }
-        if (!p) {
-            pickEl.textContent = 'You are spectating: there is no player to change.';
+        const addButtons = (parent, p, setSpecial) => {
+            const cur = (net.on && net.pendingSpecial) || p.special;
+            for (const s of SPECIALS) {
+                const b = document.createElement('button');
+                b.className = 'mode' + (s.id === cur ? ' on' : '');
+                b.textContent = s.name.charAt(0) + s.name.slice(1).toLowerCase();
+                b.addEventListener('click', () => {
+                    setSpecial(s.id);
+                    renderPicker();
+                });
+                parent.appendChild(b);
+            }
+        };
+        if (net.on) {
+            const seat = touch.seat(), p = seat >= 0 ? allPlayers[seat] : null;
+            if (!p) {
+                pickEl.textContent = 'You are spectating: there is no player to change.';
+                return;
+            }
+            addButtons(pickEl, p, id => net.setSpecial(id));
             return;
         }
-        const cur = (net.on && net.pendingSpecial) || p.special;
-        for (const s of SPECIALS) {
-            const b = document.createElement('button');
-            b.className = 'mode' + (s.id === cur ? ' on' : '');
-            b.textContent = s.name.charAt(0) + s.name.slice(1).toLowerCase();
-            b.addEventListener('click', () => {
-                if (net.on)
-                    net.setSpecial(s.id);
-                else
-                    p.special = s.id;
-                renderPicker();
-            });
-            pickEl.appendChild(b);
+        const humans = [0, 1].map(i => allPlayers[i]).filter(p => players.includes(p) && !ai[p.id].on);
+        if (!humans.length) {
+            pickEl.textContent = 'Both players are computer-controlled (they always use Dash). Switch one to Human to pick its special.';
+            return;
+        }
+        for (const p of humans) {
+            const row = document.createElement('div'), name = document.createElement('span');
+            row.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;align-items:center;width:100%';
+            name.textContent = p.id === 0 ? 'Blue' : 'Red';
+            name.style.cssText = 'font-weight:700;min-width:44px;color:' + (p.id === 0 ? '#42a5f5' : '#ef5350');
+            row.appendChild(name);
+            addButtons(row, p, id => { p.special = id; });
+            pickEl.appendChild(row);
         }
     }
     // Players tab (online): Blue, Red and the waiting list. The host gets buttons to move people; a team holds two players at most, and the match waits while a team is empty.
@@ -220,6 +237,11 @@ const gameMenu = (() => {
                 renderPicker();
             }
         });
+    for (const id of ['ai0', 'ai1', 'ai2', 'ai3', 'mode2v2']) { // changing who plays changes which players get a row
+        const el = document.getElementById(id);
+        if (el)
+            el.addEventListener('click', () => setTimeout(renderPicker, 0)); // after input.js has applied the change
+    }
     function refresh() { // the roster or the game state changed while the panel is up
         if (!isOpen())
             return;

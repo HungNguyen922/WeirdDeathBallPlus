@@ -93,11 +93,19 @@ const WARP_COOLDOWN = 12, WARP_FX = 0.4;
 // the push you give a ball, a decoy or another player is multiplied (see crashPush in collision.js). Pressing again while awake does nothing.
 const AWAKENED_CRASH = 3, AWAKENED_T = 10, AWAKENED_COOLDOWN = 15;
 
-// Explode: press the special key to blast everything whose centre is within EXPLODE_R (2 player lengths) of you away from you: every other living player (teammates too), the Death Ball
-// and every decoy get EXPLODE_KICK u/s added along the line from you to them. If anyone dies within EXPLODE_WINDOW s of the blast, Explode's cooldown drops to zero at once. Every new round
-// resets all cooldowns, so a refund earned by the death that ENDS the round (always the case in 1v1) would be lost: with EXPLODE_CARRY on, you start the next round with Explode ready.
-// EXPLODE_FX = how long the blast zone is drawn (a crisp circle of exactly EXPLODE_R that is held, then fades).
-const EXPLODE_R = 2 * PL, EXPLODE_KICK = 900, EXPLODE_COOLDOWN = 10, EXPLODE_WINDOW = 5, EXPLODE_CARRY = true, EXPLODE_FX = 0.5;
+// Explode: press the special key to blast everything whose centre is within EXPLODE_R + its own radius of you: every other living player (teammates too), the Death Ball and every
+// decoy. The kick is ADDITIVE (it is added to the body's velocity, nothing is cancelled) and it gets stronger the closer the body is to you:
+//   kick = EXPLODE_KICK_MIN (right at the edge) .. EXPLODE_KICK_MAX (dead centre), shaped by EXPLODE_FALLOFF (1 = linear, >1 = the strength stays low until it is really close).
+// Amplify: a body that is already moving is pushed along its OWN motion, not just straight away from you, so exploding while you swing the ball makes the shot faster.
+//   EXPLODE_AMP_BLEND = how far the push direction follows the body's motion (0 = always radial, 1 = fully along its motion), reached at EXPLODE_AMP_SPEED u/s;
+//   EXPLODE_AMP_GAIN  = extra speed added on top, as a share of the body's current speed (0.5 = a ball doing 800 u/s gets +400 u/s more).
+//   Only the part of its motion that is NOT toward you counts (a body flying into you is pushed out sideways / away, never deeper in).
+// If anyone dies within EXPLODE_WINDOW s of the blast, Explode's cooldown drops to zero at once. Every new round resets all cooldowns, so a refund earned by the death that ENDS the
+// round (always the case in 1v1) would be lost: with EXPLODE_CARRY on, you start the next round with Explode ready.
+// EXPLODE_FX = how long the blast is drawn (crisp zone circle, shock rings, motion lines).
+const EXPLODE_R = 3 * PL, EXPLODE_COOLDOWN = 10, EXPLODE_WINDOW = 5, EXPLODE_CARRY = true, EXPLODE_FX = 0.65;
+const EXPLODE_KICK_MIN = 600, EXPLODE_KICK_MAX = 1800, EXPLODE_FALLOFF = 1.2;
+const EXPLODE_AMP_BLEND = 0.5, EXPLODE_AMP_SPEED = 900, EXPLODE_AMP_GAIN = 0.5;
 
 const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 const START_CD = 1; // share of each ability's full cooldown still running at the start of a round (0 = ready at once, 1 = full cooldown)

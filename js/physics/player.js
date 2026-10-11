@@ -261,24 +261,40 @@ class Player {
                 this.cd.awakened = AWAKENED_COOLDOWN;
         }
     }
-    // Explode key press (instant): every other living player, and the death ball and every decoy, whose centre is within EXPLODE_R is pushed straight away from us. Starts the cooldown and
-    // the EXPLODE_WINDOW in which a death refunds it (checked in update(), rules.js). The AI's planning copies only do their own bookkeeping, they never touch the real game.
+    // Explode key press (instant): every other living player, and the death ball and every decoy, whose edge is within EXPLODE_R of our centre gets an ADDITIVE kick. The kick is stronger
+    // the closer the body is (EXPLODE_KICK_MIN at the edge .. EXPLODE_KICK_MAX in the middle), and it follows the body's own motion where it has some (so it amplifies a swing / a shot) and
+    // goes straight away from us where it has none. Starts the cooldown and the EXPLODE_WINDOW in which a death refunds it (checked in update(), rules.js). The AI's planning copies only
+    // do their own bookkeeping, they never touch the real game.
     explode() {
-        const hits = []; // every body the blast pushes, where it was at that moment (so the drawing can flash exactly those)
+        const hits = []; // every body the blast pushes: where it was, which way it was sent and how hard (0..1), so the drawing can flash and streak exactly those
         this.explodeFx = { t: EXPLODE_FX, x: this.x, y: this.y, hits };
         this.cd.explode = EXPLODE_COOLDOWN;
         this.exploT = EXPLODE_WINDOW;
         this.exploDead = players.filter(q => !q.alive).length;
         if (this.sim)
             return;
-        const blast = q => { // push one body (player, ball or decoy) if its touching the blast radius
-            const dx = q.x - this.x, dy = q.y - this.y, d = Math.hypot(dx, dy);
-            if (d > EXPLODE_R + q.r)
+        const blast = q => { // push one body (player, ball or decoy) if it is touching the blast radius
+            const dx = q.x - this.x, dy = q.y - this.y, d = Math.hypot(dx, dy), reach = EXPLODE_R + q.r;
+            if (d > reach)
                 return;
             const nx = d > 1e-6 ? dx / d : 0, ny = d > 1e-6 ? dy / d : -1; // (exactly on top of us: straight up)
-            hits.push({ x: q.x, y: q.y, r: q.r });
-            q.vx += nx * EXPLODE_KICK;
-            q.vy += ny * EXPLODE_KICK;
+            const power = Math.pow(1 - Math.min(1, d / reach), EXPLODE_FALLOFF); // 1 on top of us, 0 at the edge
+            let kick = EXPLODE_KICK_MIN + (EXPLODE_KICK_MAX - EXPLODE_KICK_MIN) * power;
+            // Amplify: the part of its motion that is not heading into us (a body flying at us keeps only its sideways motion)
+            const into = Math.min(0, q.vx * nx + q.vy * ny), mx = q.vx - into * nx, my = q.vy - into * ny, ms = Math.hypot(mx, my);
+            let ux = nx, uy = ny;
+            if (ms > 1e-6) {
+                const w = Math.min(1, ms / EXPLODE_AMP_SPEED) * EXPLODE_AMP_BLEND; // a body that is barely moving is pushed radially; a fast one along its motion
+                ux = nx * (1 - w) + (mx / ms) * w;
+                uy = ny * (1 - w) + (my / ms) * w;
+                const m = Math.hypot(ux, uy) || 1;
+                ux /= m;
+                uy /= m;
+                kick += ms * EXPLODE_AMP_GAIN; // extra speed on top of what it already has
+            }
+            hits.push({ x: q.x, y: q.y, r: q.r, ux, uy, k: Math.min(1, kick / EXPLODE_KICK_MAX) });
+            q.vx += ux * kick;
+            q.vy += uy * kick;
             if (q.boost !== undefined) { // a ball already flying fast: lift its speed cap for a moment (like a crash shot or a hatchet hit) so the push is not clipped
                 const s = Math.hypot(q.vx, q.vy);
                 if (s > BALL_VMAX)
@@ -293,6 +309,7 @@ class Player {
             if (!d.dead)
                 blast(d);
     }
+
     // A death happened within the window: the cooldown is refunded (and, if EXPLODE_CARRY, kept through the round reset that a kill ending the round is followed by).
     explodeRefund() {
         this.cd.explode = 0;

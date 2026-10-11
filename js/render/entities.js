@@ -6,19 +6,62 @@ function drawTimer(x, y, rad, frac, col) { // circular timer: faint full track p
     cx.strokeStyle = col;
     cx.beginPath(); cx.arc(x, y, rad, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * frac); cx.stroke();
 }
-function drawPegs() { // plinko pegs
-    for (const q of pegs) { // plinko pegs
-        const col = q.team === 0 ? '#42a5f5' : '#ef5350';
-        cx.globalAlpha = q.life < 2 ? 0.45 + 0.4 * Math.sin(q.life * 24) : 1; // flickers while fizzling out
-        if (q.flash > 0) {
-            cx.strokeStyle = col; cx.globalAlpha *= q.flash; cx.lineWidth = 2;
-            cx.beginPath(); cx.arc(q.x, q.y, q.r + (1 - q.flash) * 14, 0, 7); cx.stroke();
-            cx.globalAlpha = q.life < 2 ? 0.45 + 0.4 * Math.sin(q.life * 24) : 1;
-        }
+function drawPegs() { // plinko pegs: a spark burst and a pop-in when deployed, a squash / glow / spray of sparks when hit
+    const fr = v => v - Math.floor(v), hash = i => fr(Math.sin(i * 127.1 + 311.7) * 43758.5453), easeOut = u => 1 - (1 - u) * (1 - u);
+    const DEPLOY_T = 0.45; // seconds the deploy effect lasts
+    for (const q of pegs) {
+        const col = q.team === 0 ? '#42a5f5' : '#ef5350', flicker = q.life < 2 ? 0.45 + 0.4 * Math.sin(q.life * 24) : 1; // flickers while fizzling out
+        const age = PEG_LIFE - q.life, du = clamp01(age / DEPLOY_T), deploying = du < 1;
+        const hit = (q.hits | 0) > 0 && q.nx !== undefined && q.flash > 0, hu = 1 - q.flash; // hu: 0 right at the hit, 1 when it has faded
+        const grow = deploying ? 1 + 2.7 * Math.pow(du - 1, 3) + 1.7 * Math.pow(du - 1, 2) : 1; // pops in from nothing with a little overshoot
+        const squash = hit ? 1 + 0.45 * q.flash * q.flash : 1; // swells when hit, then settles
+        const rr = (q.r - 1) * grow * squash;
+        cx.save();
+        cx.globalAlpha = flicker;
+        if (hit) { cx.shadowColor = col; cx.shadowBlur = 6 + 22 * q.flash; }
         cx.fillStyle = '#e8e8e4'; cx.strokeStyle = col; cx.lineWidth = 3;
-        cx.beginPath(); cx.arc(q.x, q.y, q.r - 1, 0, 7); cx.fill(); cx.stroke();
+        cx.beginPath(); cx.arc(q.x, q.y, Math.max(0.5, rr), 0, 7); cx.fill(); cx.stroke();
+        cx.shadowBlur = 0;
+        if (hit) { // the peg lights up in its team colour and fades back
+            cx.globalAlpha = flicker * q.flash * 0.85; cx.fillStyle = col;
+            cx.beginPath(); cx.arc(q.x, q.y, Math.max(0.5, rr - 1), 0, 7); cx.fill();
+        }
+        cx.globalAlpha = flicker;
         drawTimer(q.x, q.y, q.r + 5, Math.max(0, q.life) / PEG_LIFE, col);
-        cx.globalAlpha = 1;
+        cx.restore();
+
+        cx.save();
+        cx.globalCompositeOperation = 'lighter';
+        cx.lineCap = 'round';
+        if (deploying) { // deploy: a ring, a twinkling cross and a ring of sparks flying out of the spot
+            const e = easeOut(du), a = 1 - du;
+            cx.strokeStyle = col; cx.globalAlpha = 0.9 * a * flicker; cx.lineWidth = 1 + 3 * a;
+            cx.beginPath(); cx.arc(q.x, q.y, q.r + 4 + 24 * e, 0, 7); cx.stroke();
+            const star = (1 - du) * (q.r + 16); // a 4-point twinkle that shrinks away
+            cx.strokeStyle = '#fff'; cx.globalAlpha = 0.95 * a * flicker; cx.lineWidth = 1.5 + 2 * a;
+            cx.beginPath();
+            line(q.x - star, q.y, q.x + star, q.y);
+            line(q.x, q.y - star, q.x, q.y + star);
+            cx.stroke();
+            for (let i = 0; i < 12; i++) {
+                const h = hash(i), h2 = hash(i + 0.5), ang = (i / 12) * Math.PI * 2 + (h - 0.5) * 0.4, ux = Math.cos(ang), uy = Math.sin(ang);
+                const reach = 14 + 26 * h2, head = q.r + reach * e, tail = q.r + reach * easeOut(Math.max(0, du - 0.35));
+                cx.strokeStyle = i % 2 ? col : '#fff'; cx.globalAlpha = 0.95 * a * flicker; cx.lineWidth = 1 + 2 * h2 * a;
+                cx.beginPath(); line(q.x + ux * tail, q.y + uy * tail, q.x + ux * head, q.y + uy * head); cx.stroke();
+            }
+        }
+        if (hit) { // hit: a shock ring and a spray of sparks, mostly toward the side that was hit (where the thing came from)
+            const e = easeOut(hu), a = 1 - hu, base = Math.atan2(q.ny, q.nx), seed = (q.hits || 0) * 7;
+            cx.strokeStyle = '#fff'; cx.globalAlpha = 0.8 * a * flicker; cx.lineWidth = 1 + 3 * a;
+            cx.beginPath(); cx.arc(q.x, q.y, q.r + 3 + 28 * e, 0, 7); cx.stroke();
+            for (let i = 0; i < 9; i++) {
+                const h = hash(i + seed), h2 = hash(i + seed + 0.5), ang = base + (h - 0.5) * 2.4, ux = Math.cos(ang), uy = Math.sin(ang);
+                const reach = 16 + 34 * h2, head = q.r + reach * e, tail = q.r + reach * easeOut(Math.max(0, hu - 0.4));
+                cx.strokeStyle = i % 3 ? '#fff' : col; cx.globalAlpha = 0.95 * a * flicker; cx.lineWidth = 1 + 2.2 * h2 * a;
+                cx.beginPath(); line(q.x + ux * tail, q.y + uy * tail, q.x + ux * head, q.y + uy * head); cx.stroke();
+            }
+        }
+        cx.restore();
     }
 }
 function arrowShape(x, y, ang, len, col, alpha) { // a plain rectangle: its leading end at (x, y), trailing back along ang
@@ -262,11 +305,38 @@ function drawWarps() { // Warp: the marker, the dashed line to it, and the rings
                 cx.globalAlpha = 1;
             }
         }
-        if (fx) { // a ring grows out of the spot you left and out of the one you arrived at, fading as it goes
-            const f = 1 - fx.t / WARP_FX;
+        if (fx) { // departure: the ring collapses where you left. Arrival: reverse ripples shrink in and focus on where you land, then pop
+            const f = 1 - fx.t / WARP_FX, easeOut = u => 1 - (1 - u) * (1 - u), fr = v => v - Math.floor(v), hash = i => fr(Math.sin(i * 127.1 + 311.7) * 43758.5453);
             cx.strokeStyle = col; cx.lineWidth = 3 * (1 - f) + 1; cx.globalAlpha = (1 - f) * 0.9;
-            cx.beginPath(); cx.arc(fx.ax, fx.ay, p.r * (1 - 0.5 * f) , 0, 7); cx.stroke(); // collapses where you left
-            cx.beginPath(); cx.arc(fx.bx, fx.by, p.r * (0.5 + 1.8 * f), 0, 7); cx.stroke(); // bursts out where you arrive
+            cx.beginPath(); cx.arc(fx.ax, fx.ay, p.r * (1 - 0.5 * f), 0, 7); cx.stroke();
+            cx.save();
+            cx.globalCompositeOperation = 'lighter';
+            cx.lineCap = 'round';
+            const R0 = p.r * 5, R1 = p.r * 0.6;
+            for (let i = 0; i < 4; i++) { // staggered ripples, each one smaller than the last as it closes in
+                const u = clamp01((f - i * 0.1) / 0.65);
+                if (u <= 0 || u >= 1)
+                    continue;
+                const rad = R0 + (R1 - R0) * Math.pow(u, 1.6); // slow at first, then rushing inward
+                cx.strokeStyle = i % 2 ? '#fff' : col; cx.globalAlpha = 0.25 + 0.7 * u; cx.lineWidth = 1 + 4 * u; // brighter and thicker as it focuses
+                cx.beginPath(); cx.arc(fx.bx, fx.by, rad, 0, 7); cx.stroke();
+            }
+            for (let i = 0; i < 12; i++) { // suction lines streaming into the spot
+                const h = hash(i), ang = (i / 12) * Math.PI * 2 + (h - 0.5) * 0.3, u = clamp01((f - 0.05 * h) / 0.7);
+                if (u <= 0 || u >= 1)
+                    continue;
+                const head = R0 * 1.1 * (1 - easeOut(u)) + R1, tail = head + (14 + 22 * h) * (1 - u), ux = Math.cos(ang), uy = Math.sin(ang);
+                cx.strokeStyle = i % 2 ? col : '#fff'; cx.globalAlpha = 0.9 * (1 - u * 0.5); cx.lineWidth = 1 + 2 * h;
+                cx.beginPath(); line(fx.bx + ux * tail, fx.by + uy * tail, fx.bx + ux * head, fx.by + uy * head); cx.stroke();
+            }
+            const pop = clamp01((f - 0.65) / 0.35); // the focus: a flash and a small ring when the ripples land
+            if (pop > 0) {
+                cx.fillStyle = '#fff'; cx.globalAlpha = 0.8 * (1 - pop);
+                cx.beginPath(); cx.arc(fx.bx, fx.by, p.r * (0.4 + 1.2 * Math.sin(Math.PI * pop)), 0, 7); cx.fill();
+                cx.strokeStyle = col; cx.globalAlpha = 0.9 * (1 - pop); cx.lineWidth = 3 * (1 - pop) + 1;
+                cx.beginPath(); cx.arc(fx.bx, fx.by, p.r * (1 + 1.2 * easeOut(pop)), 0, 7); cx.stroke();
+            }
+            cx.restore();
             cx.globalAlpha = 1;
         }
     }
@@ -346,24 +416,35 @@ function drawRopes() { // hook in flight, then the tether itself (barbed while t
         }
     }
 }
-function drawDashStreaks() { // dash streaks
-    for (const p of players) { // dash streaks
-        if (p.alive && p.dashT > 0) {
-            const f = p.dashT / DASH_FX, ux = p.dashDir[0], uy = p.dashDir[1], nx = -uy, ny = ux;
-            cx.save();
-            cx.globalCompositeOperation = 'lighter';
-            cx.lineCap = 'round';
-            cx.strokeStyle = p.color; cx.shadowColor = p.color; cx.shadowBlur = 12;
-            for (const o of [-0.7, 0, 0.7]) {
-                const len = (22 + 70 * f) * (o ? 0.8 : 1);
-                cx.globalAlpha = 0.8 * f * (o ? 0.7 : 1);
-                cx.lineWidth = o ? 2 : 6;
-                cx.beginPath();
-                line(p.x + nx * o * p.r, p.y + ny * o * p.r, p.x + nx * o * p.r - ux * len, p.y + ny * o * p.r - uy * len);
-                cx.stroke();
-            }
-            cx.restore();
+function drawDashStreaks() { // dash: after-images, a swarm of blur lines and a shock arc behind the player
+    const fr = v => v - Math.floor(v), hash = i => fr(Math.sin(i * 127.1 + 311.7) * 43758.5453);
+    const LANES = [-1.15, -0.92, -0.69, -0.46, -0.23, 0, 0.23, 0.46, 0.69, 0.92, 1.15, -2.3, -1.8, 1.8, 2.3]; // across the body (first 11), then loose streaks outside it
+    for (const p of players) {
+        if (!p.alive || !(p.dashT > 0))
+            continue;
+        const f = p.dashT / DASH_FX, g = 1 - f, ux = p.dashDir[0], uy = p.dashDir[1], nx = -uy, ny = ux;
+        cx.save();
+        cx.fillStyle = p.color; // after-images: faded copies of the player strung out behind
+        for (let k = 1; k <= 5; k++) {
+            const d = k * (8 + 14 * g);
+            cx.globalAlpha = 0.3 * f * (1 - k / 6);
+            cx.beginPath(); cx.arc(p.x - ux * d, p.y - uy * d, p.r * (1 - 0.06 * k), 0, 7); cx.fill();
         }
+        cx.globalCompositeOperation = 'lighter';
+        cx.lineCap = 'round';
+        cx.strokeStyle = p.color; cx.shadowColor = p.color; cx.shadowBlur = 12;
+        const back = Math.atan2(-uy, -ux); // a shock arc behind the player that grows and fades at the start of the dash
+        cx.globalAlpha = 0.55 * f * f; cx.lineWidth = 2 + 3 * f;
+        cx.beginPath(); cx.arc(p.x, p.y, p.r + 4 + 30 * g, back - 1.1, back + 1.1); cx.stroke();
+        LANES.forEach((o, i) => {
+            const h = hash(i), h2 = hash(i + 0.5), edge = Math.abs(o), wide = edge > 1.2; // wide = the loose streaks outside the body
+            const len = (24 + 120 * f) * (0.45 + 0.9 * h) * (wide ? 0.6 : 1 - 0.3 * edge);
+            const sx = p.x + nx * o * p.r + ux * p.r * 0.25 * (h2 - 0.5), sy = p.y + ny * o * p.r + uy * p.r * 0.25 * (h2 - 0.5);
+            cx.globalAlpha = (wide ? 0.4 : 0.35 + 0.5 * (1 - edge)) * f;
+            cx.lineWidth = wide ? 1.2 : 1.4 + 5 * Math.pow(1 - edge / 1.15, 2);
+            cx.beginPath(); line(sx, sy, sx - ux * len, sy - uy * len); cx.stroke();
+        });
+        cx.restore();
     }
 }
 function drawPlayerTrails() { // speed lines behind living players (same effect as the death ball's)

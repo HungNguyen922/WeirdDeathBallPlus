@@ -123,6 +123,7 @@ function pegBounce(c, q) {
     c.vx += (out - vn) * nx;
     c.vy += (out - vn) * ny;
     q.flash = 1;
+    q.nx = nx; q.ny = ny; q.hits = (q.hits | 0) + 1; // for the renderer: which way the hit came from (peg -> thing that hit it), and a counter so each hit's sparks look different
     if (c.boost !== undefined)
         c.boost = 1;
     return true;

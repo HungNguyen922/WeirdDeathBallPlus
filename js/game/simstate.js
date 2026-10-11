@@ -56,7 +56,7 @@ function saveState() {
         saw: { t: saw.t, v: saw.v },
         padFlash: [...padFlash],
         pick: cloneData(pick), pickFixed,
-        sidesSwapped, swapAt,
+        sidesSwapped, swapAt, swapOn,
         inMatch: players.map(p => p.id), // who is in the current match, in order
         players: allPlayers.map(player),
         ball: body(ball),
@@ -79,6 +79,7 @@ function loadState(s) {
     pickFixed = !!s.pickFixed;
     sidesSwapped = !!s.sidesSwapped;
     swapAt = s.swapAt === undefined ? -1 : s.swapAt;
+    swapOn = s.swapOn === undefined ? true : !!s.swapOn;
     if (s.pick)
         for (const k in s.pick)
             pick[k] = cloneData(s.pick[k]);

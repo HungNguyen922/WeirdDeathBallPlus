@@ -169,6 +169,10 @@ const net = {
         if (this.ws && this.ws.readyState === 1)
             this.ws.send(JSON.stringify({ t: 'fixed', v: !!v }));
     },
+    setSwap(v) { // host only (the server checks): turn the side swap on or off
+        if (this.ws && this.ws.readyState === 1)
+            this.ws.send(JSON.stringify({ t: 'swap', v: !!v }));
+    },
     setLobby2v2(v) { // host only (the server checks): make the room a 2v2 lobby, or turn that off
         if (this.ws && this.ws.readyState === 1)
             this.ws.send(JSON.stringify({ t: 'lobby2v2', v: !!v }));

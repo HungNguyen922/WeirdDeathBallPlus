@@ -5,6 +5,7 @@ const SWAP_EVERY = 5; // points between side swaps (0 = never)
 let swapAt = -1; // the score total the last swap happened at, so one total can only swap once (a double KO must not swap twice)
 let score = [0, 0], pause = 0, over = false, msg = '';
 let teamSize = 1; // 1 = 1v1, 2 = 2v2
+let swapOn = true; // the menu toggle: sides trade places every SWAP_EVERY points (set to false here to make it off by default)
 // Hooks the renderer fills in (see main.js). They default to no-ops so the simulation runs headless.
 const events = {
     onPoint(team, why) {}, // a point was awarded
@@ -51,7 +52,7 @@ function maybeOpenPick() { // call right after a round has been set up
 }
 function maybeSwapSides() { // call right before a round is set up
     const total = score[0] + score[1];
-    if (SWAP_EVERY > 0 && total > 0 && total % SWAP_EVERY === 0 && swapAt !== total) {
+    if (swapOn && SWAP_EVERY > 0 && total > 0 && total % SWAP_EVERY === 0 && swapAt !== total) {
         sidesSwapped = !sidesSwapped;
         swapAt = total;
     }
@@ -104,7 +105,10 @@ function setPickMode(on) { // the menu toggle: restarts the match, so the first 
     pickFixed = !!on;
     resetMatch();
 }
-
+function setSwapMode(on) { // the menu toggle: restarts the match so the sides start the right way round
+    swapOn = !!on;
+    resetMatch();
+}
 function newRound() { 
     pegs.length = 0; 
     decoys.length = 0; 

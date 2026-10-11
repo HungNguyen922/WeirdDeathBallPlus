@@ -12,6 +12,7 @@
 //                      {t:'in', n, k}                      my keys changed. n = my input counter, k = bit mask: l1 r2 up4 dn8 z16 x32 sp64   (z = grapple, x = weight, sp = special)
 //                      {t:'sp', s}                         equip special ability s (ignored while pick screens are on)
 //                      {t:'fixed', v}                      host only: specials only on pick screens (true) or free swapping (false); restarts the match
+//                      {t:'swap', v}                       host only: switch sides every 5 points (true) or never (false); restarts the match
 //                      {t:'lobby2v2', v}                   host only: 2v2 lobby on (newcomers fill Blue, Red, Blue 2, Red 2 and the match waits for all four seats) or off
 //                      {t:'assign', c, to}                 host only: move member c to team 0 (Blue), 1 (Red) or -1 (waiting); restarts the match if seats change
 //                      {t:'ping', c}                       latency probe
@@ -57,6 +58,7 @@ class Room {
         this.nextOrder = 1;
         this.host = null; // the connection allowed to change room settings and move players
         this.fixed = false; // specials only on pick screens
+        this.swapSides = true; // the host's "switch sides every 5 points" option
         this.lobby2v2 = false; // 2v2 lobby: newcomers fill all four seats automatically and the match waits until every seat is taken
         this.tick = 0;
         this.running = false;
@@ -164,6 +166,7 @@ class Room {
             sim.run(`allPlayers[${i}].special = '${c.special}'`); // before the restart, so a pick screen opens with the right choice highlighted
         });
         sim.run(`pickFixed = ${this.fixed}`);
+        sim.run(`swapOn = ${this.swapSides}`);
         sim.run(`setRoster([${ids.join(',')}])`); // exactly these players; also restarts the match (and opens the first pick screen when they are on)
         sim.ctx.__ev.length = 0;
         this.tick = 0;
@@ -182,6 +185,12 @@ class Room {
     setFixed(v) { // the "pick screens" option: restarts the match so everyone starts from the first pick screen
         this.fixed = !!v;
         this.sim.run(`pickFixed = ${this.fixed}`);
+        if (this.running)
+            this.start();
+    }
+    setSwap(v) { // the "switch sides" option: restarts the match so everyone starts from the normal sides
+        this.swapSides = !!v;
+        this.sim.run(`swapOn = ${this.swapSides}`);
         if (this.running)
             this.start();
     }
@@ -307,6 +316,8 @@ function startServer(port = 8080, host = '0.0.0.0') {
                 room.setSpecial(conn, m.s);
             else if (m.t === 'fixed' && room && room.host === conn)
                 room.setFixed(m.v);
+            else if (m.t === 'swap' && room && room.host === conn)
+                room.setSwap(m.v);
             else if (m.t === 'lobby2v2' && room && room.host === conn)
                 room.setLobby2v2(m.v);
             else if (m.t === 'assign' && room && room.host === conn)

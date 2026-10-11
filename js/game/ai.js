@@ -48,8 +48,8 @@ function aiFloorY(x) { // the arena floor under x (the hills at the net and the 
     return H - RISE * (Math.max(0, 1 - Math.abs(x - NETX) / RUN) + Math.max(0, 1 - (W - x) / RUN) + Math.max(0, 1 - x / RUN));
 }
 function aiFlight(b, team) {
-    const m = team === 0 ? 1 : -1, dt = 1 / 60, r = BALL_R, roof = GOAL_Y0 + LEDGE_T + r;
-    let x = team === 0 ? b.x : W - b.x, y = b.y, vx = b.vx * m, vy = b.vy;
+    const m = sideSwap(team) === 0 ? 1 : -1, dt = 1 / 60, r = BALL_R, roof = GOAL_Y0 + LEDGE_T + r;
+    let x = sideSwap(team) === 0 ? b.x : W - b.x, y = b.y, vx = b.vx * m, vy = b.vy;
     for (let n = 0; n < AI_FLIGHT_STEPS; n++) {
         vy += BALL_G * dt;
         vx *= 1 - 0.05 * dt;

@@ -101,6 +101,31 @@ const gameMenu = (() => {
         pickBtn.disabled = locked;
         pickBtn.title = locked ? 'Only the host (the player who created the room) can change this.' : pickTitle;
     }
+    // "Switch sides" toggle: teams trade sides every SWAP_EVERY points. Offline it is just a variable; online the server owns it, only the host may change it, and the label follows
+    // the game state (it catches up a moment after the click).
+    const swapBtn = document.getElementById('swapmode'), swapTitle = swapBtn ? swapBtn.title : '';
+    function labelSwap() {
+        if (!swapBtn || typeof swapOn === 'undefined')
+            return;
+        swapBtn.textContent = 'Switch sides: ' + (swapOn ? 'On' : 'Off');
+        swapBtn.classList.toggle('on', swapOn);
+        const locked = net.on && !net.host; // online, only the host can change this
+        swapBtn.disabled = locked;
+        swapBtn.title = locked ? 'Only the host (the player who created the room) can change this.' : swapTitle;
+    }
+    if (swapBtn)
+        swapBtn.addEventListener('click', () => {
+            if (net.on && !net.host)
+                return;
+            const want = !swapOn;
+            if (net.on) {
+                net.setSwap(want);
+                setTimeout(labelSwap, 300);
+            } else {
+                setSwapMode(want); // restarts the match
+                labelSwap();
+            }
+        });
     // The 2v2 button: offline it toggles 2v2 against the AI (input.js keeps its label); online it is the room's 2v2 lobby switch, host only. The server restarts the match, and the
     // label follows the roster message, so it catches up a moment after the click.
     const teamBtn = document.getElementById('mode2v2');
@@ -234,6 +259,7 @@ const gameMenu = (() => {
             } else {
                 setPickMode(want); // restarts the match
                 labelPick();
+                labelSwap();
                 renderPicker();
             }
         });
@@ -246,6 +272,7 @@ const gameMenu = (() => {
         if (!isOpen())
             return;
         labelPick();
+        labelSwap();
         labelTeams();
         renderPicker();
         renderRoster();
@@ -257,6 +284,7 @@ const gameMenu = (() => {
             showTab(tab);
         document.body.classList.toggle('online', !!net.on); // shows the special picker online even without a touch screen
         labelPick();
+        labelSwap();
         labelTeams();
         renderPicker();
         renderRoster();
@@ -282,6 +310,7 @@ const gameMenu = (() => {
             open();
     }, true);
     labelPick();
+    labelSwap();
         // The Menu button's real, clickable element: an invisible <button> placed exactly over the pill that special-menu.js draws on the floor. A real button gets mouse, touch
     // and keyboard handling for free, and it does not depend on the canvas hit-test. It is repositioned whenever the canvas changes size.
     const btn = document.getElementById('menubtn');

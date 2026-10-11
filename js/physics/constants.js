@@ -167,7 +167,7 @@ const KICK_STEER = 1;   // left / right held: extra sideways push toward the hel
 const PIVOT_ZONE = 3 * PL;            // how close to the pivot (u) you must land for the slam to turn into sideways speed. Bigger = it works from further away
 const PIVOT_MIN_HIT = 30;             // the slowest impact (u/s into the floor) that counts as a slam. Raise = gentle landings never trigger it
 const PIVOT_TRANSFER = 0.85;          // share of the absorbed speed turned into sideways speed (1 = all of it, 0 = a normal landing)
-
+const PIVOT_TURN_KEEP = 1;            // share of your existing sideways speed kept when you change direction across the pivot (1 = all, 0 = the old behavior)
 // =====================================================================================================================================================================
 // 8  DEATH BALL & TETHER
 // =====================================================================================================================================================================

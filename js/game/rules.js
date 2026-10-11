@@ -251,14 +251,14 @@ function update() {
     if (ball.pull)
         ball.pull.t = Math.max(0, ball.pull.t - DT);
     if (scorer !== null)
-        return point(scorer, 'scores!');
+        return point(sideSwap(scorer), 'scores!');
     for (const d of [...decoys]) { // decoys: the same physics and goals as the death ball, but no kill
         const sc = d.step();
         events.onBodyStep(d);
         if (d.dead)
             removeDecoy(d);
         else if (sc !== null)
-            return point(sc, 'scores!');
+           return point(sideSwap(scorer), 'scores!');
     }
     for (let i = 0; i < decoys.length; i++) { // decoys are solid: they bump into players, the death ball and each other (the death ball itself still just kills)
         const d = decoys[i];

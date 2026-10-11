@@ -88,15 +88,24 @@ function collide(a, b, ma, mb, e) {
 // hit) so big shots are not clipped. Returns the impact speed (0 if they were not closing).
 function crashShot(p, b) {
     const vx0 = b.vx, vy0 = b.vy, hit = collide(p, b, PLAYER_M, BALL_M, CRASH_E);
-    const k = p.crashK; // Awakened: the ball gains more speed from the same hit
-    if (k !== 1) {
-        b.vx = vx0 + (b.vx - vx0) * k;
-        b.vy = vy0 + (b.vy - vy0) * k;
-    }
+    crashPush(p.crashK, b, vx0, vy0);
     const s = Math.hypot(b.vx, b.vy);
     if (s > BALL_VMAX)
         b.boost = Math.max(b.boost, Math.min(1, (s - BALL_VMAX) / (PAD_MAX - BALL_VMAX)));
     return hit;
+}
+// Awakened crash: scale the speed body b just gained from a collision (it was moving at vx0, vy0 before) by the crasher's k, so the push it gets from them is k times as hard.
+// k is 1 for everyone who is not awake (nothing changes). Balls and decoys also get the temporary speed-cap boost, so a big hit is not clipped.
+function crashPush(k, b, vx0, vy0) {
+    if (k === 1)
+        return;
+    b.vx = vx0 + (b.vx - vx0) * k;
+    b.vy = vy0 + (b.vy - vy0) * k;
+    if (b.boost !== undefined) {
+        const s = Math.hypot(b.vx, b.vy);
+        if (s > BALL_VMAX)
+            b.boost = Math.max(b.boost, Math.min(1, (s - BALL_VMAX) / (PAD_MAX - BALL_VMAX)));
+    }
 }
 // Plinko peg: same bounce as the hatchet. Every contact launches the thing off the peg along the contact normal with PAD_E x its
 // speed (at least PAD_KICK, at most PAD_MAX); the ball also gets the hatchet's temporary speed-cap boost. There is no soft-hit case.

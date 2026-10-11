@@ -39,15 +39,16 @@ const P = (sim, expr) => sim.run('players[0].' + expr);
     check(Math.hypot(x - w.x, y - w.y) < 8, `press 2 teleports to the marker (now ${x.toFixed(1)}, ${y.toFixed(1)}; marker ${w.x.toFixed(1)}, ${w.y.toFixed(1)})`);
     check(Math.abs(vx - before.vx) < 5 && Math.abs(vy - before.vy) < 10, `velocity kept (${before.vx.toFixed(0)},${before.vy.toFixed(0)}) -> (${vx.toFixed(0)},${vy.toFixed(0)})`);
     check(P(sim, 'warp') === null, 'marker is consumed');
-    check(Math.abs(P(sim, 'cd.warp') - 15) < 0.05, `cooldown is 15 s (${P(sim, 'cd.warp').toFixed(2)})`);
+    const WCD = sim.run('WARP_COOLDOWN'); // (read, not hard-coded, so tuning it does not break the test)
+    check(Math.abs(P(sim, 'cd.warp') - WCD) < 0.05, `cooldown is ${WCD} s (${P(sim, 'cd.warp').toFixed(2)})`);
     // cooldown blocks a re-teleport, but a new marker can still be placed
     press(sim);
     check(!!P(sim, 'warp'), 'a new marker can be placed while the cooldown runs');
     sim.run('players[0].x = 400; players[0].y = 100');
     press(sim);
     check(!!P(sim, 'warp') && Math.abs(P(sim, 'x') - 400) < 20, 'a second teleport during the cooldown does nothing; the marker waits');
-    for (let i = 0; i < 15 * 120; i++) sim.tick();
-    check(P(sim, 'cd.warp') === 0, 'cooldown runs out after 15 s');
+    for (let i = 0; i < (WCD + 0.1) * 120; i++) sim.tick();
+    check(P(sim, 'cd.warp') === 0, `cooldown runs out after ${WCD} s`);
 }
 
 // 3. the grapple survives the teleport (surface rope and ball tether)
@@ -105,7 +106,7 @@ const P = (sim, expr) => sim.run('players[0].' + expr);
     press(sim);
     sim.run('players[0].reset()');
     check(P(sim, 'warp') === null, 'a new round clears the marker');
-    check(Math.abs(P(sim, 'cd.warp') - 15) < 0.01, 'a new round starts with the full cooldown (START_CD), like every other special');
+    check(Math.abs(P(sim, 'cd.warp') - sim.run('WARP_COOLDOWN')) < 0.01, 'a new round starts with the full cooldown (START_CD), like every other special');
 }
 
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nall good');

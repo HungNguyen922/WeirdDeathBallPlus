@@ -88,12 +88,18 @@ const BARBWIRE_MAX_T = 4, BARBWIRE_CD_RATIO = 2, BARBWIRE_HALF_W = 2, BARBWIRE_H
 // it. Press again to teleport to the marker: position only, so velocity (all your momentum) is kept. Your grapple stays attached (the rope's normal leash rules apply from the new spot). The cooldown (WARP_COOLDOWN s) starts at the teleport; a second press while it runs does nothing, and the marker waits. WARP_FX = how long the arrival / departure rings last.
 const WARP_COOLDOWN = 12, WARP_FX = 0.4;
 
-// Awakened: press the special key to power up for AWAKENED_T s; when it wears off the cooldown (AWAKENED_COOLDOWN s) starts. While awake the Player getters (grapMax, range,
-// grapLock, kickV, crashK) return boosted numbers: grapple meter (seconds of use), grapple reach, the weighted kick, the ball's gain from a crash shot, and the overcharge lockout
-// (0.5 = half as long). The grapple meter keeps its fill share across the switch (4 of 4 s becomes 6 of 6 s, and back). Pressing again while awake does nothing.
-const AWAKENED = { use: 2, range: 1, kick: 1, crash: 5, lock: 0 }, AWAKENED_T = 10, AWAKENED_COOLDOWN = 15;
+// Awakened: press the special key to power up for AWAKENED_T s; when it wears off the cooldown (AWAKENED_COOLDOWN s) starts. While awake: the grapple meter does not drain, you cannot
+// be overcharged (a lockout already running is cleared as you awaken), the Death Ball cannot kill you (it bounces you off instead) and your crashes hit AWAKENED_CRASH times as hard:
+// the push you give a ball, a decoy or another player is multiplied (see crashPush in collision.js). Pressing again while awake does nothing.
+const AWAKENED_CRASH = 3, AWAKENED_T = 10, AWAKENED_COOLDOWN = 15;
 
-const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
+// Explode: press the special key to blast everything whose centre is within EXPLODE_R (2 player lengths) of you away from you: every other living player (teammates too), the Death Ball
+// and every decoy get EXPLODE_KICK u/s added along the line from you to them. If anyone dies within EXPLODE_WINDOW s of the blast, Explode's cooldown drops to zero at once. Every new round
+// resets all cooldowns, so a refund earned by the death that ENDS the round (always the case in 1v1) would be lost: with EXPLODE_CARRY on, you start the next round with Explode ready.
+// EXPLODE_FX = how long the blast zone is drawn (a crisp circle of exactly EXPLODE_R that is held, then fades).
+const EXPLODE_R = 2 * PL, EXPLODE_KICK = 900, EXPLODE_COOLDOWN = 10, EXPLODE_WINDOW = 5, EXPLODE_CARRY = true, EXPLODE_FX = 0.5;
+
+const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 const START_CD = 1; // share of each ability's full cooldown still running at the start of a round (0 = ready at once, 1 = full cooldown)
 
 // Crash shot: a player who touches the death ball dies, but first collides with it like two pool balls: an elastic collision along the line between their centers,

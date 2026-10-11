@@ -1,4 +1,4 @@
-// PHYSICS - Player: movement, grapple rope, and special abilities (dash / plinko / marionette / decoy / arrow / bat / barbwire / warp / awakened).
+// PHYSICS - Player: movement, grapple rope, and special abilities (dash / plinko / marionette / decoy / arrow / bat / barbwire / warp / awakened / explode).
 // step(ball) advances one fixed timestep. Reads this.keys; never draws.
 const noKeys = () => ({ l: false, r: false, up: false, z: false, x: false, sp: false, dn: false }); // sp = special ability, dn = down, z = grapple, x = weight
 // Bat special. Angle of the bat at swing progress f (0..1). The swing is a semicircle (BAT_ARC) centred on the aim c.ang: it starts BAT_ARC/2 to one side of the aim (pulled back a
@@ -95,6 +95,10 @@ class Player {
         this.special = 'dash'; // chosen special ability (see SPECIALS)
         this.warp = null; // Warp: the placed marker { x, y }, or null (replaced, never edited in place, so the AI's shallow copies are safe)
         this.awakeT = 0; // Awakened: seconds of power-up left (0 = not awake)
+        this.exploT = 0; // Explode: seconds left in which a death refunds the cooldown (0 = no blast to reward)
+        this.exploDead = 0; // Explode: how many players were already dead when the blast went off
+        this.exploCarry = false; // Explode: a refund was earned, so the next round starts with it ready (see reset)
+        this.explodeFx = null; // Explode: the last blast { t, x, y, hits: [{ x, y, r }] } (the zone, and a flash on each body it hit); t counts down from EXPLODE_FX
         this.warpFx = null; // Warp: the last teleport { t, ax, ay, bx, by } (a short visual: rings at both ends); t counts down from WARP_FX
         this.arrowAng = -Math.PI / 2; // last arrow aim, kept across rounds (so not in reset())
         this.reset();
@@ -106,8 +110,8 @@ class Player {
         this.alive = true;
         this.rope = null;
         this.pending = null;
-        this.awakeT = 0; // Awakened never survives the round (cleared before the meter below, so it starts at the normal size)
-        this.gCharge = this.grapMax; // grapple meter: seconds of grip left
+        this.awakeT = 0; // Awakened never survives the round
+        this.gCharge = GRAPPLE_MAX; // grapple meter: seconds of grip left
         this.gCool = 0;             // > 0: the meter was spent; no grappling at all until this runs out (then the meter restarts from 0 and refills passively)
         this.onBall = false;
         this.ground = false;
@@ -117,11 +121,16 @@ class Player {
         this.liftX = this.liftY = 0; this.liftT = 1e9; // the kick still being delivered (see LIFT_RAMP)
         this.dashReady = true; // one dash per trip off the floor
         this.tball = null;
-        this.cd = { dash: 0, plinko: 0, marionette: 0, decoy: 0, arrow: 0, bat: 0, barbwire: 0, warp: 0, awakened: 0 }; // per-ability cooldown remaining (s)
+        this.cd = { dash: 0, plinko: 0, marionette: 0, decoy: 0, arrow: 0, bat: 0, barbwire: 0, warp: 0, awakened: 0, explode: 0 }; // per-ability cooldown remaining (s)
         this.warp = null; // a marker never survives the round
         this.warpFx = null;
         for (const id in ABILITY)
             this.cd[id] = ABILITY[id].cd * START_CD;
+        if (this.exploCarry)
+            this.cd.explode = 0; // earned by a kill that ended the last round: start this one with Explode ready
+        this.exploCarry = false;
+        this.exploT = 0;
+        this.explodeFx = null;
         this.cast = null; // ability being cast: { type, t, t0, hx, hy, x, y }
         this.dashT = 0;
         this.dashDir = [0, 0];
@@ -130,17 +139,14 @@ class Player {
         this.gBurst = 0;
     }
     get grounded() { return this.ground; }
-    // Awakened (active for AWAKENED_T s): per-player versions of the grapple / kick / crash numbers. Everyone else gets the plain constants.
-    get grapMax() { return GRAPPLE_MAX * (this.awakeT > 0 ? AWAKENED.use : 1); } // seconds of grapple use
-    get range() { return RANGE * (this.awakeT > 0 ? AWAKENED.range : 1); } // grapple reach
-    get grapLock() { return GRAPPLE_COOLDOWN * (this.awakeT > 0 ? AWAKENED.lock : 1); } // overcharge lockout (s)
-    get kickV() { return this.awakeT > 0 ? AWAKENED.kick : 1; } // weighted kick strength
-    get crashK() { return this.awakeT > 0 ? AWAKENED.crash : 1; } // share of a crash shot's push on the ball
+    get crashK() { return this.awakeT > 0 ? AWAKENED_CRASH : 1; } // Awakened: multiplier on the push your crashes give to balls, decoys and players
     // Overcharge: the meter is emptied, the grapple is locked out for GRAPPLE_COOLDOWN and the grip is torn away (purple ripple). Happens when the meter runs out, or when a
     // player with their grapple active (rope out, or hook in flight) touches an enemy (see update() in rules.js).
     overcharge() {
+        if (this.awakeT > 0)
+            return; // Awakened: never overcharged, whatever the cause
         this.gCharge = 0;
-        this.gCool = this.grapLock;
+        this.gCool = GRAPPLE_COOLDOWN;
         this.gBurst = GRAPPLE_BURST_T;
         this.kickReq = false;
         this.rope = null;
@@ -172,8 +178,7 @@ class Player {
             const hd = Math.hypot(hp.x - this.x, hp.y - this.y);
             c.push({ p: hp, d: hd, len: Math.max(hd, 41), b: true, ground: false, ball: b, decoy: b !== ball });
         }
-        const reach = this.range;
-        return c.filter(o => o.d <= reach);
+        return c.filter(o => o.d <= RANGE);
     }
     inReach(ball) { return this.candidates(ball).length > 0; }
     // Tether to the nearest thing in reach (no priorities). Rope length = distance at press.
@@ -241,17 +246,59 @@ class Player {
         this.vx += ux * 60;
         this.vy += uy * 60;
     }
-    // Awakened on / off. The grapple meter keeps its share (a full meter stays full). Wearing off starts the cooldown; being swapped away from (cooling = false) does not.
+    // Awakened on / off. Powering up lifts a grapple lockout that is running (the meter restarts from 0, as when a lockout ends). Wearing off starts the cooldown;
+    // being swapped away from (cooling = false) does not.
     setAwake(on, cooling = true) {
         if (on) {
-            this.gCharge *= AWAKENED.use;
             this.awakeT = AWAKENED_T;
-        } else { // (only called while awake: see step)
-            this.gCharge /= AWAKENED.use;
+            if (this.gCool > 0) {
+                this.gCool = 0;
+                this.gCharge = 0;
+            }
+        } else {
             this.awakeT = 0;
             if (cooling)
                 this.cd.awakened = AWAKENED_COOLDOWN;
         }
+    }
+    // Explode key press (instant): every other living player, and the death ball and every decoy, whose centre is within EXPLODE_R is pushed straight away from us. Starts the cooldown and
+    // the EXPLODE_WINDOW in which a death refunds it (checked in update(), rules.js). The AI's planning copies only do their own bookkeeping, they never touch the real game.
+    explode() {
+        const hits = []; // every body the blast pushes, where it was at that moment (so the drawing can flash exactly those)
+        this.explodeFx = { t: EXPLODE_FX, x: this.x, y: this.y, hits };
+        this.cd.explode = EXPLODE_COOLDOWN;
+        this.exploT = EXPLODE_WINDOW;
+        this.exploDead = players.filter(q => !q.alive).length;
+        if (this.sim)
+            return;
+        const blast = q => { // push one body (player, ball or decoy) if its touching the blast radius
+            const dx = q.x - this.x, dy = q.y - this.y, d = Math.hypot(dx, dy);
+            if (d > EXPLODE_R + q.r)
+                return;
+            const nx = d > 1e-6 ? dx / d : 0, ny = d > 1e-6 ? dy / d : -1; // (exactly on top of us: straight up)
+            hits.push({ x: q.x, y: q.y, r: q.r });
+            q.vx += nx * EXPLODE_KICK;
+            q.vy += ny * EXPLODE_KICK;
+            if (q.boost !== undefined) { // a ball already flying fast: lift its speed cap for a moment (like a crash shot or a hatchet hit) so the push is not clipped
+                const s = Math.hypot(q.vx, q.vy);
+                if (s > BALL_VMAX)
+                    q.boost = Math.max(q.boost, Math.min(1, (s - BALL_VMAX) / (PAD_MAX - BALL_VMAX)));
+            }
+        };
+        for (const q of players)
+            if (q !== this && q.alive)
+                blast(q);
+        blast(ball);
+        for (const d of decoys)
+            if (!d.dead)
+                blast(d);
+    }
+    // A death happened within the window: the cooldown is refunded (and, if EXPLODE_CARRY, kept through the round reset that a kill ending the round is followed by).
+    explodeRefund() {
+        this.cd.explode = 0;
+        this.exploT = 0;
+        if (EXPLODE_CARRY)
+            this.exploCarry = true;
     }
     // Warp key press. No marker yet: drop one here. A marker and the cooldown is over: jump to it. Position only: vx / vy are untouched, so all momentum carries over.
     // The grapple is kept: the rope stays on its pivot (or ball) and the normal tether rules take over from the new spot. netSide is refreshed so the net guard in step() does not drag us back across the net.
@@ -305,6 +352,10 @@ class Player {
         }
         if (this.warpFx && (this.warpFx = { ...this.warpFx, t: this.warpFx.t - DT }).t <= 0)
             this.warpFx = null;
+        if (this.exploT > 0)
+            this.exploT = Math.max(0, this.exploT - DT);
+        if (this.explodeFx && (this.explodeFx = { ...this.explodeFx, t: this.explodeFx.t - DT }).t <= 0)
+            this.explodeFx = null;
         this.gBurst = Math.max(0, this.gBurst - DT);
         // Start a cast. The arrow(s) held at the press are remembered (dash direction / plinko displacement); plinko also remembers the spot.
         if (this.special === 'arrow' && k.sp && this.cd.arrow > 0)
@@ -329,6 +380,9 @@ class Player {
             else if (this.special === 'awakened') { // instant, no cast: power up if ready and not already awake
                 if (this.cd.awakened <= 0 && this.awakeT <= 0)
                     this.setAwake(true);
+            } else if (this.special === 'explode') { // instant, no cast
+                if (this.cd.explode <= 0)
+                    this.explode();
             } else if (this.special === 'warp') // instant: no cast, no timer (see warpPress)
                 this.warpPress();
             else if (this.special === 'arrow' && this.cd.arrow <= 0)
@@ -464,7 +518,6 @@ class Player {
             this.kickReq = true; // remembered until the hook lands, so a delayed hook still gets its kick
         // Grapple meter: GRAPPLE_MAX seconds of use (rope out, or hook in flight). Spend it all and the grapple is locked out for GRAPPLE_COOLDOWN seconds,
         // then comes back full. Letting go at any point refills it over time instead.
-        this.gCharge = Math.min(this.gCharge, this.grapMax); // (safety net: the meter can never exceed the current maximum)
         if (this.gCool > 0) {
             this.gCool = Math.max(0, this.gCool - DT);
             if (this.gCool === 0)
@@ -484,11 +537,13 @@ class Player {
             }
         }
         if (this.rope || this.pending) {
-            this.gCharge -= DT;
-            if (this.gCharge <= 0) // spent: the grip is torn away
-                this.overcharge();
+            if (this.awakeT <= 0) { // (Awakened: holding the grapple costs nothing)
+                this.gCharge -= DT;
+                if (this.gCharge <= 0) // spent: the grip is torn away
+                    this.overcharge();
+            }
         } else if (this.gCool <= 0)
-            this.gCharge = Math.min(this.grapMax, this.gCharge + GRAPPLE_REGEN * DT);
+            this.gCharge = Math.min(GRAPPLE_MAX, this.gCharge + GRAPPLE_REGEN * DT);
         if (!z) {
             this.rope = null;
             this.pending = null;
@@ -513,8 +568,8 @@ class Player {
             if (this.ropeGround && !this.onBall && Math.abs(this.x - a.x) > 12)
                 this.pivotSide = Math.sign(this.x - a.x); // which side of the pivot you were last on
             if (this.kickReq && !this.onBall) {
-                this.vx -= nx * WEIGHT_KICK * this.kickV;
-                this.vy -= ny * WEIGHT_KICK * this.kickV;
+                this.vx -= nx * WEIGHT_KICK;
+                this.vy -= ny * WEIGHT_KICK;
                 this.kickReq = false;
                 if (this.ropeGround)
                     this.dribT = DRIB_T; // weighted kick on a floor pivot = dribbling: the float steps aside

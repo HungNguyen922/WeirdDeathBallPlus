@@ -149,6 +149,35 @@ function drawCasts() { // abilities being cast: ghost pegs / decoys, marionette 
         }
     }
 }
+function drawExplode() { // Explode: the blast zone is a crisp circle of exactly EXPLODE_R, drawn at once and held; a shock wave sweeps outwards INSIDE it and ends on its edge; each body hit gets a flash
+    cx.save();
+    cx.lineCap = 'round';
+    for (const p of players) {
+        const fx = p.explodeFx;
+        if (!fx)
+            continue;
+        const col = p.team === 0 ? '#42a5f5' : '#ef5350', f = 1 - fx.t / EXPLODE_FX;
+        const wave = Math.min(1, f / 0.4), e = 1 - (1 - wave) * (1 - wave); // the wave reaches the edge 40% of the way through (ease-out)
+        const hold = f < 0.6 ? 1 : 1 - (f - 0.6) / 0.4; // the zone stays fully visible for 60% of the effect, then fades
+        cx.globalAlpha = 0.2 * hold; cx.fillStyle = col; // an even tint over exactly the area that is hit
+        cx.beginPath(); cx.arc(fx.x, fx.y, EXPLODE_R, 0, 7); cx.fill();
+        if (wave < 1) { // the wave: a bright disc growing to the edge, with a coloured front. It never goes past EXPLODE_R.
+            cx.globalAlpha = 0.45 * (1 - wave); cx.fillStyle = '#fff';
+            cx.beginPath(); cx.arc(fx.x, fx.y, EXPLODE_R * e, 0, 7); cx.fill();
+            cx.globalAlpha = 1 - 0.6 * wave; cx.strokeStyle = col; cx.lineWidth = 4;
+            cx.beginPath(); cx.arc(fx.x, fx.y, Math.max(1, EXPLODE_R * e - 2), 0, 7); cx.stroke();
+        }
+        const lw = 3; // the edge: a solid line whose OUTER side is exactly EXPLODE_R (drawn half a line-width inside it)
+        cx.globalAlpha = hold; cx.strokeStyle = '#fff'; cx.lineWidth = lw;
+        cx.beginPath(); cx.arc(fx.x, fx.y, EXPLODE_R - lw / 2, 0, 7); cx.stroke();
+        for (const h of fx.hits || []) { // every body that was inside when it went off: a flash ring where it was, and a dot on the centre that counted
+            cx.globalAlpha = 1 - f; cx.strokeStyle = '#fff'; cx.fillStyle = '#fff'; cx.lineWidth = 3 * (1 - f) + 1;
+            cx.beginPath(); cx.arc(h.x, h.y, h.r + 4 + 10 * f, 0, 7); cx.stroke();
+            cx.beginPath(); cx.arc(h.x, h.y, 3, 0, 7); cx.fill();
+        }
+    }
+    cx.restore();
+}
 function drawAwakened() { // Awakened: a golden pulsing aura on a powered-up player, with a ring that drains as the time runs out
     const tm = performance.now();
     cx.save();
@@ -208,7 +237,7 @@ function drawGrappleRange() { // range indicator when nothing is in reach
             cx.lineWidth = 2;
             cx.setLineDash([8, 8]);
             cx.beginPath();
-            cx.arc(p.x, p.y, p.range, 0, 7);
+            cx.arc(p.x, p.y, RANGE, 0, 7);
             cx.stroke();
             cx.setLineDash([]);
         }
@@ -301,8 +330,8 @@ function drawPlayerTrails() { // speed lines behind living players (same effect 
 }
 function drawGrappleRing(p) {
     const R = p.r + 2;
-    if (p.gCool > 0 || p.gCharge < p.grapMax - 0.01) {
-        const f = p.gCool > 0 ? 1 - p.gCool / p.grapLock : p.gCharge / p.grapMax;
+    if (p.gCool > 0 || p.gCharge < GRAPPLE_MAX - 0.01) {
+        const f = p.gCool > 0 ? 1 - p.gCool / GRAPPLE_COOLDOWN : p.gCharge / GRAPPLE_MAX;
         drawTimer(p.x, p.y, R, f, p.gCool > 0 ? '#d25b5b' : f < 0.25 ? '#f0a43c' : '#e8e8e4');
     }
     if (p.gBurst > 0) {

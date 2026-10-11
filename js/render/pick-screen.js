@@ -10,7 +10,8 @@ const PICK_DESC = { // two short lines under the highlighted special
     bat: ['Hold to charge, release to', 'swing a half-circle.'],
     barbwire: ['Your grapple rope kills', 'any player it touches.'],
     warp: ['Press to mark a spot, press', 'again to teleport there.'],
-    awakened: ['10 s of stronger grapple,', 'kicks and crash shots.'],
+    awakened: ['Unkillable, endless grapple,', '3x crash power. Lasts 10 s.'],
+    explode: ['Blasts discs and balls away.', 'Kill in 5 s: cooldown reset.'],
 };
 const pickSp = id => SPECIALS.find(a => a.id === id) || SPECIALS[0];
 const PICK_NAMES = ['BLUE', 'RED', 'BLUE 2', 'RED 2']; // by player id

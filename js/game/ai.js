@@ -229,7 +229,7 @@ function aiEngageKeys(me, b, E, k) {
         k[dx > 0 ? 'r' : 'l'] = true;
     else if (E.mode === 'away' && Math.abs(dx) < 130)
         k[dx > 0 ? 'l' : 'r'] = true;      // too close to latch from here: open the gap while we rise
-    if (!me.ground && Math.hypot(dx, b.y - me.y) < me.range + 30) { // (candidates() is the expensive part, so only ask when the ball could be in reach)
+    if (!me.ground && Math.hypot(dx, b.y - me.y) < RANGE + 30) { // (candidates() is the expensive part, so only ask when the ball could be in reach)
         const near = aiNearest(me, b);
         if (near && near.b && !near.decoy)
             k.z = true;                        // the ball is the nearest thing in reach: latch on
@@ -527,5 +527,3 @@ function aiDrive(i) {
     }
     Object.assign(me.keys, k);
 }
-
-

@@ -19,7 +19,7 @@ const events = {
 // their normal keys. On the screen: left / right / up / down move the cursor over a grid PICK_COLS wide, grapple or special locks the choice in, weight takes it back.
 // The computer always takes Dash (it is the only special the AI knows how to use). When everybody is locked in, a short countdown runs and the point starts.
 const PICK_EVERY = 5, PICK_COLS = 5, PICK_GO_T = 0.9; // points between screens, icons per row, seconds of "get ready" after the last lock-in
-const PICK_LIST = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened']; // the grid, in reading order (same ids as SPECIALS in render/special-menu.js)
+const PICK_LIST = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened', 'explode']; // the grid, in reading order (same ids as SPECIALS in render/special-menu.js)
 let pickFixed = false; // the toggle: true = specials are only chosen on pick screens, false = swap any time from the keycap
 const pick = { on: false, t: 0, go: 0, at: -1, cur: [0, 0, 0, 0], ready: [false, false, false, false], prev: [0, 0, 0, 0] }; // on = screen open, t = seconds open, go = countdown left, at = score total it was opened at, cur / ready / prev per player id (prev = last key mask, to spot fresh presses)
 const keyBits = k => (k.l ? 1 : 0) | (k.r ? 2 : 0) | (k.up ? 4 : 0) | (k.dn ? 8 : 0) | (k.z ? 16 : 0) | (k.x ? 32 : 0) | (k.sp ? 64 : 0);
@@ -128,6 +128,7 @@ function resetMatch() { // R key
     over = false;
     msg = '';
     pause = 0;
+    allPlayers.forEach(p => { p.exploCarry = false; }); // a refund carries into the next ROUND, never into a new match
     newRound();
     pick.on = false;
     pick.go = 0;
@@ -217,7 +218,9 @@ function update() {
                     if (b.rope || b.pending)
                         b.overcharge();
                 }
-                const hit = collide(a, b, PLAYER_M, PLAYER_M, PLAYER_BOUNCE);
+                const avx = a.vx, avy = a.vy, bvx = b.vx, bvy = b.vy, hit = collide(a, b, PLAYER_M, PLAYER_M, PLAYER_BOUNCE);
+                crashPush(a.crashK, b, bvx, bvy); // Awakened: the push you give the other player is multiplied (both ways if both are awake)
+                crashPush(b.crashK, a, avx, avy);
                 if (hit > IMPACT_V0) { // each player's sparks fly off on their own side of the contact
                     const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
                     events.onImpact(a, a.x + nx * a.r, a.y + ny * a.r, -nx, -ny, hit);
@@ -243,7 +246,8 @@ function update() {
         const d = decoys[i];
         for (const p of players)
             if (p.alive) {
-                const hit = collide(p, d, 1, BALL_M, DECOY_BOUNCE_PLAYER);
+                const dvx = d.vx, dvy = d.vy, hit = collide(p, d, 1, BALL_M, DECOY_BOUNCE_PLAYER);
+                crashPush(p.crashK, d, dvx, dvy); // Awakened: a decoy takes the same multiplied push
                 if (hit > IMPACT_V0) {
                     const dx = d.x - p.x, dy = d.y - p.y, m = Math.hypot(dx, dy) || 1;
                     events.onImpact(p, p.x + dx / m * p.r, p.y + dy / m * p.r, dx / m, dy / m, hit); // sparks fly the way the decoy is pushed
@@ -260,11 +264,17 @@ function update() {
                 const dx = ball.x - p.x, dy = ball.y - p.y, m = Math.hypot(dx, dy) || 1;
                 events.onImpact(p, p.x + dx / m * p.r, p.y + dy / m * p.r, dx / m, dy / m, hit);
             }
+            if (p.awakeT > 0)
+                continue; // Awakened: unkillable, the crash bounces you off instead
             p.alive = false;
             p.rope = null;
             p.onBall = false;
         }
     }
+    const dead = players.filter(q => !q.alive).length; // Explode: any death (a kill, or your own) within EXPLODE_WINDOW s of a blast refunds that blast's cooldown
+    for (const p of players)
+        if (p.exploT > 0 && dead > p.exploDead)
+            p.explodeRefund();
     const teamAlive = t => players.some(p => p.team === t && p.alive); // a team is out when all its players are dead
     if (!teamAlive(0) && !teamAlive(1)) {
         msg = 'Double KO';

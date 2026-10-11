@@ -10,6 +10,7 @@ const SPECIALS = [
     { id: 'barbwire', name: 'BARBWIRE', icon: 'barbwire' },
     { id: 'warp', name: 'WARP', icon: 'warp' },
     { id: 'awakened', name: 'AWAKENED', icon: 'awakened' },
+    { id: 'explode', name: 'EXPLODE', icon: 'explode' },
 ];
 const ui = { open: -1, hover: null }; // open = index of the player whose menu is open (-1 = none)
 const hintX = i => (i === 0 ? -OX / 2 : W + OX / 2);

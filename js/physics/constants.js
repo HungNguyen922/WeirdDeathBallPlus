@@ -45,10 +45,10 @@ const GROUND_BRAKE = 2;               // ground friction (per second, share of s
 // =====================================================================================================================================================================
 // 3  GRAPPLE: THE HOOK  (press and hold GRAPPLE: the nearest thing in range is picked, the hook lands, a rope is out)
 // =====================================================================================================================================================================
-const RANGE = 5 * PL;                 // how far from you a hook can latch (128 u). Also the hard cap on a grapple jump's reach from the pivot
+const RANGE = 4 * PL;                 // how far from you a hook can latch (128 u). Also the hard cap on a grapple jump's reach from the pivot
 const MIN_LEN = 16;                   // the shortest a surface rope can be (u). Standing on the floor you are 16 u (your radius) from the floor pivot, so this is also your starting distance
-const GROUND_DELAY = 0.1;             // seconds between the press and a surface hook landing, when you are standing (the original game measured ~3 frames). Lower = snappier start, 0 = same tick
-const HOOK_DELAY = 0.1;               // the same, when you are in the air. (Ball hooks land instantly, whatever these say)
+const GROUND_DELAY = 0.05;             // seconds between the press and a surface hook landing, when you are standing (the original game measured ~3 frames). Lower = snappier start, 0 = same tick
+const HOOK_DELAY = 0.05;               // the same, when you are in the air. (Ball hooks land instantly, whatever these say)
 const HOOK_R = 3;                     // radius (u) of the hook dot as DRAWN (display only; does not collide with anything)
 
 // The grapple meter: holding a rope (or a hook in flight) drains it; letting go refills it.
@@ -73,19 +73,19 @@ const GRAPPLE_BURST_T = 0.7;          // how long (s) the purple ripple lasts wh
 // =====================================================================================================================================================================
 
 // --- Reach: how far the rope pulls you out ------------------------------------------------------------------------------------------------------------------------
-const GJ_REACH_GROUND = PL * 2;    // 40 u: how much FURTHER from the pivot than you are right now the rope reaches. Standing on the floor: rope = 16 + 40 = 56 u.
+const GJ_REACH_GROUND = PL * 1.25;    // 40 u: how much FURTHER from the pivot than you are right now the rope reaches. Standing on the floor: rope = 16 + 40 = 56 u.
                                       //   The float sags a few u under the rope's length, so you settle with your feet about 1 PL off the platform. Raise = every jump goes higher
 const GJ_REACH_WEIGHTED = 0.5;        // share of the reach you get when WEIGHT is held as the hook lands (0.5 = half as far: weight is a short, heavy hop)
 const GJ_EASE = PL / 2;               // 16 u: the pull fades out over the last GJ_EASE u before the reach, so you glide in instead of slamming into the rope.
                                       //   Bigger = softer, floatier arrival but you stall a little short of the reach / 0 = full pull right up to the rope (overshoot + bounce)
 
 // --- Strength: how hard the pull is -------------------------------------------------------------------------------------------------------------------------------
-const LIFT_V = 400;                   // u/s: the base speed of a grapple jump at full chain. The pull's top speed = LIFT_V x chain x (WEIGHT_M if weighted) x GJ_DRIVE_BOOST x air scale
-const GJ_DRIVE_BOOST = 0.5;           // multiplier on that top speed (it exists so the pull can cover the reach inside the short window). First jump from the floor: 280 x 0.4 x 2.2 = ~246 u/s,
+const LIFT_V = 280;                   // u/s: the base speed of a grapple jump at full chain. The pull's top speed = LIFT_V x chain x (WEIGHT_M if weighted) x GJ_DRIVE_BOOST x air scale
+const GJ_DRIVE_BOOST = 2.2;           // multiplier on that top speed (it exists so the pull can cover the reach inside the short window). First jump from the floor: 280 x 0.4 x 2.2 = ~246 u/s,
                                       //   a full chain: 616 u/s. The acceleration is top speed / GJ_DRIVE_T, so this scales the snap and the height together.
                                       //   THIS (and GJ_REACH_GROUND) is the "pop" you feel when a float is established: the pull overshoots the float point by ~16 u on a floor jump, then the rope reels you back
 const WEIGHT_M = 1.2;                 // multiplier on the pull while WEIGHT is held as the hook lands (stronger, but see GJ_REACH_WEIGHTED: it reaches less far)
-const GJ_DRIVE_T = 0.075;              // s: the window the pull runs for after the hook lands. Short on purpose: shorter = snappier and more all-or-nothing, longer = smoother and
+const GJ_DRIVE_T = 0.2;              // s: the window the pull runs for after the hook lands. Short on purpose: shorter = snappier and more all-or-nothing, longer = smoother and
                                       //   more forgiving (you can reach full speed from a later press). Pull strength = top speed / this, so lengthening it also softens each tick
 
 // --- Latching while already high: weaker than a jump off the platform ---------------------------------------------------------------------------------------------
@@ -100,7 +100,7 @@ const GJ_FAR = 3 * PL;                // 96 u: from this distance up you get the
 const GJ_START = 1;                 // chain factor of the first jump (40% of full strength)
 const GJ_GROWTH = 1.5;                // each further jump in the chain is 10% stronger than the one before (0.4, 0.44, 0.48, 0.53 ...)
 const GJ_MAX = 1;                     // ceiling on the chain factor; with the numbers above it is reached on the 11th jump (0.4 x 1.1^10 = 1.04)
-const GJ_CHAIN_T = 3;               // s: if this long passes since the last grapple jump landed, the chain resets to jump 1
+const GJ_CHAIN_T = 5;               // s: if this long passes since the last grapple jump landed, the chain resets to jump 1
 
 // --- Direction ----------------------------------------------------------------------------------------------------------------------------------------------------
 const HOP_AIM = 0.5;                  // sideways share of the pull's direction. The pull points away from the pivot; the horizontal part is scaled by this, then it is renormalised.
@@ -113,29 +113,33 @@ const HOP_AIM = 0.5;                  // sideways share of the pull's direction.
 // =====================================================================================================================================================================
 
 // --- The rope spring (past the rope's length) ---------------------------------------------------------------------------------------------------------------------
-const KS = 110;                       // stiffness (force per u of stretch). Higher = snaps back harder and stops you sooner, so kicks and jumps overshoot less / lower = long, stretchy swings
+const KS = 80;                        // stiffness (force per u of stretch). Higher = snaps back harder and stops you sooner, so kicks and jumps overshoot less / lower = long, stretchy swings
 const DAMP = 0.8;                     // damping while the rope is being STRETCHED (the way back is undamped on purpose, so the pull-back keeps its energy). Higher = overshoot dies out faster
-const STRETCH_X0 = 120;               // the rope stiffens as it stretches: its force is multiplied by (1 + stretch / this). Smaller = stiffens sooner = a harder wall past the rope's length
+const STRETCH_X0 = 400;               // the rope stiffens as it stretches: its force is multiplied by (1 + stretch / this). Smaller = stiffens sooner = a harder wall past the rope's length
 const HEAVY_KS = 1.0;                 // multiplier on the rope's AND the float's stiffness while WEIGHT is held (1 = weight changes nothing, 1.5 = a firmer rope while weighted)
+const RETURN_DAMP = 6;                // brakes the pull-back while you are heading toward the pivot (surface ropes only). Higher = softer, slower rubberband
 
 // --- The float (below the rope's length: holds you above the pivot) -----------------------------------------------------------------------------------------------
 const TAUT_K = 110;                   // float stiffness: how hard it pushes you back up when you sink below the float point. Higher = a stiffer, higher-frequency bob
 const TAUT_DAMP = 18;                 // braking on the way DOWN through the float zone. THE UNDERSHOOT KNOB: 12 = sink ~1 PL and bob a few times, 18 = sink ~0.7 PL and bob about once,
                                       //   30+ = barely sink. Remember the float point of a floor jump is only ~1 PL off the floor, so a big undershoot reaches the floor
-const TAUT_MIN_NY = 0.5;              // the float only works when the pivot is roughly BELOW you: it fades in from this (cosine of the angle off straight-down) to fully on at 0.8.
-                                      //   Higher = the float switches off sooner when you drift sideways of the pivot
+const TAUT_MIN_NY = 0.9;    // float starts at ~26° off vertical (was 0.5 = 60°)
+const TAUT_FADE = 0.08;     // fully on by ny = 0.98 (~11° off vertical)
+
 const TAUT_CENTER = 6;                // while floating in the air, how hard you are pulled back over the pivot sideways. Higher = you hang straight above it
 const TAUT_DRAG = 3;                  // while floating in the air, sideways speed lost per second. Higher = sideways speed dies faster
 
 // --- The bob zone: a little sag is allowed just under the float point --------------------------------------------------------------------------------------------
-const BOB_DEPTH = 6;                  // u below the float point where the float spring is only BOB_SOFT x as stiff (a gentle landing for the sag)
+const BOB_DEPTH = PL/ 4;              // u below the float point where the float spring is only BOB_SOFT x as stiff (a gentle landing for the sag)
 const BOB_KICK_BONUS = 6;             // extra u of bob zone right after a weight kick (fades over DRIB_T s), so a kick can sink you a little before the float catches you
 const BOB_SOFT = 0.25;                // spring strength inside the bob zone (0.25 = a quarter as stiff). Lower = a softer, deeper sag
 
 // --- The post-kick window (what a weight kick does to the float) --------------------------------------------------------------------------------------------------
 const DRIB_T = 0.45;                  // s: how long the post-kick window lasts (the bob zone is wider, and DRIB_FLOAT_FADE applies)
-const DRIB_FLOAT_FADE = 0;            // 0..1: how much of the float a kick removes during that window. 0 = none (kicks bob on the rope's rubber band and settle back at the float point);
-                                      //   1 = the old "dribble" (float off, you fall to the pivot and bounce on the floor)
+const DRIB_FLOAT_FADE = 1;            // a below-float press now fully switches the float off, so you fall to the pivot
+const DRIB_BELOW_TOL = PL;            // u under the float point where a press still kicks you upward
+
+const FLOAT_RELEASE_DEPTH = 22;       // u under the float point where the float lets go (dribble)
 const FLOAT_OFF_RATE = 25;            // how fast (per second) the float fades OUT when DRIB_FLOAT_FADE asks for it (only matters if you raise DRIB_FLOAT_FADE)
 const FLOAT_ON_RATE = 3;              // how fast (per second) the float fades back IN afterwards. Lower = a longer, floppier recovery
 
@@ -146,19 +150,22 @@ const FLOAT_ON_RATE = 3;              // how fast (per second) the float fades b
 // A press tops you up to the kick's speed rather than adding on top of what you have, and it fades out the further you already are, so spamming cannot snowball:
 //   outward speed after a press = WEIGHT_KICK x (1 - how far past the float point you are / WEIGHT_KICK_REACH), if you were slower than that.
 // =====================================================================================================================================================================
-const WEIGHT_KICK = 800;              // u/s of outward speed a press tries to reach, from the float point. THE main knob for how hard a kick throws you:
+const WEIGHT_KICK = 600;              // u/s of outward speed a press tries to reach, from the float point. THE main knob for how hard a kick throws you:
                                       //   300 = ~1 PL out | 600 = ~1.6 PL | 800 = ~2 PL (default) | 1000+ = hard enough to slam you right down to the pivot on the way back
-const WEIGHT_KICK_REACH = 2 * PL;     // u past the float point where a press stops adding anything (the cap on how far a second kick can throw you). Raise = allows bigger stacked bobs
+const WEIGHT_KICK_REACH = 5 * PL;     // u past the float point where a press stops adding anything (the cap on how far a second kick can throw you). Raise = allows bigger stacked bobs
 const PRIME_T = 0.4;                  // s a WEIGHT press stays "primed" after you let go: a grapple that lands inside this window gets its kick at once (WEIGHT held = always primed)
 // Things elsewhere that shape the bob: KS (rubber band above), TAUT_DAMP / TAUT_K / BOB_* (below the float point), G and HEAVY_KS (gravity is x1.35 while WEIGHT is held), DOWN (fast-fall).
 
+const KICK_STEEP = 1;   // up / down held: the vertical share of the kick is multiplied by this (higher = steeper)
+const KICK_FLAT = 0.35;   // left / right held: the vertical share is multiplied by this (lower = flatter)
+const KICK_STEER = 1;   // left / right held: extra sideways push toward the held direction
 // =====================================================================================================================================================================
 // 7  PIVOT SLAM
 // When you come back down onto the floor right at a floor/slope pivot (within PIVOT_ZONE of it), the speed the floor would absorb is turned into sideways speed along the
 // surface instead (a rotation, so your speed is kept) and sends you out the other side. This is what a hard fall onto the pivot does.
 // =====================================================================================================================================================================
-const PIVOT_ZONE = 2 * PL;            // how close to the pivot (u) you must land for the slam to turn into sideways speed. Bigger = it works from further away
-const PIVOT_MIN_HIT = 60;             // the slowest impact (u/s into the floor) that counts as a slam. Raise = gentle landings never trigger it
+const PIVOT_ZONE = 3 * PL;            // how close to the pivot (u) you must land for the slam to turn into sideways speed. Bigger = it works from further away
+const PIVOT_MIN_HIT = 30;             // the slowest impact (u/s into the floor) that counts as a slam. Raise = gentle landings never trigger it
 const PIVOT_TRANSFER = 0.85;          // share of the absorbed speed turned into sideways speed (1 = all of it, 0 = a normal landing)
 
 // =====================================================================================================================================================================

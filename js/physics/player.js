@@ -568,10 +568,7 @@ class Player {
         if (k.up && this.rope) {
             g = (this.onBall ? G * 0.4 : G_FLOAT) * (heavy ? 1.35 : 1);
             const cap = this.onBall ? 170 : 70;
-            if (this.onBall) {
-                if (this.vy > cap)
-                    this.vy = cap;
-            } else if (this.vy > cap)
+            if (this.vy > cap)
                 g = 0; // surface tether: the float only stops gravity from adding fall speed. It never clips the rope's own recoil, so a held grapple can pull you back through the pivot
         }
         if (k.dn)
@@ -653,17 +650,37 @@ class Player {
                     }
                 }
             }
-            if (this.kickReq && !this.onBall) { // weight kick: every press tries to throw you about WEIGHT_KICK_REACH u past the float point
-                const past = Math.max(0, d - this.len); // how far past the float point (the rope's length) you already are
-                const room = Math.max(0, 1 - past / WEIGHT_KICK_REACH); // 1 at the float point, fading to 0 at WEIGHT_KICK_REACH: no room left = no kick, so a second kick cannot throw you further out
-                const want = WEIGHT_KICK * room; // outward speed this press tops you up to (it tops up, it does not stack on the speed you already have)
-                const out = -(this.vx * nx + this.vy * ny); // speed already heading away from the pivot (negative = falling in toward it)
-                const add = Math.max(0, want - out);
-                this.vx -= nx * add;
-                this.vy -= ny * add;
-                this.kickReq = false;
-                if (this.ropeGround)
-                    this.dribT = DRIB_T; // opens the post-kick window (wider bob zone below; and DRIB_FLOAT_FADE, if you set it above 0, thins the float out)
+            if (this.kickReq && !this.onBall) {
+                // Below the float point (once the grapple jump's slack is used up) a press does nothing: no force is added,
+                // so only your momentum and gravity carry you. The taut check keeps the weighted grapple-jump kick working.
+                const below = this.ropeGround && this.taut && d < this.len - DRIB_BELOW_TOL;
+                if (!below) {
+                    const past = Math.max(0, d - this.len);
+                    const room = Math.max(0, 1 - past / WEIGHT_KICK_REACH);
+                    const want = WEIGHT_KICK * room;
+
+                    // Kick direction: away from the pivot, reshaped by the arrows. Only once the float is established (taut),
+                    // so the weighted grapple-jump launch keeps its direction.
+                    let ux = -nx, uy = -ny;
+                    if (this.taut && this.ropeGround) {
+                        const vert = k.up || k.dn, horiz = dir !== 0;
+                        if (vert && !horiz)
+                            uy *= KICK_STEEP;                  // up / down only: steeper
+                        else if (horiz && !vert) {
+                            uy *= KICK_FLAT;                   // left / right only: flatter, leaning the way you hold
+                            ux += dir * KICK_STEER;
+                        }
+                        // both (diagonal) or neither: plain radial direction
+                        const m = Math.hypot(ux, uy) || 1;
+                        ux /= m;
+                        uy /= m;
+                    }
+                    const out = this.vx * ux + this.vy * uy;
+                    const add = Math.max(0, want - out);
+                    this.vx += ux * add;
+                    this.vy += uy * add;
+                }
+                this.kickReq = false;          // the press is used up either way
             }
             if (d > this.len) {
                 if (this.onBall) {
@@ -680,7 +697,9 @@ class Player {
                     }
                 }
                 const x = d - this.len; // the rope can deform past its length, but pulls back with a force that grows the further it goes
-                const f = Math.max(0, (this.onBall ? KB : KS) * (heavy ? HEAVY_KS : 1) * x * (1 + x / STRETCH_X0) - (this.onBall ? DB : DAMP) * Math.min(0, closing)); // damp only while the rope is being stretched; the recoil is undamped so the pull-back keeps its energy
+                const f = Math.max(0, (this.onBall ? KB : KS) * (heavy ? HEAVY_KS : 1) * x * (1 + x / STRETCH_X0)
+                    - (this.onBall ? DB : DAMP) * Math.min(0, closing)
+                    - (this.onBall ? 0 : RETURN_DAMP) * Math.max(0, closing)); // RETURN_DAMP: brakes the pull-back while heading toward the pivot (surface ropes only)
                 const pf = this.onBall ? BALL_PULL : 1; // platform ropes stay as they were
                 this.vx += nx * f * DT * pf;
                 this.vy += ny * f * DT * pf;
@@ -700,9 +719,11 @@ class Player {
                 }
             }
             if (TAUT_K > 0 && !this.onBall && this.ropeGround) { // taut floor tether: hang above the pivot instead of dropping onto it
-                const s = Math.max(0, Math.min(1, (ny - TAUT_MIN_NY) / 0.3)); // 1 with the pivot straight below, 0 once it is off to the side
+                const s = Math.max(0, Math.min(1, (ny - TAUT_MIN_NY) / TAUT_FADE));
                 if (!this.taut && d >= this.len)
                     this.taut = true; // the grapple-jump slack is used up
+                if (this.taut && this.len - d > FLOAT_RELEASE_DEPTH)
+                    this.dribT = DRIB_T;   // sank clearly below the float point: the float steps aside and you fall to the pivot
                 // Float weight: dribbling overrides the float (fast fade out), then it settles back in slowly so there is no pop.
                 const wT = this.dribT > 0 ? 1 - DRIB_FLOAT_FADE : 1; // (0 fade = the float never steps aside, so the rope's rubber band alone brings you back)
                 this.floatW += (wT - this.floatW) * Math.min(1, (wT >= this.floatW ? FLOAT_ON_RATE : FLOAT_OFF_RATE) * DT);
@@ -716,7 +737,7 @@ class Player {
                         this.vx -= nx * f * DT;
                         this.vy -= ny * f * DT;
                     }
-                    if (!this.ground) { // airborne above the pivot: pull back over it and damp sideways speed, so the float is stable
+                    if (!this.ground && dir === 0) {   // no sideways centering or drag while you steer
                         this.vx -= (this.x - a.x) * TAUT_CENTER * fw * DT;
                         this.vx *= 1 - TAUT_DRAG * fw * DT;
                     }
@@ -758,7 +779,8 @@ class Player {
             // travelling, else out the side opposite to the one you came in on.
             const sgn = dir !== 0 ? dir : Math.abs(this.vx) > 10 ? Math.sign(this.vx) : this.pivotSide ? -this.pivotSide : 1;
             const add = this.hit * PIVOT_TRANSFER;
-            this.vx = sgn * Math.hypot(this.vx * (Math.sign(this.vx) === sgn ? 1 : 0), add);
+            const keep = Math.sign(this.vx) === sgn ? 1 : PIVOT_TURN_KEEP;
+            this.vx = sgn * Math.hypot(this.vx * keep, add);
         }
         if (this.y - this.r < 0) {
             this.y = this.r;

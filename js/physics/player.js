@@ -3,11 +3,11 @@
 const noKeys = () => ({ l: false, r: false, up: false, z: false, x: false, sp: false, sp2: false, dn: false }); // sp = first special, sp2 = second special (only when twoSpecials), dn = down, z = grapple, x = weight
 const AIMING = ['arrow', 'marionette', 'bat']; // casts that read the arrow keys live to aim: only one of them can run at a time
 // Bat special. Angle of the bat at swing progress f (0..1). The swing is a semicircle (BAT_ARC) centred on the aim c.ang: it starts BAT_ARC/2 to one side of the aim (pulled back a
-// little further the more it is charged), sweeps through the aim and ends BAT_ARC/2 on the other side, easing in and out (smoothstep). Clockwise when aiming right, anticlockwise when
-// aiming left. The renderer draws the bat at this angle (and earlier ones for the motion blur); the physics uses the same angle to sweep the hit area.
+// little further the more it is charged), sweeps through the aim and ends BAT_ARC/2 on the other side, easing in and out (smoothstep). Clockwise when aiming, anticlockwise when
+// holding weight. The renderer draws the bat at this angle (and earlier ones for the motion blur); the physics uses the same angle to sweep the hit area.
 function batAngleAt(c, f) {
     f = Math.max(0, Math.min(1, f));
-    const e = f * f * (3 - 2 * f), s = Math.cos(c.ang) >= 0 ? 1 : -1, half = BAT_ARC / 2, back = half + BAT_WIND * c.charge;
+    const e = f * f * (3 - 2 * f), s = (Math.cos(c.ang) >= 0 ? 1 : -1) * (c.inv ? -1 : 1), half = BAT_ARC / 2, back = half + BAT_WIND * c.charge; // inv: start on the other end, sweep the other way
     return c.ang - s * back + s * (back + half) * e;
 }
 const batAngle = c => batAngleAt(c, c.charging ? 0 : 1 - c.t / c.t0);
@@ -28,7 +28,7 @@ function batStep(p, c, ball) {
     }
     const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
     const ax = Math.cos(c.ang), ay = Math.sin(c.ang); // the way the bat was aimed (the direction held)
-    const s = ax >= 0 ? 1 : -1, stepAng = Math.abs(wrap(th - prev)); // s: swing direction, stepAng: how far the bat moved this step
+    const s = (ax >= 0 ? 1 : -1) * (c.inv ? -1 : 1), stepAng = Math.abs(wrap(th - prev)); // s: swing direction, stepAng: how far the bat moved this step
     for (let i = 0; i < targets.length; i++) {
         const b = targets[i], isArrow = b.stuck !== undefined, bit = isArrow ? 0 : 1 << i; // (only arrows have a `stuck` field)
         if (isArrow ? b.immune > 0 : c.hits & bit)
@@ -449,7 +449,7 @@ class Player {
         else if (id === 'decoy' && this.cd.decoy <= 0)
             c = { type: 'decoy', t: DECOY_CAST, t0: DECOY_CAST, hx, hy, x: this.x, y: this.y };
         else if (id === 'bat' && this.cd.bat <= 0) // charges while the key is held (aim read live), swings on release
-            c = { type: 'bat', t: BAT_T, t0: BAT_T, charging: true, charge: 0, pow: 0, hx, hy, ang: hx || hy ? Math.atan2(hy, hx) : Math.atan2(ball.y - this.y, ball.x - this.x), hits: 0 };
+            c = { type: 'bat', t: BAT_T, t0: BAT_T, charging: true, charge: 0, pow: 0, hx, hy, inv: !!k.x, ang: hx || hy ? Math.atan2(hy, hx) : Math.atan2(ball.y - this.y, ball.x - this.x), hits: 0 };
         else if (id === 'barbwire' && this.cd.barbwire <= 0)
             c = { type: 'barbwire', t: 1, t0: 1, held: 0, roped: 0, hx, hy };
         else if (id === 'arrow' && this.cd.arrow <= 0)
@@ -837,7 +837,7 @@ class Player {
             this.vx = this.hopDir[0] * HOPPER_HOP_V;
             this.vy = this.hopDir[1] * HOPPER_HOP_V;
         } else if (this.clinging) { // clinging: no sliding, only a slow crawl along the surface
-            const crawl = HOPPER_CRAWL;
+            const crawl = k.x ? HOPPER_CRAWL_FINE : HOPPER_CRAWL; // Weight held: slow, precise crawl
             if (this.surf === 'C' || this.surf === 'JU') { this.vy = 0; this.vx = dir * crawl; } // (JU = the underside of a goal jut, crawled along like the ceiling)
             else { this.vx = 0; this.vy = ((k.dn ? 1 : 0) - (k.up ? 1 : 0)) * crawl; }
         }

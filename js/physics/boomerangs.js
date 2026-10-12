@@ -2,12 +2,16 @@
 // Load order: after arrows.js (it reuses wrapAng and the arrow terrain lists) and before game/rules.js (which calls stepBoomerangs()).
 // Tuning numbers live in constants.js (BOOMERANG_*).
 //
-// A boomerang is thrown with one tap (see startAbility in player.js) along the arrows held (none held: toward the net). It flies OUT along a constant-speed arc until it has covered
-// BOOMERANG_RANGE, then comes BACK: it homes in on its owner, turning harder the longer it takes, and is caught (removed) when it reaches them. Touching terrain on the way out
-// also turns it round. Every boomerang a player has in the air counts against BOOMERANG_MAX, so a catch is what gives the throw back.
-// It never kills and never knocks hard: it is a light solid body that takes up space, and whatever it runs into (players, the death ball, decoys) is nudged out of its way.
-// Its own path is not changed by what it hits, and its owner passes straight through it.
-const boomerangs = []; // { x, y, vx, vy, ang, sp, team, owner, spin, phase (0 out, 1 back), trav, back, life, r, rot }
+// One press throws a VOLLEY of BOOMERANG_VOLLEY boomerangs in a fan along the arrows held (none held: toward the net). Each one flies OUT along a curved, constant-speed arc until it has covered
+// its range (the volley's ranges are staggered, so the wave is layered), then comes BACK: it keeps circling the same way it was thrown (so the path is a loop, not a U-turn) and homes in on its
+// owner, turning harder the longer it takes, and is caught (removed) when it reaches them.
+//
+// DEFAULT: the arc bends UP first (over and around). Holding WEIGHT (keys.x) when you throw flips it: the arc bends DOWN first (under and around).
+//
+// PUSH: going out a boomerang is almost massless (BOOMERANG_M_OUT) so it barely moves what it touches. Coming back it is heavy (BOOMERANG_M_BACK), so whatever it meets on the return leg
+// is shoved along with it, toward the owner. The outbound wave sails past an object, the return arc comes round the far side of it and drags it home.
+// A boomerang never kills, its own path is not changed by what it hits, and its owner passes straight through it.
+const boomerangs = []; // { x, y, vx, vy, ang, sp, team, owner, spin (-1 anticlockwise / +1 clockwise on screen), phase (0 out, 1 back), trav, range, back, life, r, rot }
 function clearBoomerangs() { boomerangs.length = 0; }
 function boomCount(p) { // how many of p's boomerangs are out right now
     let n = 0;
@@ -17,19 +21,27 @@ function boomCount(p) { // how many of p's boomerangs are out right now
     return n;
 }
 
-// Throw one from player p along the arrows held (hx, hy are -1 / 0 / 1; both 0 = toward the net).
-function throwBoomerang(p, hx, hy) {
-    const ang = hx || hy ? Math.atan2(hy, hx) : (p.x < NETX ? 0 : Math.PI), ux = Math.cos(ang), uy = Math.sin(ang);
-    const flip = p.boomFlip === -1 ? -1 : 1; // BOOMERANG_ALTERNATE: every throw curves the other way, so a spammed volley fans out
-    if (BOOMERANG_ALTERNATE)
-        p.boomFlip = -flip;
-    const spin = (ux >= 0 ? -1 : 1) * (BOOMERANG_ALTERNATE ? flip : 1); // thrown right it curves up first (anticlockwise on screen), thrown left the mirror image
-    const d = p.r + BOOMERANG_R + 2, b = { x: p.x + ux * d, y: p.y + uy * d, vx: ux * BOOMERANG_V, vy: uy * BOOMERANG_V, ang, sp: BOOMERANG_V, team: p.team, owner: p, spin, phase: 0, trav: 0, back: 0, life: BOOMERANG_LIFE, r: BOOMERANG_R, rot: 0 };
-    if (boomBlocked(b.x, b.y, b.r)) { // thrown straight into a wall, floor or jut: it starts on you, hits the surface on its first step and comes straight back
-        b.x = p.x;
-        b.y = p.y;
+// Throw a volley from player p along the arrows held (hx, hy are -1 / 0 / 1; both 0 = toward the net).
+// inv = flip the arc to bend downward first. Left out, it follows whether p is holding Weight. Returns how many were thrown (0 = already at BOOMERANG_MAX out).
+function throwBoomerang(p, hx, hy, inv = !!(p.keys && p.keys.x)) {
+    const n = Math.min(BOOMERANG_VOLLEY, BOOMERANG_MAX - boomCount(p));
+    if (n <= 0)
+        return 0;
+    const base = hx || hy ? Math.atan2(hy, hx) : (p.x < NETX ? 0 : Math.PI);
+    const spin = (Math.cos(base) >= 0 ? -1 : 1) * (inv ? -1 : 1); // thrown right it curves up first (anticlockwise on screen), thrown left the mirror image; inv flips it
+    for (let k = 0; k < n; k++) {
+        const t = n === 1 ? 0 : k / (n - 1) - 0.5; // -0.5 .. 0.5 across the volley
+        const ang = wrapAng(base + t * BOOMERANG_FAN), ux = Math.cos(ang), uy = Math.sin(ang);
+        const d = p.r + BOOMERANG_R + 2;
+        const b = { x: p.x + ux * d, y: p.y + uy * d, vx: ux * BOOMERANG_V, vy: uy * BOOMERANG_V, ang, sp: BOOMERANG_V, team: p.team, owner: p, spin, phase: 0, trav: 0,
+            range: BOOMERANG_RANGE * (1 + t * BOOMERANG_RANGE_SPREAD), back: 0, life: BOOMERANG_LIFE, r: BOOMERANG_R, rot: 0 };
+        if (boomBlocked(b.x, b.y, b.r)) { // thrown straight into a wall, floor or jut: it starts on you, hits the surface on its first step and comes straight back
+            b.x = p.x;
+            b.y = p.y;
+        }
+        boomerangs.push(b);
     }
-    boomerangs.push(b);
+    return n;
 }
 
 // Is a circle at (x, y) with radius r touching the terrain (or outside the arena walls)? The same solids arrows stick into; the net is ignored, like the death ball does.
@@ -79,13 +91,13 @@ function boomTerrain(b) {
     return hit;
 }
 
-// The boomerang meets something: a light-body collision (mass BOOMERANG_M against the thing's mass, restitution BOOMERANG_E) shoves the thing out of the way and gives it a small share
-// of the boomerang's motion. The boomerang itself carries straight on.
+// The boomerang meets something: a collision where the boomerang weighs BOOMERANG_M_OUT going out (a nudge) and BOOMERANG_M_BACK coming home (a shove), against the thing's own mass.
+// The boomerang itself carries straight on.
 function boomHit(b, o, mo) {
-    const vx0 = b.vx, vy0 = b.vy, hit = collide(b, o, BOOMERANG_M, mo, BOOMERANG_E);
+    const out = b.phase === 0, vx0 = b.vx, vy0 = b.vy, hit = collide(b, o, out ? BOOMERANG_M_OUT : BOOMERANG_M_BACK, mo, out ? BOOMERANG_E_OUT : BOOMERANG_E_BACK);
     b.vx = vx0;
     b.vy = vy0;
-    if (hit > IMPACT_V0) {
+    if (hit > IMPACT_V0 && !out) { // sparks only for the hard return hits
         const dx = o.x - b.x, dy = o.y - b.y, m = Math.hypot(dx, dy) || 1;
         events.onImpact(b.owner, b.x + dx / m * b.r, b.y + dy / m * b.r, dx / m, dy / m, hit); // sparks fly the way the thing was pushed
     }
@@ -112,12 +124,15 @@ function stepBoomerangs() {
             b.ang = wrapAng(b.ang + b.spin * BOOMERANG_TURN * DT);
             b.sp = BOOMERANG_V;
             b.trav += b.sp * DT;
-            if (b.trav >= BOOMERANG_RANGE)
+            if (b.trav >= (b.range || BOOMERANG_RANGE))
                 b.phase = 1;
-        } else { // back: turn toward the owner, harder and harder, and speed up
+        } else { // back: keep circling the way it was thrown, closing in on the owner, harder and harder, and speed up
             b.back += DT;
             const dist = Math.hypot(o.x - b.x, o.y - b.y); // the turning circle is never allowed to be bigger than the distance left, so it spirals in instead of orbiting you
-            const turn = Math.max(BOOMERANG_BACK_TURN + BOOMERANG_BACK_GROW * b.back, b.sp / Math.max(20, dist * 0.4)) * DT, diff = wrapAng(Math.atan2(o.y - b.y, o.x - b.x) - b.ang);
+            const turn = Math.max(BOOMERANG_BACK_TURN + BOOMERANG_BACK_GROW * b.back, b.sp / Math.max(20, dist * 0.4)) * DT;
+            let diff = wrapAng(Math.atan2(o.y - b.y, o.x - b.x) - b.ang);
+            if (diff * b.spin < 0 && Math.abs(diff) > BOOMERANG_BACK_COMMIT) // the owner is mostly behind and on the "wrong" side: go round the long way (the loop) instead of a U-turn
+                diff -= Math.sign(diff) * Math.PI * 2;
             b.ang = wrapAng(b.ang + Math.max(-turn, Math.min(turn, diff)));
             b.sp = Math.min(BOOMERANG_BACK_V, b.sp + BOOMERANG_BACK_ACC * DT);
         }

@@ -355,30 +355,36 @@ const EXPLODE_AMP_GAIN = 0.5;         // extra speed added on top, as a share of
 // --- Hopper ---
 const HOPPER_MOVE = 0.25;        // share of normal run acceleration and top speed
 const HOPPER_CRAWL = 800;        // u/s you can crawl along a surface you are stuck to
+const HOPPER_CRAWL_FINE = 250;   // u/s crawl along a surface while holding Weight (fine positioning)
 const HOPPER_HOP_V = 1400;      // hop speed (u/s)
 const HOPPER_HOP_T = 0.8;       // longest a hop can last (s), a safety timeout
 const HOPPER_GRACE = 0.25;      // s you stay stuck after a hop lands without holding the key (so you can chain hops)
 const HOPPER_COOLDOWN = 1;      // s, starts when the hop starts
 
 // --- Boomerang ---
-const BOOMERANG_MAX = 10;              // most one player can have out at once
-const BOOMERANG_COOLDOWN = 0.25;      // s between throws
-const BOOMERANG_HOLD = true;         // true = holding the key keeps throwing instead of one throw per tap
-const BOOMERANG_V = 800;              // outbound speed (u/s)
-const BOOMERANG_RANGE = 400;          // outbound path length (u) before it turns for home
-const BOOMERANG_TURN = 2;           // rad/s the outbound path curves (arc radius = V / TURN)
-const BOOMERANG_BACK_V = 800;         // top speed on the way back
-const BOOMERANG_BACK_ACC = 800;       // u/s^2 it speeds up on the way back
-const BOOMERANG_BACK_TURN = 5;      // rad/s it can turn toward you on the way back...
-const BOOMERANG_BACK_GROW = 5;      // ...plus this much more per second
-const BOOMERANG_CATCH = 2;            // extra reach (u) when caught
-const BOOMERANG_LIFE = 15;             // s a boomerang can stay out at most
-const BOOMERANG_R = 10;               // radius for touching things (u)
-const BOOMERANG_M = 0.01;              // mass vs a player's 1 (lower = just a nudge)
-const BOOMERANG_E = 0.01;              // restitution against what it hits
+const BOOMERANG_MAX = 10;              // most one player can have out at once (2 volleys)
+const BOOMERANG_VOLLEY = 5;            // thrown per press
+const BOOMERANG_FAN = 0.5;             // rad, total spread of launch angles across the volley
+const BOOMERANG_RANGE_SPREAD = 0.75;    // outer boomerangs go this much farther / inner ones shorter (0.5 = +/-25%)
+const BOOMERANG_COOLDOWN = 4;        // s between throws
+const BOOMERANG_HOLD = true;
+const BOOMERANG_V = 600;
+const BOOMERANG_RANGE = 400;
+const BOOMERANG_TURN = 2;
+const BOOMERANG_BACK_V = 1000;         // faster return = harder shove
+const BOOMERANG_BACK_ACC = 600;
+const BOOMERANG_BACK_TURN = 5;
+const BOOMERANG_BACK_GROW = 5;
+const BOOMERANG_BACK_COMMIT = 1;     // rad: past this the return loops round instead of U-turning
+const BOOMERANG_CATCH = 2;
+const BOOMERANG_LIFE = 15;
+const BOOMERANG_R = 10;
+const BOOMERANG_M_OUT = 0.001;         // outbound: practically no push
+const BOOMERANG_E_OUT = 0;
+const BOOMERANG_M_BACK = 0.25;         // return: each one is a real shove (ball takes ~half the closing speed per hit)
+const BOOMERANG_E_BACK = 0.05;
 const BOOMERANG_SOLID_TEAMMATES = true;
-const BOOMERANG_ALTERNATE = true;     // each throw curves the other way
-const BOOMERANG_SPIN = 20;            // spin speed (display only)
+const BOOMERANG_SPIN = 20;
 
 // --- The ability table: reads every cooldown above, so it has to stay below them ------------------------------------------------------------------------------------
 const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)

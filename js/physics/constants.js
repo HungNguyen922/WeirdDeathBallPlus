@@ -23,7 +23,7 @@ const PL = 32;                        // one "player length" (a player's diamete
 
 // Slopes: the floor rises on both sides of the net.
 const RUN = 2 * PL;                   // how long each slope is (horizontal). Longer = gentler ramps
-const RISE = 0.75 * PL;               // how tall each slope is. Taller = steeper ramps
+const RISE = 3/4 * PL;               // how tall each slope is. Taller = steeper ramps
 const PK = 5;                         // half the gap between the two middle peaks, either side of the net (u)
 const NOTCH = 2;                      // how far the floor dips between the two middle peaks (u)
 
@@ -45,7 +45,7 @@ const GROUND_BRAKE = 2;               // ground friction (per second, share of s
 // =====================================================================================================================================================================
 // 3  GRAPPLE: THE HOOK  (press and hold GRAPPLE: the nearest thing in range is picked, the hook lands, a rope is out)
 // =====================================================================================================================================================================
-const RANGE = 4 * PL;                 // how far from you a hook can latch (128 u). Also the hard cap on a grapple jump's reach from the pivot
+const RANGE = 5 * PL;                 // how far from you a hook can latch (128 u). Also the hard cap on a grapple jump's reach from the pivot
 const MIN_LEN = 16;                   // the shortest a surface rope can be (u). Standing on the floor you are 16 u (your radius) from the floor pivot, so this is also your starting distance
 const GROUND_DELAY = 0.05;             // seconds between the press and a surface hook landing, when you are standing (the original game measured ~3 frames). Lower = snappier start, 0 = same tick
 const HOOK_DELAY = 0.05;               // the same, when you are in the air. (Ball hooks land instantly, whatever these say)
@@ -113,11 +113,13 @@ const HOP_AIM = 0.5;                  // sideways share of the pull's direction.
 // =====================================================================================================================================================================
 
 // --- The rope spring (past the rope's length) ---------------------------------------------------------------------------------------------------------------------
-const KS = 80;                        // stiffness (force per u of stretch). Higher = snaps back harder and stops you sooner, so kicks and jumps overshoot less / lower = long, stretchy swings
-const DAMP = 0.8;                     // damping while the rope is being STRETCHED (the way back is undamped on purpose, so the pull-back keeps its energy). Higher = overshoot dies out faster
-const STRETCH_X0 = 400;               // the rope stiffens as it stretches: its force is multiplied by (1 + stretch / this). Smaller = stiffens sooner = a harder wall past the rope's length
-const HEAVY_KS = 1.0;                 // multiplier on the rope's AND the float's stiffness while WEIGHT is held (1 = weight changes nothing, 1.5 = a firmer rope while weighted)
-const RETURN_DAMP = 6;                // brakes the pull-back while you are heading toward the pivot (surface ropes only). Higher = softer, slower rubberband
+const KS = 100;                       // stiffness (force per u of stretch). Higher = snaps back harder and stops you sooner, so kicks and jumps overshoot less / lower = long, stretchy swings
+const DAMP = 0.75;                     // damping while the rope is being STRETCHED (the way back is undamped on purpose, so the pull-back keeps its energy). Higher = overshoot dies out faster
+const STRETCH_X0 = 600;               // the rope stiffens as it stretches: its force is multiplied by (1 + stretch / this). Smaller = stiffens sooner = a harder wall past the rope's length
+const HEAVY_KS = 0.5;                 // multiplier on the rope's AND the float's stiffness while WEIGHT is held (1 = weight changes nothing, 1.5 = a firmer rope while weighted)
+const RETURN_DAMP = 1;                // brakes the pull-back while you are heading toward the pivot (surface ropes only). Higher = softer, slower rubberband
+const WALL_KICK_SCALE = 0.5;          // weight kick strength on walls / ceiling / net / ledges (1 = same as floor ropes)
+const WALL_KS_SCALE = 0.7;            // rope spring stiffness on those surfaces (1 = same as floor ropes)
 
 // --- The float (below the rope's length: holds you above the pivot) -----------------------------------------------------------------------------------------------
 const TAUT_K = 110;                   // float stiffness: how hard it pushes you back up when you sink below the float point. Higher = a stiffer, higher-frequency bob
@@ -152,8 +154,8 @@ const FLOAT_ON_RATE = 3;              // how fast (per second) the float fades b
 // =====================================================================================================================================================================
 const WEIGHT_KICK = 600;              // u/s of outward speed a press tries to reach, from the float point. THE main knob for how hard a kick throws you:
                                       //   300 = ~1 PL out | 600 = ~1.6 PL | 800 = ~2 PL (default) | 1000+ = hard enough to slam you right down to the pivot on the way back
-const WEIGHT_KICK_REACH = 5 * PL;     // u past the float point where a press stops adding anything (the cap on how far a second kick can throw you). Raise = allows bigger stacked bobs
-const PRIME_T = 0.4;                  // s a WEIGHT press stays "primed" after you let go: a grapple that lands inside this window gets its kick at once (WEIGHT held = always primed)
+const WEIGHT_KICK_REACH = 10 * PL;     // u past the float point where a press stops adding anything (the cap on how far a second kick can throw you). Raise = allows bigger stacked bobs
+const PRIME_T = 0.1;                  // s a WEIGHT press stays "primed" after you let go: a grapple that lands inside this window gets its kick at once (WEIGHT held = always primed)
 // Things elsewhere that shape the bob: KS (rubber band above), TAUT_DAMP / TAUT_K / BOB_* (below the float point), G and HEAVY_KS (gravity is x1.35 while WEIGHT is held), DOWN (fast-fall).
 
 const KICK_STEEP = 1;   // up / down held: the vertical share of the kick is multiplied by this (higher = steeper)
@@ -195,7 +197,7 @@ const BALL_TM = 0.7;                  // ball mass as the tether sees it (higher
 // Crash shot: a player who touches the death ball dies, but first collides with it like two pool balls: an elastic collision along the line between their centers,
 // momentum conserved with the player's mass PLAYER_M against the ball's BALL_M. CRASH_E is the restitution (1 = perfectly elastic, no energy lost).
 const PLAYER_M = 1;                   // a player's mass in collisions with the ball and decoys
-const CRASH_E = 0.75;                 // restitution of a crash into the ball: higher = the ball is hit harder
+const CRASH_E = 0.25;                 // restitution of a crash into the ball: higher = the ball is hit harder
 const PLAYER_BOUNCE = 0.9;            // restitution when two players collide: 1 = attacker stops dead and the victim takes all the speed, 0 = they stick together and share it (was 0.4)
 const IMPACT_V0 = 260;                // the slowest impact (u/s) that throws sparks when a player hits something
 const IMPACT_V1 = 1000;               // the impact speed (u/s) that gives the biggest spark burst (display only; sparks scale between V0 and V1)
@@ -273,6 +275,8 @@ const BAT_ARROW_V = 500;              // bat vs arrow: flat speed added (u/s)
 const BAT_ARROW_KEEP = 1;             // bat vs arrow: share of the arrow's own speed kept
 const BAT_ARROW_VMAX = 1600;          // bat vs arrow: speed cap (+ BAT_VMAX_CHARGE at full charge)
 const BAT_HITS_STUCK_ARROWS = true;   // the bat can dislodge arrows that are stuck in a wall
+const PEG_ARROW_E = 1;                // restitution of an arrow on a peg: 1 = a perfect mirror bounce, <1 loses speed, >1 gains it
+const PEG_CLAIMS_ARROWS = false;      // true = a deflected arrow becomes the peg owner's team's arrow (it can then hit the shooter, and a spent arrow is re-armed)
 
 // --- Bat ---------------------------------------------------------------------------------------------------------------------------------------------------------
 // Hold the special key to charge (BAT_CHARGE_T s to full; a tap is a weak swing), release to swing. The swing is a SEMICIRCLE (BAT_ARC rad) centred on the direction held

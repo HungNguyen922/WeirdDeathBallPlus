@@ -130,6 +130,43 @@ function arrowBumpPlayers(a) {
     }
 }
 
+// A loose arrow that touches a plinko peg is reflected off it, like light off a mirror: the velocity component along the line from the peg's centre
+// to the arrow is reversed (scaled by PEG_ARROW_E). Pegs are fixed, so nothing is transferred to them. Returns true if it bounced.
+function arrowPegBounce(a) {
+    for (const q of pegs) {
+        const dx = a.x - q.x, dy = a.y - q.y, d = Math.hypot(dx, dy), min = a.r + q.r;
+        if (d >= min || d === 0)
+            continue;
+        const nx = dx / d, ny = dy / d;
+        a.x = q.x + nx * min;                      // out of the peg
+        a.y = q.y + ny * min;
+        const vn = a.vx * nx + a.vy * ny;
+        if (vn >= 0)
+            continue;                              // already moving away
+        a.vx -= (1 + PEG_ARROW_E) * vn * nx;
+        a.vy -= (1 + PEG_ARROW_E) * vn * ny;
+        const s = Math.hypot(a.vx, a.vy);
+        if (s > ARROW_VCAP) {
+            a.vx *= ARROW_VCAP / s;
+            a.vy *= ARROW_VCAP / s;
+        }
+        a.ang = Math.atan2(a.vy, a.vx);
+        a.life = Math.max(a.life, ARROW_KNOCK_LIFE);
+        if (PEG_CLAIMS_ARROWS) {
+            a.team = q.team;
+            a.owner = q.owner;
+            if (ARROW_REARM)
+                a.spent = false;
+        }
+        q.flash = 1;                               // the peg's hit effect (the renderer reads these)
+        q.nx = -nx;
+        q.ny = -ny;
+        q.hits = (q.hits | 0) + 1;
+        return true;
+    }
+    return false;
+}
+
 function stepArrows() {
     for (let i = arrows.length - 1; i >= 0; i--) {
         const a = arrows[i];
@@ -147,6 +184,7 @@ function stepArrows() {
         for (let s = 0; s < n; s++) {
             a.x += a.vx * DT / n;
             a.y += a.vy * DT / n;
+            arrowPegBounce(a);
             if (!a.spent && arrowStrike(a)) { // it has done its one hit: it bounces off limp and keeps falling, still a solid thing that can stick in the terrain
                 arrowBumpPlayers(a);
                 a.spent = true;

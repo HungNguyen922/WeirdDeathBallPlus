@@ -657,7 +657,7 @@ class Player {
                 if (!below) {
                     const past = Math.max(0, d - this.len);
                     const room = Math.max(0, 1 - past / WEIGHT_KICK_REACH);
-                    const want = WEIGHT_KICK * room;
+                    const want = WEIGHT_KICK * room * (this.ropeGround ? 1 : WALL_KICK_SCALE);
 
                     // Kick direction: away from the pivot, reshaped by the arrows. Only once the float is established (taut),
                     // so the weighted grapple-jump launch keeps its direction.
@@ -697,9 +697,9 @@ class Player {
                     }
                 }
                 const x = d - this.len; // the rope can deform past its length, but pulls back with a force that grows the further it goes
-                const f = Math.max(0, (this.onBall ? KB : KS) * (heavy ? HEAVY_KS : 1) * x * (1 + x / STRETCH_X0)
+                const f = Math.max(0, (this.onBall ? KB : KS) * (this.onBall || this.ropeGround ? 1 : WALL_KS_SCALE) * (heavy ? HEAVY_KS : 1) * x * (1 + x / STRETCH_X0)
                     - (this.onBall ? DB : DAMP) * Math.min(0, closing)
-                    - (this.onBall ? 0 : RETURN_DAMP) * Math.max(0, closing)); // RETURN_DAMP: brakes the pull-back while heading toward the pivot (surface ropes only)
+                    - (this.onBall ? 0 : RETURN_DAMP) * Math.max(0, closing));
                 const pf = this.onBall ? BALL_PULL : 1; // platform ropes stay as they were
                 this.vx += nx * f * DT * pf;
                 this.vy += ny * f * DT * pf;

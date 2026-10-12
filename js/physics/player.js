@@ -113,6 +113,7 @@ class Player {
         this.explodeFx = null; // Explode: the last blast { t, x, y, hits: [{ x, y, r }] } (the zone, and a flash on each body it hit); t counts down from EXPLODE_FX
         this.warpFx = null; // Warp: the last teleport { t, ax, ay, bx, by } (a short visual: rings at both ends); t counts down from WARP_FX
         this.arrowAng = -Math.PI / 2; // last arrow aim, kept across rounds (so not in reset())
+        this.boomFlip = 1;
         this.reset();
     }
     reset() {
@@ -466,7 +467,15 @@ class Player {
         } else if (id === 'warp') { // instant: no cast, no timer (see warpPress)
             this.warpPress();
             return true;
-        } else if (id === 'hopper') {
+        } else if (id === 'boomerang') { // instant: no cast
+            if (this.cd.boomerang <= 0 && (this.sim || boomCount(this) < BOOMERANG_MAX)) {
+                if (!this.sim)
+                    throwBoomerang(this, hx, hy);
+                this.cd.boomerang = BOOMERANG_COOLDOWN;
+                return true;
+            }
+            return false;
+        }else if (id === 'hopper') {
             return this.hop();
         }
         if (!c)
@@ -624,8 +633,8 @@ class Player {
         for (const [key, id] of slots) {
             if (this.casts.some(c => c.key === key))
                 continue; // that key already has a cast running
-            const pressed = k[key] && !prev[key], queued = id === 'arrow' && this.arrowQueued === key && this.cd.arrow <= 0;
-            if (!pressed && !queued)
+            const pressed = k[key] && !prev[key], queued = id === 'arrow' && this.arrowQueued === key && this.cd.arrow <= 0, repeat = BOOMERANG_HOLD && id === 'boomerang' && k[key];
+            if (!pressed && !queued && !repeat)
                 continue;
             if (this.startAbility(id, key, ball) && queued)
                 this.arrowQueued = false; // (if the aiming rule refused it, the queue stays and tries again)

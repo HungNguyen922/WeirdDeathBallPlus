@@ -20,6 +20,7 @@ function draw() {
     drawBalls();
     drawImpacts();
     drawArrows();
+    drawBoomerangs();
     drawMessage();
     drawPickScreen(); // the special-ability select grid, over the playing area, when one is open
     drawSpecialMenu();

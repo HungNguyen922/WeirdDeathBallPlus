@@ -164,6 +164,7 @@ function predShape(mixed) {
         out.ball = { ...b, x: b.x + pred.errBall.x, y: b.y + pred.errBall.y };
         out.pegs = mixed.pegs.filter(q => q.owner !== slot).concat(ps.pegs.filter(q => q.owner === slot));
         out.arrows = mixed.arrows.filter(a => a.owner !== slot).concat(ps.arrows.filter(a => a.owner === slot));
+        out.boomerangs = (mixed.boomerangs || []).filter(b => b.owner !== slot).concat((ps.boomerangs || []).filter(b => b.owner === slot));
         // Decoys: mine, and the one I am tethered to, come from the predicted world (the rope end is computed there, so it must hang on the decoy that is drawn).
         // The others stay on the drawn timeline. Decoys are told apart by owner (one per player), because their index in the list differs between the two worlds.
         const tethered = me.tball > 0 ? ps.decoys[me.tball - 1] : null;

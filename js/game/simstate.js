@@ -63,6 +63,7 @@ function saveState() {
         decoys: decoys.map(body),
         pegs: pegs.map(owned),
         arrows: arrows.map(owned),
+        boomerangs: boomerangs.map(owned),
     };
 }
 
@@ -125,6 +126,8 @@ function loadState(s) {
     pegs.push(...relink(s.pegs));
     arrows.length = 0;
     arrows.push(...relink(s.arrows));
+    boomerangs.length = 0;
+    boomerangs.push(...relink(s.boomerangs || []));
     stuckSegs.length = 0;
     for (const a of arrows)
         if (a.stuck)

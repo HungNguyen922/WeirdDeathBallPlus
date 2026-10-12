@@ -360,8 +360,28 @@ const HOPPER_HOP_T = 0.8;       // longest a hop can last (s), a safety timeout
 const HOPPER_GRACE = 0.25;      // s you stay stuck after a hop lands without holding the key (so you can chain hops)
 const HOPPER_COOLDOWN = 1;      // s, starts when the hop starts
 
+// --- Boomerang ---
+const BOOMERANG_MAX = 10;              // most one player can have out at once
+const BOOMERANG_COOLDOWN = 0.25;      // s between throws
+const BOOMERANG_HOLD = true;         // true = holding the key keeps throwing instead of one throw per tap
+const BOOMERANG_V = 800;              // outbound speed (u/s)
+const BOOMERANG_RANGE = 400;          // outbound path length (u) before it turns for home
+const BOOMERANG_TURN = 2;           // rad/s the outbound path curves (arc radius = V / TURN)
+const BOOMERANG_BACK_V = 800;         // top speed on the way back
+const BOOMERANG_BACK_ACC = 800;       // u/s^2 it speeds up on the way back
+const BOOMERANG_BACK_TURN = 5;      // rad/s it can turn toward you on the way back...
+const BOOMERANG_BACK_GROW = 5;      // ...plus this much more per second
+const BOOMERANG_CATCH = 2;            // extra reach (u) when caught
+const BOOMERANG_LIFE = 15;             // s a boomerang can stay out at most
+const BOOMERANG_R = 10;               // radius for touching things (u)
+const BOOMERANG_M = 0.01;              // mass vs a player's 1 (lower = just a nudge)
+const BOOMERANG_E = 0.01;              // restitution against what it hits
+const BOOMERANG_SOLID_TEAMMATES = true;
+const BOOMERANG_ALTERNATE = true;     // each throw curves the other way
+const BOOMERANG_SPIN = 20;            // spin speed (display only)
+
 // --- The ability table: reads every cooldown above, so it has to stay below them ------------------------------------------------------------------------------------
-const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
+const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 
 // =====================================================================================================================================================================
 // 11  MATCH

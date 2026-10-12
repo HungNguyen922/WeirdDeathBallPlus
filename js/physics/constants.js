@@ -353,8 +353,8 @@ const EXPLODE_AMP_SPEED = 900;        // body speed (u/s) at which that blend is
 const EXPLODE_AMP_GAIN = 0.5;         // extra speed added on top, as a share of the body's current speed
 
 // --- Hopper ---
-const HOPPER_MOVE = 0.5;        // share of normal run acceleration and top speed
-const HOPPER_CRAWL = 60;        // u/s you can crawl along a surface you are stuck to
+const HOPPER_MOVE = 0.25;        // share of normal run acceleration and top speed
+const HOPPER_CRAWL = 750;        // u/s you can crawl along a surface you are stuck to
 const HOPPER_HOP_V = 1400;      // hop speed (u/s)
 const HOPPER_HOP_T = 0.8;       // longest a hop can last (s), a safety timeout
 const HOPPER_GRACE = 0.25;      // s you stay stuck after a hop lands without holding the key (so you can chain hops)

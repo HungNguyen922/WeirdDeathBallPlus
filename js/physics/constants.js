@@ -352,8 +352,16 @@ const EXPLODE_AMP_BLEND = 0.5;        // how far the push follows the body's own
 const EXPLODE_AMP_SPEED = 900;        // body speed (u/s) at which that blend is fully reached
 const EXPLODE_AMP_GAIN = 0.5;         // extra speed added on top, as a share of the body's current speed
 
+// --- Hopper ---
+const HOPPER_MOVE = 0.5;        // share of normal run acceleration and top speed
+const HOPPER_CRAWL = 60;        // u/s you can crawl along a surface you are stuck to
+const HOPPER_HOP_V = 1400;      // hop speed (u/s)
+const HOPPER_HOP_T = 0.8;       // longest a hop can last (s), a safety timeout
+const HOPPER_GRACE = 0.25;      // s you stay stuck after a hop lands without holding the key (so you can chain hops)
+const HOPPER_COOLDOWN = 1;      // s, starts when the hop starts
+
 // --- The ability table: reads every cooldown above, so it has to stay below them ------------------------------------------------------------------------------------
-const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
+const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 
 // =====================================================================================================================================================================
 // 11  MATCH

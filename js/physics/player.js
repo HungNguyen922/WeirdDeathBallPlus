@@ -143,6 +143,8 @@ class Player {
         this.exploCarry = false;
         this.exploT = 0;
         this.explodeFx = null;
+        this.hopT = 0; this.hopDir = [0, 0]; this.hopTo = { x: 0, y: 0 }; this.hopFloor = false; this.hopPx = 0; this.hopPy = 0;
+        this.surf = null; this.stuck = false; this.stickGrace = 0;
         this.casts = []; // abilities being cast right now, at most one per special key: { type, key, t, t0, hx, hy, x, y, ... }
         this.dashT = 0;
         this.dashDir = [0, 0];
@@ -364,6 +366,60 @@ class Player {
         this.cd.warp = WARP_COOLDOWN;
         this.netSide = this.x < NETX ? 0 : 1;
     }
+
+    // Hopper: pick the surface to jump to and start flying at it.
+hop() {
+    if (this.hopT > 0 || this.cd.hopper > 0)
+        return false;
+    const s = this.stuck ? this.surf : this.ground ? 'F' : this.surf; // stuck surface first, else the floor, else whatever we touch
+    if (!s)
+        return false;
+    const r = this.r;
+    const target = {
+        F: { x: this.x, y: r },
+        C: { x: this.x, y: H - r },
+        L: { x: NETX - r, y: Math.max(this.y, NET_GAP + r + 2) }, // the net only exists below its gap
+        R: { x: NETX + r, y: Math.max(this.y, NET_GAP + r + 2) },
+        NL: { x: r, y: this.y },
+        NR: { x: W - r, y: this.y },
+    }[s];
+    const dx = target.x - this.x, dy = target.y - this.y, m = Math.hypot(dx, dy);
+    if (m < 2)
+        return false;
+    this.hopDir = [dx / m, dy / m];
+    this.hopTo = target;
+    this.hopFloor = s === 'C';
+    this.hopT = HOPPER_HOP_T;
+    this.stuck = false;
+    this.cd.hopper = HOPPER_COOLDOWN;
+    this.dashT = DASH_FX; this.dashDir = this.hopDir; // reuses the dash streak
+    return true;
+}
+// Called at the end of step(): finish a hop, then work out what we are touching.
+hopperEnd(k) {
+    if (!this.has('hopper'))
+        return;
+    if (this.hopT > 0) {
+        this.hopT -= DT;
+        const rem = (this.hopTo.x - this.x) * this.hopDir[0] + (this.hopTo.y - this.y) * this.hopDir[1];
+        const moved = Math.hypot(this.x - this.hopPx, this.y - this.hopPy);
+        const landed = rem <= 1;
+        if (landed || moved < HOPPER_HOP_V * DT * 0.4 || this.hopT <= 0) { // arrived, blocked, or timed out
+            this.hopT = 0;
+            this.vx = this.vy = 0;
+            this.stickGrace = landed && !this.hopFloor ? HOPPER_GRACE : 0;
+        }
+    }
+    const r = this.r, hits = [];
+    if (this.y - r <= 0.5) hits.push(['C', k.up]);
+    if (this.x <= r + 0.5) hits.push(['L', k.l]);
+    if (this.x >= W - r - 0.5) hits.push(['R', k.r]);
+    if (this.y + r > NET_GAP + 0.5 && Math.abs(this.x - NETX) <= r + 1.5)
+        hits.push(this.x < NETX ? ['NL', k.r] : ['NR', k.l]);
+    const pick = hits.find(h => h[1]) || hits[0]; // prefer a surface we are pushing into
+    this.surf = pick ? pick[0] : null;
+    this.stuck = !!pick && this.hopT <= 0 && (pick[1] || this.stickGrace > 0);
+}
     // A special key went down (or a queued arrow came off cooldown): start that ability. Returns true if it started or fired.
     startAbility(id, key, ball) {
         const k = this.keys, hx = (k.r ? 1 : 0) - (k.l ? 1 : 0), hy = (k.dn ? 1 : 0) - (k.up ? 1 : 0);
@@ -397,6 +453,8 @@ class Player {
         } else if (id === 'warp') { // instant: no cast, no timer (see warpPress)
             this.warpPress();
             return true;
+        } else if (id === 'hopper') {
+            return this.hop();
         }
         if (!c)
             return false;
@@ -512,8 +570,10 @@ class Player {
             this.gjN = 0; // chain broken
         const dir = this.casting('arrow') ? 0 : (k.r ? 1 : 0) - (k.l ? 1 : 0);
         // Constant acceleration toward the max speed (the demo shows a steady ramp, not a hard build-up curve).
-        const acc = RUN_ACC * (this.grounded ? 1 : 0.55) * (dir * this.vx < 0 ? 1.4 : 1);
-        if (dir && dir * this.vx < 330)
+        // Movement is halved for Hopper Special
+        const mv = this.has('hopper') ? HOPPER_MOVE : 1;
+        const acc = RUN_ACC * mv * (this.grounded ? 1 : 0.55) * (dir * this.vx < 0 ? 1.4 : 1);
+        if (dir && dir * this.vx < 330 * mv)
             this.vx += dir * acc * DT;
         else if (!dir && this.grounded && !this.rope)
             this.vx *= 1 - GROUND_BRAKE * DT; // no ground braking while tethered, so the rope bounce is not eaten
@@ -538,6 +598,8 @@ class Player {
         if (this.explodeFx && (this.explodeFx = { ...this.explodeFx, t: this.explodeFx.t - DT }).t <= 0)
             this.explodeFx = null;
         this.gBurst = Math.max(0, this.gBurst - DT);
+        this.stickGrace = Math.max(0, this.stickGrace - DT);
+        if (!this.has('hopper')) { this.hopT = 0; this.stuck = false; this.surf = null; }
         // Start a cast. Each active special has its own key; a press of either starts that ability, unless a cast is already running (then it is ignored, like today).
         // To let the instant abilities (warp, awakened, explode) fire mid-cast, test them here before the `!this.cast` check.
         const slots = this.slots(), prev = { sp: this.prevSp, sp2: this.prevSp2 };
@@ -745,8 +807,19 @@ class Player {
             }
         }
         this.prevX = k.x;
+        if (this.hopT > 0 || this.stuck)
+            g = 0;
         this.vy += g * DT;
         this.vx *= 1 - 0.1 * DT;
+        if (this.hopT > 0) { // flying: the hop sets the velocity outright (so the rope cannot slow it)
+            this.vx = this.hopDir[0] * HOPPER_HOP_V;
+            this.vy = this.hopDir[1] * HOPPER_HOP_V;
+        } else if (this.stuck) { // clinging: no sliding, only a slow crawl along the surface
+            const crawl = HOPPER_CRAWL;
+            if (this.surf === 'C') { this.vy = 0; this.vx = dir * crawl; }
+            else { this.vx = 0; this.vy = ((k.dn ? 1 : 0) - (k.up ? 1 : 0)) * crawl; }
+        }
+        this.hopPx = this.x; this.hopPy = this.y;
         this.x += this.vx * DT;
         this.y += this.vy * DT;
         // The hook is just the rope's anchor point: nothing blocks you from reaching it, so you can swing straight through the pivot and out the other side.
@@ -808,5 +881,6 @@ class Player {
                 this.vx *= -0.2;
         } else
             this.netSide = side;
+        this.hopperEnd(k);
     }
 }

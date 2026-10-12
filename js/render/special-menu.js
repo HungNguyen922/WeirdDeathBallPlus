@@ -11,6 +11,7 @@ const SPECIALS = [
     { id: 'warp', name: 'WARP', icon: 'warp' },
     { id: 'awakened', name: 'AWAKENED', icon: 'awakened' },
     { id: 'explode', name: 'EXPLODE', icon: 'explode' },
+    { id: 'hopper', name: 'HOPPER', icon: 'hopper' },
 ];
 const ui = { open: -1, slot: 0, hover: null }; // open = index of the player whose menu is open (-1 = none), slot = which of their specials it edits (0 first, 1 second)
 const hintX = i => (sideSwap(i) === 0 ? -OX / 2 : W + OX / 2); // i is 0 (Blue) or 1 (Red) here, which is also the team

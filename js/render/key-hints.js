@@ -96,6 +96,14 @@ function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebel
         cx.moveTo(-2, 2); cx.lineTo(2, -2);
         cx.moveTo(-0.5, -2.5); cx.lineTo(2.2, -2.2); cx.lineTo(2.5, 0.5);
         cx.stroke();
+    } else if (kind === 'hopper') { // two surfaces with an arrow bouncing between them
+        cx.lineWidth = 2.4;
+        cx.moveTo(-9, -9); cx.lineTo(9, -9);
+        cx.moveTo(-9, 9); cx.lineTo(9, 9);
+        cx.moveTo(0, -5); cx.lineTo(0, 5);
+        cx.moveTo(-3.5, -1.5); cx.lineTo(0, -5); cx.lineTo(3.5, -1.5);
+        cx.moveTo(-3.5, 1.5); cx.lineTo(0, 5); cx.lineTo(3.5, 1.5);
+        cx.stroke();
     } else if (kind === 'locked') { // padlock
         cx.fillRect(-6, -1, 12, 9);
         cx.beginPath(); cx.arc(0, -2, 4.5, Math.PI, 0); cx.stroke();

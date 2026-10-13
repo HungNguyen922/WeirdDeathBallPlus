@@ -116,6 +116,15 @@ function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebel
         cx.beginPath(); cx.moveTo(0, 6); cx.lineTo(0, -9);
         cx.moveTo(-4, -5); cx.lineTo(0, -9); cx.lineTo(4, -5);
         cx.stroke();
+    } else if (kind === 'swap') { // two dots trading places along two curved arrows
+        cx.lineWidth = 2;
+        cx.arc(-7, 0, 2.6, 0, 7); cx.fill();
+        cx.beginPath(); cx.arc(7, 0, 2.6, 0, 7); cx.fill();
+        cx.beginPath(); cx.arc(0, 0, 7, Math.PI * 1.15, Math.PI * 1.85); cx.stroke();
+        cx.beginPath(); cx.arc(0, 0, 7, Math.PI * 0.15, Math.PI * 0.85); cx.stroke();
+        cx.beginPath(); cx.moveTo(4, -9); cx.lineTo(7, -6); cx.lineTo(3.5, -4.5);
+        cx.moveTo(-4, 9); cx.lineTo(-7, 6); cx.lineTo(-3.5, 4.5);
+        cx.stroke();
     } else if (kind === 'locked') { // padlock
         cx.fillRect(-6, -1, 12, 9);
         cx.beginPath(); cx.arc(0, -2, 4.5, Math.PI, 0); cx.stroke();

@@ -7,7 +7,8 @@ const load = f => vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'), c
 load('js/physics/constants.js');
 vm.runInContext(`
 class Player {}
-const mk = (id, x, y) => Object.assign(new Player(), { cd: { portal: 0 }, netSide: 0, id, team: id % 2, x, y, vx: 0, vy: 0, r: 16, alive: true, keys: { l: 0, r: 0, up: 0, dn: 0, z: 0, x: 0, sp: 0, sp2: 0 }, special: 'portal', special2: 'dash' });
+const AIMING = ['arrow', 'marionette', 'bat'];
+const mk = (id, x, y) => Object.assign(new Player(), { casts: [], cd: { portal: 0 }, netSide: 0, id, team: id % 2, x, y, vx: 0, vy: 0, r: 16, alive: true, keys: { l: 0, r: 0, up: 0, dn: 0, z: 0, x: 0, sp: 0, sp2: 0 }, special: 'portal', special2: 'dash' });
 const allPlayers = [mk(0, 100, 300), mk(1, 800, 300), mk(2, 0, 0), mk(3, 0, 0)], players = [allPlayers[0], allPlayers[1]];
 const ball = { x: 475, y: 100, vx: 0, vy: 0, r: 14 }, decoys = [], arrows = [], boomerangs = [];
 let twoSpecials = false;

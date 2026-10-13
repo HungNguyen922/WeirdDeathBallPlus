@@ -56,7 +56,10 @@ function portalPass(b, turnAng = false) {
     }
     return false;
 }
-function portalAimStep(c, k) { // the same aim controls as ARROW: LEFT / RIGHT turn it, a double tap on an arrow key snaps it that way
+function aimingCastRunning(p) { // ARROW / MARIONETTE / BAT read the arrow keys live: none of them can run at the same time as a portal or swap aim
+    return p.casts.some(c => AIMING.includes(c.type));
+}
+function portalAimStep(c, k, turn = PORTAL_TURN, dbl = PORTAL_DBL_T) { // the same aim controls as ARROW: LEFT / RIGHT turn it, a double tap on an arrow key snaps it that way (SWAP uses this too)
     const now = { l: !!k.l, r: !!k.r, u: !!k.up, d: !!k.dn };
     for (const id in now) {
         c.tap[id] = Math.max(0, c.tap[id] - DT);
@@ -66,14 +69,14 @@ function portalAimStep(c, k) { // the same aim controls as ARROW: LEFT / RIGHT t
                 c.tap[id] = 0;
                 c.noTilt = true;
             } else
-                c.tap[id] = PORTAL_DBL_T;
+                c.tap[id] = dbl;
         }
         c.prev[id] = now[id];
     }
     if (!now.l && !now.r)
         c.noTilt = false;
     if (now.l !== now.r && !c.noTilt)
-        c.ang = wrapAng(c.ang + (now.r ? 1 : -1) * PORTAL_TURN * DT);
+        c.ang = wrapAng(c.ang + (now.r ? 1 : -1) * turn * DT);
 }
 function placePortal(p, c) {
     const mine = portals.filter(q => q.owner === p);
@@ -98,7 +101,7 @@ function portalCasts() {
                 placePortal(p, p.pcast);
                 p.pcast = null;
             }
-        } else if (held && !p.portalHeld && !(p.cd.portal > 0))
+        } else if (held && !p.portalHeld && !(p.cd.portal > 0) && !p.scast && !aimingCastRunning(p))
             p.pcast = { x: p.x, y: p.y, ang: -Math.PI / 2, noTilt: false, tap: { l: 0, r: 0, u: 0, d: 0 }, prev: { l: !!k.l, r: !!k.r, u: !!k.up, d: !!k.dn } }; // starts pointing up, anchored where you pressed
         p.portalHeld = held;
     }

@@ -1,0 +1,100 @@
+// Headless tests for the Swap special. Run:  node js/test/swap-test.js
+// Needs only constants.js, portals.js and swap.js (it stubs the bodies), so it runs even without the rest of the sim.
+const fs = require('fs'), path = require('path'), vm = require('vm');
+const root = path.join(__dirname, '..', '..');
+const ctx = vm.createContext({ console, Math });
+const load = f => vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'), ctx, { filename: f });
+load('js/physics/constants.js');
+vm.runInContext(`
+class Player {}
+const mk = (id, x, y) => Object.assign(new Player(), { cd: { swap: 0, portal: 0 }, casts: [], netSide: 0, id, team: id % 2, color: '#fff', x, y, vx: 0, vy: 0, r: 16, alive: true, keys: { l: 0, r: 0, up: 0, dn: 0, z: 0, x: 0, sp: 0, sp2: 0 }, special: 'swap', special2: 'dash' });
+const allPlayers = [mk(0, 100, 300), mk(1, 800, 300), mk(2, 0, 0), mk(3, 0, 0)], players = [allPlayers[0], allPlayers[1]];
+const ball = { x: 900, y: 50, vx: 7, vy: 8, r: 14 }, decoys = [], arrows = [], boomerangs = [];
+let twoSpecials = false;
+const AIMING = ['arrow', 'marionette', 'bat'];
+const wrapAng = a => Math.atan2(Math.sin(a), Math.cos(a));
+const ARROW_SNAP = { l: Math.PI, r: 0, u: -Math.PI / 2, d: Math.PI / 2 };
+`, ctx);
+load('js/physics/portals.js');
+load('js/physics/swap.js');
+let fails = 0;
+const check = (ok, msg) => { if (!ok) fails++; console.log((ok ? 'ok   ' : 'FAIL ') + msg); };
+const run = c => vm.runInContext(c, ctx);
+const reset = () => run(`
+players[0].x = 100; players[0].y = 300; players[0].vx = 11; players[0].vy = 12; players[0].alive = true; players[0].cd.swap = 0; players[0].scast = null; players[0].swapHeld = false; players[0].swapAng = 0; players[0].keys.sp = 0; players[0].keys.x = 0; players[0].pcast = null; players[0].casts = [];
+players[1].x = 800; players[1].y = 100; players[1].alive = true;
+ball.x = 900; ball.y = 50; decoys.length = 0; arrows.length = 0; boomerangs.length = 0;`);
+
+// 1. what is in the cone (aim = 0, i.e. pointing right; the cone reaches 15 PL = 480 u)
+reset();
+run('decoys.push({ x: 250, y: 310, r: 14, vx: 0, vy: 0 }); arrows.push({ x: 400, y: 290, r: 8, vx: 0, vy: 0, stuck: false }); boomerangs.push({ x: 560, y: 300, r: 10, vx: 0, vy: 0 })');
+check(run('swapPick(players[0], 0, false) === decoys[0]'), 'nearest in the cone is picked');
+check(run('swapPick(players[0], 0, true) === boomerangs[0]'), 'furthest in the cone is picked when far = true');
+run('arrows[0].stuck = true');
+check(run('swapPick(players[0], 0, false) === decoys[0] && swapPick(players[0], 0, true) === boomerangs[0]'), 'an arrow stuck in the terrain is not a target');
+run('decoys[0].dead = true');
+check(run('swapPick(players[0], 0, false) === boomerangs[0]'), 'a dead decoy is not a target');
+run('boomerangs[0].x = 100 + 480 + 40');
+check(run('swapPick(players[0], 0, true) === null'), 'beyond the cone\'s range nothing is picked (and the player never picks themselves)');
+run('boomerangs[0].x = 300; boomerangs[0].y = 300 + 300 * Math.tan(SWAP_HALF + 0.2)');
+check(run('swapPick(players[0], 0, false) === null'), 'outside the cone\'s angle nothing is picked');
+check(run('swapPick(players[0], Math.atan2(boomerangs[0].y - 300, 200), false) === boomerangs[0]'), 'turning the aim onto it picks it');
+run('players[1].x = 100; players[1].y = 200');
+check(run('swapPick(players[0], -Math.PI / 2, false) === players[1]'), 'other players (including teammates) are targets');
+check(run('swapPick(players[0], Math.PI, false) === null'), 'aiming at the wall behind picks nothing');
+run('players[1].x = 100 - 200; players[1].y = 300 - 1');
+check(run('swapPick(players[0], Math.PI + 0.01, false) === players[1] && swapPick(players[0], -Math.PI + 0.01, false) === players[1]'), 'the angle test wraps around +-PI');
+
+// 2. a swap: positions exchanged, velocities kept, net side updated for players
+reset();
+run('players[1].x = 300; players[1].y = 320; players[1].vx = -5; players[1].vy = 6; players[1].netSide = 0; players[0].netSide = 0');
+run('doSwap(players[0], players[1])');
+check(run('players[0].x === 300 && players[0].y === 320 && players[1].x === 100 && players[1].y === 300'), 'places are exchanged');
+check(run('players[0].vx === 11 && players[0].vy === 12 && players[1].vx === -5 && players[1].vy === 6'), 'everyone keeps their own velocity');
+reset();
+run('players[0].x = 400; players[0].netSide = 0; players[1].x = 560; players[1].y = 300; players[1].netSide = 1; doSwap(players[0], players[1])');
+check(run('players[0].netSide === 1 && players[1].netSide === 0'), 'swapping across the net updates both players\' net side (the net guard would drag them back otherwise)');
+reset();
+run('ball.x = 400; ball.y = 300; ball.vx = 3; doSwap(players[0], ball)');
+check(run('ball.x === 100 && ball.y === 300 && players[0].x === 400 && ball.vx === 3'), 'swapping with the ball moves both and keeps the ball\'s velocity');
+
+// 3. the whole cast: hold, turn, release
+reset();
+run('decoys.push({ x: 250, y: 300, r: 14, vx: 0, vy: 0 }); boomerangs.push({ x: 500, y: 300, r: 10, vx: 0, vy: 0 }); players[0].keys.sp = 1; stepSwaps()');
+check(run('players[0].scast') !== null && run('players[0].scast.ang') === 0, 'holding the key opens the cone, starting where the last one pointed');
+run('players[0].keys.sp = 0; stepSwaps()');
+check(run('players[0].x') === 250 && run('decoys[0].x') === 100 && run('players[0].cd.swap') === run('SWAP_COOLDOWN'), 'releasing swaps with the nearest in the cone and starts the cooldown');
+reset();
+run('decoys.push({ x: 250, y: 300, r: 14, vx: 0, vy: 0 }); boomerangs.push({ x: 500, y: 300, r: 10, vx: 0, vy: 0 }); players[0].keys.sp = 1; stepSwaps(); players[0].keys.x = 1; players[0].keys.sp = 0; stepSwaps()');
+check(run('players[0].x') === 500 && run('boomerangs[0].x') === 100, 'releasing while holding weight swaps with the furthest');
+reset();
+run('players[0].keys.sp = 1; stepSwaps(); players[0].keys.sp = 0; stepSwaps()');
+check(run('players[0].x') === 100 && run('players[0].cd.swap') === run('SWAP_MISS_CD') && run('players[0].scast') === null, 'nothing in the cone: nothing happens, only the short miss cooldown');
+// aim controls
+reset();
+run('players[0].swapAng = 0; players[0].keys.sp = 1; stepSwaps(); players[0].keys.r = 1; for (let i = 0; i < 120; i++) stepSwaps(); players[0].keys.r = 0');
+check(Math.abs(run('players[0].scast.ang') - run('SWAP_TURN')) < 1e-6, 'RIGHT turns the cone clockwise at SWAP_TURN rad/s');
+run('for (const v of [1, 0, 1]) { players[0].keys.dn = v; stepSwaps(); }');
+check(Math.abs(run('players[0].scast.ang') - Math.PI / 2) < 1e-9, 'double tapping DOWN snaps it downwards');
+run('players[0].keys.sp = 0; stepSwaps()');
+check(Math.abs(run('players[0].swapAng') - Math.PI / 2) < 1e-9, 'the next cone starts where this one ended');
+// 4. rules about when a cast can start
+reset();
+run('players[0].cd.swap = 1; players[0].keys.sp = 1; stepSwaps()');
+check(run('players[0].scast') === null, 'no cone during the cooldown');
+reset();
+run('players[0].pcast = {}; players[0].keys.sp = 1; stepSwaps()');
+check(run('players[0].scast') === null, 'no cone while aiming a portal');
+reset();
+run('players[0].casts = [{ type: "arrow" }]; players[0].keys.sp = 1; stepSwaps()');
+check(run('players[0].scast') === null, 'no cone while another aiming cast (arrow / marionette / bat) is running');
+reset();
+run('players[0].keys.sp = 1; stepSwaps(); players[0].alive = false; stepSwaps()');
+check(run('players[0].scast') === null, 'dying cancels the cone');
+reset();
+run('twoSpecials = true; players[0].special = "dash"; players[0].special2 = "swap"; players[0].keys.sp2 = 1; stepSwaps()');
+check(run('players[0].scast') !== null, 'works from the second special key too');
+run('twoSpecials = false');
+check(run('JSON.stringify(players[0].scast)').length > 0 && run('JSON.stringify(players[0].swapFx)') !== undefined, 'cast and flash data are plain JSON');
+console.log(fails ? `\n${fails} FAILED` : '\nall passed');
+process.exit(fails ? 1 : 0);

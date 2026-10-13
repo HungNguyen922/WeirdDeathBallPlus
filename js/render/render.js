@@ -11,6 +11,7 @@ function draw() {
     drawCasts();
     drawWarps();
     drawPortals();
+    drawSwaps();
     drawAwakened();
     drawExplode();
     drawGrappleRange();

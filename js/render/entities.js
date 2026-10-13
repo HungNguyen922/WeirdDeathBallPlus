@@ -455,6 +455,45 @@ function drawPortals() { // Portal: both teams see every portal (all orange), a 
             drawPortalShape(p.pcast.x, p.pcast.y, p.pcast.ang, 0, true, tm);
     cx.restore();
 }
+function drawSwaps() { // Swap: the cone of vision while aiming (with the body it would pick ringed: solid ring = nearest, double dashed ring = furthest, i.e. weight held), and a flash after a swap
+    cx.save();
+    for (const p of players) {
+        const c = p.scast;
+        if (p.alive && c) {
+            const far = !!(p.keys && p.keys.x), t = swapPick(p, c.ang, far), col = p.color || '#fff';
+            cx.globalAlpha = 1;
+            const g = cx.createRadialGradient(p.x, p.y, 4, p.x, p.y, SWAP_RANGE);
+            g.addColorStop(0, 'rgba(255,255,255,0.28)');
+            g.addColorStop(1, 'rgba(255,255,255,0.03)');
+            cx.fillStyle = g;
+            cx.beginPath(); cx.moveTo(p.x, p.y); cx.arc(p.x, p.y, SWAP_RANGE, c.ang - SWAP_HALF, c.ang + SWAP_HALF); cx.closePath(); cx.fill();
+            cx.strokeStyle = col; cx.lineWidth = 2; cx.setLineDash([8, 6]);
+            cx.beginPath(); cx.moveTo(p.x + Math.cos(c.ang - SWAP_HALF) * SWAP_RANGE, p.y + Math.sin(c.ang - SWAP_HALF) * SWAP_RANGE); cx.lineTo(p.x, p.y);
+            cx.lineTo(p.x + Math.cos(c.ang + SWAP_HALF) * SWAP_RANGE, p.y + Math.sin(c.ang + SWAP_HALF) * SWAP_RANGE);
+            cx.stroke();
+            cx.beginPath(); cx.arc(p.x, p.y, SWAP_RANGE, c.ang - SWAP_HALF, c.ang + SWAP_HALF); cx.stroke();
+            cx.setLineDash([]);
+            if (t) {
+                const tr = (t.r || 8) + 6;
+                cx.strokeStyle = '#fff'; cx.lineWidth = 2.5;
+                cx.beginPath(); cx.arc(t.x, t.y, tr, 0, 7); cx.stroke();
+                if (far) { cx.setLineDash([4, 4]); cx.beginPath(); cx.arc(t.x, t.y, tr + 5, 0, 7); cx.stroke(); cx.setLineDash([]); }
+                cx.globalAlpha = 0.6; cx.lineWidth = 1.5; cx.setLineDash([3, 5]);
+                cx.beginPath(); line(p.x, p.y, t.x, t.y); cx.stroke();
+                cx.setLineDash([]);
+            }
+        }
+        const f = p.swapFx;
+        if (f) {
+            const u = Math.max(0, f.t / SWAP_FX);
+            cx.globalAlpha = u; cx.strokeStyle = p.color || '#fff'; cx.lineWidth = 3;
+            cx.beginPath(); line(f.ax, f.ay, f.bx, f.by); cx.stroke();
+            cx.beginPath(); cx.arc(f.ax, f.ay, 12 + 26 * (1 - u), 0, 7); cx.stroke();
+            cx.beginPath(); cx.arc(f.bx, f.by, 12 + 26 * (1 - u), 0, 7); cx.stroke();
+        }
+    }
+    cx.restore();
+}
 function anyArrowHeld(p) { return !!(p.keys.l || p.keys.r || p.keys.up || p.keys.dn); }
 function drawGrappleRange() { // range indicator when nothing is in reach
     for (const p of players) { // range indicator when nothing is in reach

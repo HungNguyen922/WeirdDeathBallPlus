@@ -353,12 +353,13 @@ const EXPLODE_AMP_SPEED = 900;        // body speed (u/s) at which that blend is
 const EXPLODE_AMP_GAIN = 0.5;         // extra speed added on top, as a share of the body's current speed
 
 // --- Hopper ---
-const HOPPER_MOVE = 0.25;        // share of normal run acceleration and top speed
-const HOPPER_CRAWL = 800;        // u/s you can crawl along a surface you are stuck to
-const HOPPER_HOP_V = 1400;      // hop speed (u/s)
-const HOPPER_HOP_T = 0.8;       // longest a hop can last (s), a safety timeout
-const HOPPER_GRACE = 0.25;      // s you stay stuck after a hop lands without holding the key (so you can chain hops)
-const HOPPER_COOLDOWN = 1;      // s, starts when the hop starts
+const HOPPER_MOVE = 0.25;             // share of normal run acceleration and top speed
+const HOPPER_CRAWL = 800;             // u/s you can crawl along a surface you are stuck to
+const HOPPER_CRAWL_FINE = 400;        // u/s you can crawl along a surface you are stuck to while holding the weight key (for fine positioning)
+const HOPPER_HOP_V = 1400;            // hop speed (u/s)
+const HOPPER_HOP_T = 0.8;             // longest a hop can last (s), a safety timeout
+const HOPPER_GRACE = 0.25;            // s you stay stuck after a hop lands without holding the key (so you can chain hops)
+const HOPPER_COOLDOWN = 1;            // s, starts when the hop starts
 
 // --- Boomerang ---
 const BOOMERANG_MAX = 10;              // most one player can have out at once (2 volleys)
@@ -399,8 +400,19 @@ const PORTAL_MIN_V = 120;             // u/s: slowest a body leaves a portal (so
 const PORTAL_EXIT_GAP = 3;            // u: a body comes out this far beyond the exit disc's edge (edge to the body's rim)
 const PORTAL_FX = 0.4;                // s the flash on a portal lasts when something goes through (display only)
 
+// --- Swap --------------------------------------------------------------------------------------------------------------------------------------------------------
+// Hold the special key to open a cone of vision in front of you, LEFT / RIGHT turn it (a double tap on an arrow key snaps it), release to swap places with the NEAREST thing in the cone,
+// or the FURTHEST if weight is held when you let go. Players, the death ball, decoys, arrows in flight and boomerangs all count. Position only: everyone keeps their own velocity. See physics/swap.js.
+const SWAP_RANGE = 40 * PL;           // how far the cone reaches (u): about half the arena
+const SWAP_HALF = 0.3;                // half the cone's angle (rad): 0.5 = a cone about 57 degrees wide
+const SWAP_TURN = 2;                  // how fast LEFT / RIGHT turn the aim (rad/s)
+const SWAP_DBL_T = 0.25;              // s: a double tap within this snaps the aim
+const SWAP_COOLDOWN = 10;              // s after a swap that happened
+const SWAP_MISS_CD = 0.5;             // s after letting go with nothing in the cone (stops key-mashing, costs almost nothing)
+const SWAP_FX = 0.35;                 // s the swap flash lasts (display only)
+
 // --- The ability table: reads every cooldown above, so it has to stay below them ------------------------------------------------------------------------------------
-const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN }, portal: { cd: PORTAL_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
+const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN }, portal: { cd: PORTAL_COOLDOWN }, swap: { cd: SWAP_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 
 // =====================================================================================================================================================================
 // 11  MATCH

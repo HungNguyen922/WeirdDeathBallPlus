@@ -361,7 +361,7 @@ const HOPPER_HOP_T = 0.8;             // longest a hop can last (s), a safety ti
 const HOPPER_GRACE = 0.25;            // s you stay stuck after a hop lands without holding the key (so you can chain hops)
 const HOPPER_COOLDOWN = 1;            // s, starts when the hop starts
 
-// --- Boomerang ---
+// --- Boomerang ---    
 const BOOMERANG_MAX = 10;              // most one player can have out at once (2 volleys)
 const BOOMERANG_VOLLEY = 5;            // thrown per press
 const BOOMERANG_FAN = 0.5;             // rad, total spread of launch angles across the volley

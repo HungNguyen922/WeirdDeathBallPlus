@@ -210,7 +210,7 @@ function aiArrival(me) {
 const AI_GRIP_MIN = 1.6, AI_FLOAT_T = 0.8, AI_JUMP_HOLD = 0.6, AI_STAND = 90, AI_STANDS = [90, 130, 70, 160, 110], AI_HOLD_MAX = 1.6;
 const AI_SLICE = 96, AI_PRE = 8;          // jump jobs: physics steps per tick, and the ticks of latency they plan around
 const AI_SLICE_H = 48, AI_PRE_H = 24;      // held-plan jobs: bigger, because they must finish within their latency window (AI_PRE_H ticks) to be about the moment they land
-const AI_JUMP_STEPS = 180, AI_SAFE_STEPS = 36, AI_HELD_STEPS = 96, AI_AFTER_STEPS = 72, AI_LOOP_STEPS = 180, AI_LOOP_MAX = 2.4, AI_STALL_MAX = 2.2; // look-ahead lengths (steps): a jump, the safe time after latching, a held plan, the time after a release
+const AI_JUMP_STEPS = 180, AI_SAFE_STEPS = 84, AI_HELD_STEPS = 96, AI_AFTER_STEPS = 72, AI_LOOP_STEPS = 180, AI_LOOP_MAX = 2.4, AI_STALL_MAX = 2.2; // look-ahead lengths (steps): a jump, the safe time after latching, a held plan, the time after a release
 const AI_WAIT_FRAC = 0.5; // where the AI waits when the ball is not its business: 0 = against the net, 0.5 = the midline of its half (the book's Midline Defense), 1 = at its goal. (The old spot was 90 u from the net, about 0.19.)
 const aiMid = me => NETX - aiSide(me) * AI_WAIT_FRAC * NETX;
 // Grapple-jump launches: tap the grapple on the floor with weight held (weight multiplies the kick, and each tap within 1.5 s of the last makes the next one stronger and adds to our
@@ -270,7 +270,7 @@ function aiEngageKeys(me, b, E, k) {
         k[dx > 0 ? 'r' : 'l'] = true;
     else if (E.mode === 'away' && Math.abs(dx) < 130)
         k[dx > 0 ? 'l' : 'r'] = true;      // too close to latch from here: open the gap while we rise
-    if (!me.ground && Math.hypot(dx, b.y - me.y) < me.range + 30) { // (candidates() is the expensive part, so only ask when the ball could be in reach)
+    if (!me.ground && Math.hypot(dx, b.y - me.y) < RANGE + 30) { // (candidates() is the expensive part, so only ask when the ball could be in reach)
         const near = aiNearest(me, b);
         if (near && near.b && !near.decoy)
             k.z = true;                        // the ball is the nearest thing in reach: latch on
@@ -372,7 +372,7 @@ function* aiJumpJob(me0, frozen, delays, modes, out, styles = [0], robust = fals
         const V = aiSimFork(snap), E = { t: 0, mode, taps }, hs = { t: 0, dashT: null, plan: 'hold' };
         V.me.x += jx;
         V.me.vx += jv;
-        let latchedAt = -1, minD = 1e9;
+        let latchedAt = -1, minD = 1e9, prevGap = 1e9;
         for (let i = 0; i < AI_JUMP_STEPS; i++) {
             const k = aiNoKeys();
             if (V.me.onBall) {
@@ -384,7 +384,12 @@ function* aiJumpJob(me0, frozen, delays, modes, out, styles = [0], robust = fals
             const sc = aiSimStep(V, k);
             if (aiDead(V) || (sc !== null && sc !== V.me.team))
                 return false;                  // it got us, or it went in our goal anyway
-            minD = Math.min(minD, aiGap(V));
+            const gap = aiGap(V);
+            minD = Math.min(minD, gap);
+            if (latchedAt < 0 && !V.me.ground && gap > RANGE + 30 && gap > prevGap)
+                return false;                  // out of reach and still drifting apart (a tap jump that has shot past the ball): it cannot latch any more, so stop here and let the search move on.
+                                               // Without this every failed candidate ran the whole look-ahead, the job finished after the moment it was planning for, and the AI fell back to a dodge hop.
+            prevGap = gap;
             if (latchedAt >= 0 && i - latchedAt >= AI_SAFE_STEPS)
                 return minD > 36 && !aiFlight(V.b, 1 - V.me.team);
             if (latchedAt < 0 && V.me.ground && E.t > 0.3)

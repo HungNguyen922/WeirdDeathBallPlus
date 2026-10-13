@@ -184,6 +184,7 @@ function stepArrows() {
         for (let s = 0; s < n; s++) {
             a.x += a.vx * DT / n;
             a.y += a.vy * DT / n;
+            portalPass(a, true); // PORTAL: carried through a portal if its centre is inside one
             arrowPegBounce(a);
             if (!a.spent && arrowStrike(a)) { // it has done its one hit: it bounces off limp and keeps falling, still a solid thing that can stick in the terrain
                 arrowBumpPlayers(a);

@@ -355,7 +355,6 @@ const EXPLODE_AMP_GAIN = 0.5;         // extra speed added on top, as a share of
 // --- Hopper ---
 const HOPPER_MOVE = 0.25;        // share of normal run acceleration and top speed
 const HOPPER_CRAWL = 800;        // u/s you can crawl along a surface you are stuck to
-const HOPPER_CRAWL_FINE = 250;   // u/s crawl along a surface while holding Weight (fine positioning)
 const HOPPER_HOP_V = 1400;      // hop speed (u/s)
 const HOPPER_HOP_T = 0.8;       // longest a hop can last (s), a safety timeout
 const HOPPER_GRACE = 0.25;      // s you stay stuck after a hop lands without holding the key (so you can chain hops)
@@ -368,8 +367,8 @@ const BOOMERANG_FAN = 0.5;             // rad, total spread of launch angles acr
 const BOOMERANG_RANGE_SPREAD = 0.75;    // outer boomerangs go this much farther / inner ones shorter (0.5 = +/-25%)
 const BOOMERANG_COOLDOWN = 4;        // s between throws
 const BOOMERANG_HOLD = true;
-const BOOMERANG_V = 600;
-const BOOMERANG_RANGE = 400;
+const BOOMERANG_V = 800;
+const BOOMERANG_RANGE = 800;
 const BOOMERANG_TURN = 2;
 const BOOMERANG_BACK_V = 1000;         // faster return = harder shove
 const BOOMERANG_BACK_ACC = 600;
@@ -386,8 +385,22 @@ const BOOMERANG_E_BACK = 0.05;
 const BOOMERANG_SOLID_TEAMMATES = true;
 const BOOMERANG_SPIN = 20;
 
+// --- Portal ------------------------------------------------------------------------------------------------------------------------------------------------------
+// Hold the special key to anchor a portal where you stand, LEFT / RIGHT turn it (it starts pointing up; a double tap on an arrow key snaps it), release to open it. Two portals of yours
+// are linked: anything whose centre is inside one (players, the death ball, decoys, arrows, boomerangs) comes out of the other, just outside it, heading the way it points, at the
+// speed it had. There is no front or back: things enter from any angle. A third portal closes your oldest. Everyone can use everyone's. A player who ends up outside the side walls
+// (behind a goal alcove) dies. See physics/portals.js.
+const PORTAL_R = PL;                  // radius (u) of a portal: 1 player length
+const PORTAL_MAX = 2;                 // portals per player: opening another closes the oldest
+const PORTAL_TURN = 3;                // how fast LEFT / RIGHT turn the aim (rad/s)
+const PORTAL_DBL_T = 0.25;            // s: a double tap within this snaps the aim
+const PORTAL_COOLDOWN = 0.5;          // s before you can start the next one (it starts when one opens)
+const PORTAL_MIN_V = 120;             // u/s: slowest a body leaves a portal (something that drifted in is still pushed out along the arrow)
+const PORTAL_EXIT_GAP = 3;            // u: a body comes out this far beyond the exit disc's edge (edge to the body's rim)
+const PORTAL_FX = 0.4;                // s the flash on a portal lasts when something goes through (display only)
+
 // --- The ability table: reads every cooldown above, so it has to stay below them ------------------------------------------------------------------------------------
-const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
+const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN }, portal: { cd: PORTAL_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 
 // =====================================================================================================================================================================
 // 11  MATCH

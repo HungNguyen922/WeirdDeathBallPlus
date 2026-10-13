@@ -64,6 +64,8 @@ function saveState() {
         pegs: pegs.map(owned),
         arrows: arrows.map(owned),
         boomerangs: boomerangs.map(owned),
+        portals: portals.map(owned),
+        portalSeq,
     };
 }
 
@@ -128,6 +130,9 @@ function loadState(s) {
     arrows.push(...relink(s.arrows));
     boomerangs.length = 0;
     boomerangs.push(...relink(s.boomerangs || []));
+    portals.length = 0;
+    portals.push(...relink(s.portals || []));
+    portalSeq = s.portalSeq || 0;
     stuckSegs.length = 0;
     for (const a of arrows)
         if (a.stuck)

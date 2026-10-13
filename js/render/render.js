@@ -10,6 +10,7 @@ function draw() {
     drawAITags();
     drawCasts();
     drawWarps();
+    drawPortals();
     drawAwakened();
     drawExplode();
     drawGrappleRange();

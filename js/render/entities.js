@@ -415,6 +415,46 @@ function drawWarps() { // Warp: the marker, the dashed line to it, and the rings
     }
     cx.restore();
 }
+function drawPortalShape(x, y, ang, flash, preview, tm) { // one portal: a glowing orange disc with an arrow showing which way things come out
+    const R = PORTAL_R, nx = Math.cos(ang), ny = Math.sin(ang), tx = -ny, ty = nx, pulse = 0.5 + 0.5 * Math.sin(tm / 200);
+    cx.save();
+    cx.globalAlpha = preview ? 0.55 : 1;
+    const g = cx.createRadialGradient(x, y, 2, x, y, R);
+    g.addColorStop(0, 'rgba(255,152,0,' + (0.35 + 0.3 * flash) + ')');
+    g.addColorStop(1, 'rgba(255,152,0,0.05)');
+    cx.fillStyle = g;
+    cx.beginPath(); cx.arc(x, y, R, 0, 7); cx.fill();
+    cx.shadowColor = '#ff9800'; cx.shadowBlur = 10 + 14 * flash + 4 * pulse;
+    cx.strokeStyle = '#ff9800'; cx.lineWidth = 3 + 2 * flash;
+    if (preview) cx.setLineDash([6, 5]);
+    cx.beginPath(); cx.arc(x, y, R, 0, 7); cx.stroke();
+    cx.setLineDash([]);
+    cx.shadowBlur = 0;
+    cx.strokeStyle = '#ffe0b2'; cx.lineWidth = 3; cx.lineCap = 'round'; cx.lineJoin = 'round'; // the arrow: which way things come out
+    const tipX = x + nx * R * 0.8, tipY = y + ny * R * 0.8;
+    cx.beginPath(); line(x - nx * R * 0.45, y - ny * R * 0.45, tipX, tipY);
+    cx.moveTo(tipX - nx * 10 + tx * 8, tipY - ny * 10 + ty * 8); cx.lineTo(tipX, tipY); cx.lineTo(tipX - nx * 10 - tx * 8, tipY - ny * 10 - ty * 8);
+    cx.stroke();
+    cx.restore();
+}
+function drawPortals() { // Portal: both teams see every portal (all orange), a faint dashed link between each pair, and a dashed preview while a player is aiming one
+    const tm = performance.now();
+    cx.save();
+    for (const q of portals) {
+        const o = partnerOf(q);
+        if (o && q.id < o.id) {
+            cx.globalAlpha = 0.25; cx.strokeStyle = '#ff9800'; cx.lineWidth = 1.5; cx.setLineDash([5, 7]); cx.lineDashOffset = -(tm / 50) % 12;
+            cx.beginPath(); line(q.x, q.y, o.x, o.y); cx.stroke();
+            cx.setLineDash([]); cx.lineDashOffset = 0; cx.globalAlpha = 1;
+        }
+    }
+    for (const q of portals)
+        drawPortalShape(q.x, q.y, q.ang, q.flash || 0, false, tm);
+    for (const p of players)
+        if (p.alive && p.pcast)
+            drawPortalShape(p.pcast.x, p.pcast.y, p.pcast.ang, 0, true, tm);
+    cx.restore();
+}
 function anyArrowHeld(p) { return !!(p.keys.l || p.keys.r || p.keys.up || p.keys.dn); }
 function drawGrappleRange() { // range indicator when nothing is in reach
     for (const p of players) { // range indicator when nothing is in reach

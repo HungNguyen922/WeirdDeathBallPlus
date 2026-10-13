@@ -110,6 +110,12 @@ function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebel
         cx.lineTo(-5, 0); 
         cx.lineTo(8, 9);
         cx.stroke();
+    } else if (kind === 'portal') { // a ring with an arrow pointing out of it
+        cx.lineWidth = 2;
+        cx.arc(0, 2, 8, 0, 7); cx.stroke();
+        cx.beginPath(); cx.moveTo(0, 6); cx.lineTo(0, -9);
+        cx.moveTo(-4, -5); cx.lineTo(0, -9); cx.lineTo(4, -5);
+        cx.stroke();
     } else if (kind === 'locked') { // padlock
         cx.fillRect(-6, -1, 12, 9);
         cx.beginPath(); cx.arc(0, -2, 4.5, Math.PI, 0); cx.stroke();

@@ -14,6 +14,7 @@ const PICK_DESC = { // two short lines under the highlighted special
     explode: ['Blasts discs and balls away.', 'Kill in 5 s: cooldown reset.'],
     hopper: ['Stick to walls and ceiling.', 'Special hops to the far side.'],
     boomerang: ['Curving throw that returns.', 'Nudges things. Up to 4 out.'],
+    portal: ['Hold, turn with the arrows,', 'release. Two linked portals.'],
 };
 const pickSp = id => SPECIALS.find(a => a.id === id) || SPECIALS[0];
 const PICK_NAMES = ['BLUE', 'RED', 'BLUE 2', 'RED 2']; // by player id

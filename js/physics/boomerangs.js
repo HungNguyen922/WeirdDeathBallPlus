@@ -140,8 +140,10 @@ function stepBoomerangs() {
         b.vy = Math.sin(b.ang) * b.sp;
         const n = Math.max(1, Math.ceil(b.sp * DT / b.r)); // sub-steps of at most one radius, so it cannot skip through a thin wall or a player
         for (let s = 0; s < n; s++) {
+            const px = b.x, py = b.y;
             b.x += b.vx * DT / n;
             b.y += b.vy * DT / n;
+            portalPass(b, px, py, true);
             if (boomTerrain(b)) {
                 if (b.phase === 0)
                     b.phase = 1; // hit a wall on the way out: that is as far as it goes

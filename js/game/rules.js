@@ -23,7 +23,7 @@ const events = {
 // their normal keys. On the screen: left / right / up / down move the cursor over a grid PICK_COLS wide, grapple or special locks the choice in, weight takes it back.
 // The computer always takes Dash (it is the only special the AI knows how to use). When everybody is locked in, a short countdown runs and the point starts.
 const PICK_EVERY = 5, PICK_COLS = 5, PICK_GO_T = 0.9; // points between screens, icons per row, seconds of "get ready" after the last lock-in
-const PICK_LIST = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened', 'explode', 'hopper', 'boomerang']; // the grid, in reading order (same ids as SPECIALS in render/special-menu.js)
+const PICK_LIST = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened', 'explode', 'hopper', 'boomerang', 'portal']; // the grid, in reading order (same ids as SPECIALS in render/special-menu.js)
 let pickFixed = false; // the toggle: true = specials are only chosen on pick screens, false = swap any time from the keycap
 const pick = { on: false, t: 0, go: 0, at: -1, cur: [0, 0, 0, 0], ready: [false, false, false, false], prev: [0, 0, 0, 0], stage: [0, 0, 0, 0] };
 const keyBits = k => (k.l ? 1 : 0) | (k.r ? 2 : 0) | (k.up ? 4 : 0) | (k.dn ? 8 : 0) | (k.z ? 16 : 0) | (k.x ? 32 : 0) | (k.sp ? 64 : 0) | (k.sp2 ? 128 : 0);
@@ -148,6 +148,7 @@ function newRound() {
     decoys.length = 0; 
     clearArrows();
     clearBoomerangs();
+    clearPortals();
     ai.forEach((a, i) => aiReset(i)); // forget any look-ahead / plan from the last round
     players.forEach(p => p.reset()); 
     ball.reset(); 
@@ -311,6 +312,7 @@ function update() {
         for (let j = i + 1; j < decoys.length; j++)
             collide(d, decoys[j], BALL_M, BALL_M, DECOY_BOUNCE_BALL);
     }
+    stepPortals(); // PORTAL: carries players, the ball and decoys through, and opens / closes portals
     for (const p of players) { // the Death Ball kills on any touch, but the player's momentum goes into it first (crash shot)
         if (p.alive && Math.hypot(p.x - ball.x, p.y - ball.y) < p.r + ball.r) {
             const hit = crashShot(p, ball);

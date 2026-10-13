@@ -15,7 +15,7 @@ function findRoot() {
 const ROOT = findRoot();
 const SIM_FILES = [ // same order as index.html's <script> tags, minus everything that draws, plays sound or reads the keyboard
     'js/physics/constants.js', 'js/physics/terrain.js', 'js/physics/collision.js', 'js/physics/ball.js', 'js/physics/player.js',
-    'js/physics/bodies.js', 'js/physics/arrows.js', 'js/game/rules.js', 'js/game/simstate.js', 'js/game/ai.js',
+    'js/physics/bodies.js', 'js/physics/arrows.js', 'js/physics/boomerangs.js', 'js/physics/portals.js', 'js/game/rules.js', 'js/game/simstate.js', 'js/game/ai.js',
 ];
 
 function loadSim() {

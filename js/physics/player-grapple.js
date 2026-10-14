@@ -1,6 +1,69 @@
 // PHYSICS - Player grapple: the overcharge lockout, what the hook can reach, attaching / landing, and the per-tick rope, tether and weight-kick physics (stepGrapple).
 // Adds methods to Player (see mixin() in player.js); load after player.js.
 mixin(Player, {
+    // ---- Hyper / Xeric / Stun (constants.js has the numbers and the rules in one place) ----
+    // Called for every player once per tick BEFORE anyone steps, so the order players are stepped in never matters.
+    auraStep() {
+        const k = this.keys, zEff = k.z && this.gCool <= 0 && this.stunT <= 0; // the grapple key only counts when the grapple can actually work
+        const hyperOn = this.alive && this.ground && k.x && zEff && !this.onBall;   // weight + grapple on the floor
+        const xericOn = this.alive && this.ground && k.x && !zEff;                  // weight on the floor, grapple not held
+        this.hyperT = hyperOn ? HYPER_LINGER : Math.max(0, this.hyperT - DT);
+        this.xericT = xericOn ? XERIC_LINGER : Math.max(0, this.xericT - DT);
+        this.hyperGap = hyperOn ? 0 : this.hyperGap + DT;
+        this.xericGap = xericOn ? 0 : this.xericGap + DT;
+        this.xericLen = xericOn ? (this.xericWas ? this.xericLen + DT : DT) : this.xericLen; // how long the latest xeric run has lasted (kept after it ends)
+        this.stunCd = Math.max(0, this.stunCd - DT);
+        this.stunFx = Math.max(0, this.stunFx - DT);
+        // Stun combo: one aura starts while the other was on a moment ago (hyper then xeric, or xeric then hyper)
+        const hyperStart = hyperOn && !this.hyperWas && this.xericGap <= STUN_WINDOW && this.xericLen >= STUN_HOLD_MIN && this.xericLen <= STUN_HOLD_MAX; // xeric, then a quick grapple
+        const xericStart = xericOn && !this.xericWas && this.hyperGap <= STUN_WINDOW;                                                                   // hyper, then a quick xeric (the dribble)
+        if (this.stunCd <= 0 && (hyperStart || xericStart))
+            this.stunOthers();
+        this.hyperWas = hyperOn;
+        this.xericWas = xericOn;
+        // Stun: counts down, ends the moment the player is back on the floor, then a short immunity
+        if (this.stunT > 0) {
+            this.stunT = this.ground || !this.alive ? 0 : Math.max(0, this.stunT - DT);
+            if (this.stunT === 0)
+                this.stunImm = STUN_IMMUNE;
+        } else
+            this.stunImm = Math.max(0, this.stunImm - DT);
+    },
+    // What the OTHER players' floor auras do to me right now: { hyper, xeric } (true = at least one other player has it up). The AI's planning copies see neither.
+    floorFx() {
+        const fx = { hyper: false, xeric: false };
+        if (this.sim)
+            return fx;
+        for (const o of players)
+            if (o !== this && o.alive && (FLOOR_FX_TEAMMATES || o.team !== this.team)) {
+                if (o.hyperT > 0) fx.hyper = true;
+                if (o.xericT > 0) fx.xeric = true;
+            }
+        return fx;
+    },
+    // The stun combo: everybody else who is in the air off a floor grapple is stunned.
+    stunOthers() {
+        this.stunCd = STUN_CD;
+        this.stunFx = STUN_FX;
+        for (const q of players) {
+            if (q === this || !q.alive || q.ground || q.stunT > 0 || q.stunImm > 0 || (!FLOOR_FX_TEAMMATES && q.team === this.team))
+                continue;
+            const onFloorRope = (q.rope && q.ropeGround && !q.onBall) || (q.pending && q.pending.ground);
+            if (onFloorRope || q.gjT < STUN_GJ_T)
+                q.stun();
+        }
+    },
+    stun() { // the grapple stops working: the rope goes limp and is dropped, no pull, no kick, no float, and no new hook until they land
+        this.stunT = STUN_T;
+        this.rope = null;
+        this.pending = null;
+        this.onBall = false;
+        this.tball = null;
+        this.driveT = 0;
+        this.kickReq = false;
+        this.taut = false;
+        this.floatW = 0;
+    },
     // Overcharge: the meter is emptied, the grapple is locked out for GRAPPLE_COOLDOWN and the grip is torn away (purple ripple). Happens when the meter runs out, or when a
     // player with their grapple active (rope out, or hook in flight) touches an enemy (see update() in rules.js).
     overcharge() {
@@ -81,12 +144,15 @@ mixin(Player, {
             const lift = LIFT_V * chain * (this.keys.x ? WEIGHT_M : 1);
             this.gjN++;
             this.gjT = 0;
+            if (this.keys.x && !this.onBall)
+                this.hyperT = HYPER_LINGER; // a weighted grapple jump off the floor is a hyper in passing: it lasts past the moment you leave the floor
             // The rope's length becomes the reach: one more GJ_REACH_GROUND out than we are now (on a platform that is a player length off it), never past RANGE.
             // Latching high above the pivot (already airborne) is weaker than a jump off the platform: full strength within GJ_NEAR u of the pivot, fading to GJ_AIR_SCALE by GJ_FAR u.
             const air = 1 - (1 - GJ_AIR_SCALE) * Math.max(0, Math.min(1, (d - GJ_NEAR) / (GJ_FAR - GJ_NEAR)));
-            this.len = Math.min(RANGE, Math.max(d, MIN_LEN) + GJ_REACH_GROUND * air * (this.keys.x ? GJ_REACH_WEIGHTED : 1));
+            const fxL = this.floorFx();
+            this.len = Math.min(RANGE, Math.max(d, MIN_LEN) + GJ_REACH_GROUND * air * (this.keys.x ? GJ_REACH_WEIGHTED : 1) * (fxL.hyper ? HYPER_REACH : 1));
             this.driveT = GJ_DRIVE_T;
-            this.driveVmax = lift * GJ_DRIVE_BOOST * air; // top speed away from the pivot this jump can reach
+            this.driveVmax = lift * GJ_DRIVE_BOOST * air * (this.keys.x && fxL.xeric ? XERIC_JUMP : 1); // top speed away from the pivot this jump can reach (a xeric under a weighted jump makes it a misfire)
             this.driveAcc = this.driveVmax / GJ_DRIVE_T; // delivered by step() as a pull away from the pivot, not as one kick
             this.taut = false;
         }
@@ -110,7 +176,7 @@ mixin(Player, {
             if (this.gCool === 0)
                 this.gCharge = 0; // lockout over: the meter does NOT jump to full, it restarts from 0 (grapple again right away and it just overcharges again)
         }
-        const z = k.z && this.gCool <= 0;
+        const z = k.z && this.gCool <= 0 && this.stunT <= 0; // (stunned: no hook)
         if (!z && !primed)
             this.kickReq = false; // a primed kick survives the grapple being up
         if (z && !this.rope && !this.pending)
@@ -140,6 +206,7 @@ mixin(Player, {
         }
         // Tether = a leash: a maximum length, nothing more. Stretched past it = spring + damping (hard limit on surfaces); closer than it the rope is slack. The pivot
         // has no effect on you at all: no push, no steering, nothing solid, so you can swing right through it. The ball pivot sits on its edge and spins with it.
+        const fx = this.floorFx(); // what other players' hyper / xeric do to me this tick
         const a = this.rope, tb = this.tball || ball; // tb = the ball we are tethered to: the death ball or one of the decoys
         if (a) {
             if (this.ropeBase && !this.onBall)
@@ -163,9 +230,10 @@ mixin(Player, {
                     const m = Math.hypot(ux, uy) || 1;
                     ux /= m; uy /= m;
                     const ease = Math.min(1, room / GJ_EASE); // glide in: the pull fades over the last GJ_EASE u
+                    const hb = fx.hyper ? HYPER_DRIVE : 1; // another player's hyper speeds the whole pull up (acceleration and top speed)
                     const out = this.vx * ux + this.vy * uy; // speed already heading away from the pivot: the drive never pushes past this jump's top speed, so a regrab on the way up cannot stack
-                    if (out < this.driveVmax) {
-                        const add = Math.min(this.driveAcc * ease * DT, this.driveVmax - out);
+                    if (out < this.driveVmax * hb) {
+                        const add = Math.min(this.driveAcc * hb * ease * DT, this.driveVmax * hb - out);
                         this.vx += ux * add;
                         this.vy += uy * add;
                     }
@@ -178,7 +246,7 @@ mixin(Player, {
                 if (!below) {
                     const past = Math.max(0, d - this.len);
                     const room = Math.max(0, 1 - past / WEIGHT_KICK_REACH);
-                    const want = WEIGHT_KICK * room * (this.ropeGround ? 1 : WALL_KICK_SCALE);
+                    const want = WEIGHT_KICK * room * (this.ropeGround ? 1 : WALL_KICK_SCALE) * (fx.hyper ? HYPER_KICK : 1) * (fx.xeric ? XERIC_KICK : 1);
 
                     // Kick direction: away from the pivot, reshaped by the arrows. Only once the float is established (taut),
                     // so the weighted grapple-jump launch keeps its direction.
@@ -268,3 +336,6 @@ mixin(Player, {
         this.prevX = k.x;
     },
 });
+
+
+

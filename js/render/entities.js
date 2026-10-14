@@ -677,6 +677,66 @@ function drawGrappleRing(p) {
         cx.shadowBlur = 0; cx.globalAlpha = 1;
     }
 }
+// ---- Hyper / Xeric / Stun visuals (display only: reads the player's timers, never writes them) ----
+// Paste above drawPlayers() in js/render/entities.js and call drawFloorFx(p) right after drawGrappleRing(p).
+function drawStar4(x, y, r) { // a small four-pointed star
+    cx.beginPath();
+    for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4, d = i % 2 ? r * 0.35 : r;
+        const px = x + Math.cos(a) * d, py = y + Math.sin(a) * d;
+        if (i) cx.lineTo(px, py); else cx.moveTo(px, py);
+    }
+    cx.closePath(); cx.fill();
+}
+function drawFloorFx(p) {
+    const tm = performance.now(), R = p.r;
+    cx.save();
+    if (p.hyperT > 0) { // HYPER: hot orange pulses and chevrons streaming up off the player
+        const f = Math.min(1, p.hyperT / HYPER_LINGER), pulse = 0.5 + 0.5 * Math.sin(tm / 55);
+        cx.globalCompositeOperation = 'lighter';
+        cx.shadowColor = '#ff8a1a'; cx.shadowBlur = 14;
+        cx.strokeStyle = '#ffb21f'; cx.lineWidth = 2 + 2 * pulse; cx.globalAlpha = 0.35 + 0.5 * f;
+        cx.beginPath(); cx.arc(p.x, p.y, R + 7 + 3 * pulse, 0, 7); cx.stroke();
+        cx.lineCap = 'round'; cx.lineJoin = 'round'; cx.lineWidth = 2.5; cx.strokeStyle = '#ffe45a';
+        for (let i = 0; i < 3; i++) { // chevrons rising, staggered
+            const u = ((tm / 420 + i / 3) % 1), cy = p.y - R - 4 - u * 34, w = 8 - 3 * u;
+            cx.globalAlpha = (1 - u) * (0.3 + 0.6 * f);
+            cx.beginPath(); cx.moveTo(p.x - w, cy + 5); cx.lineTo(p.x, cy - 2); cx.lineTo(p.x + w, cy + 5); cx.stroke();
+        }
+    }
+    if (p.xericT > 0) { // XERIC: a cool, steady shield of six arcs turning slowly, plus a ripple on the floor under the feet
+        const f = Math.min(1, p.xericT / XERIC_LINGER), rot = tm / 700;
+        cx.shadowColor = '#4fd8e8'; cx.shadowBlur = 10;
+        cx.strokeStyle = '#7ee8f4'; cx.lineWidth = 3; cx.lineCap = 'round'; cx.globalAlpha = 0.4 + 0.5 * f;
+        for (let i = 0; i < 6; i++) {
+            const a = rot + i * Math.PI / 3;
+            cx.beginPath(); cx.arc(p.x, p.y, R + 8, a, a + 0.75); cx.stroke();
+        }
+        cx.globalAlpha = 0.3 * f; cx.lineWidth = 2;
+        cx.beginPath(); cx.ellipse(p.x, p.y + R, R + 10, 4, 0, 0, 7); cx.stroke();
+    }
+    if (p.stunFx > 0) { // STUN combo: shockwave rings racing out along the floor from the owner's feet
+        const u = 1 - p.stunFx / STUN_FX;
+        cx.shadowColor = '#ffd23a'; cx.shadowBlur = 12; cx.lineCap = 'round';
+        for (let i = 0; i < 2; i++) {
+            const v = Math.min(1, Math.max(0, (u - i * 0.15) / 0.85));
+            if (v <= 0) continue;
+            cx.globalAlpha = (1 - v) * 0.9; cx.strokeStyle = i ? '#ff8a1a' : '#fff1a8'; cx.lineWidth = 1.5 + 4 * (1 - v);
+            cx.beginPath(); cx.ellipse(p.x, p.y + R, 20 + v * 240, 3 + v * 9, 0, Math.PI, 2 * Math.PI); cx.stroke(); // (the upper half only: the floor hides the rest)
+        }
+    }
+    if (p.stunT > 0) { // STUN: stars circling above the head, and the body flickers pale
+        const f = Math.min(1, p.stunT / 0.25);
+        cx.globalAlpha = 0.45 * f * (0.5 + 0.5 * Math.sin(tm / 45)); cx.fillStyle = '#fff';
+        cx.beginPath(); cx.arc(p.x, p.y, R, 0, 7); cx.fill();
+        cx.globalAlpha = f; cx.fillStyle = '#ffe45a'; cx.shadowColor = '#ffb21f'; cx.shadowBlur = 8;
+        for (let i = 0; i < 3; i++) {
+            const a = tm / 260 + i * 2 * Math.PI / 3;
+            drawStar4(p.x + Math.cos(a) * (R + 2), p.y - R - 8 + Math.sin(a) * 4, 5 + 1.5 * Math.sin(tm / 90 + i));
+        }
+    }
+    cx.restore();
+}
 function drawPlayers() { // the player discs
     for (const p of players) {
         cx.globalAlpha = p.alive ? swapArrive(p) : 0.2;
@@ -688,8 +748,10 @@ function drawPlayers() { // the player discs
         cx.fill();
         cx.stroke();
         cx.globalAlpha = 1;
-        if (p.alive)
+        if (p.alive) {
             drawGrappleRing(p);
+            drawFloorFx(p);
+        }
         if (p.alive && p.arrowQueued && !p.casting('arrow')) { // queued arrow: pulsing dashed ring
             cx.globalAlpha = 0.45 + 0.4 * (0.5 + 0.5 * Math.sin(performance.now() / 90));
             cx.strokeStyle = p.color; cx.lineWidth = 2; cx.setLineDash([4, 4]);
@@ -766,3 +828,6 @@ function drawMessage() { // round / match banner
         cx.fillText(msg, W / 2, H / 2 - 40);
     }
 }
+
+
+

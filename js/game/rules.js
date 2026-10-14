@@ -2,6 +2,8 @@
 // Drives the physics modules and never draws. The renderer subscribes through `events`.
 const WIN = 9; // points to win the match
 const SWAP_EVERY = 5; // points between side swaps (0 = never)
+const SWAP_BANNER_T = 1.2; // seconds the "SIDE CHANGE" banner holds the game after the teams trade ends
+let swapBanner = 0; // > 0: the banner is showing and the world is frozen (counts down; part of the saved state)
 let swapAt = -1; // the score total the last swap happened at, so one total can only swap once (a double KO must not swap twice)
 let score = [0, 0], pause = 0, over = false, msg = '';
 let teamSize = 1; // 1 = 1v1, 2 = 2v2
@@ -58,6 +60,7 @@ function maybeSwapSides() { // call right before a round is set up
     if (swapOn && SWAP_EVERY > 0 && total > 0 && total % SWAP_EVERY === 0 && swapAt !== total) {
         sidesSwapped = !sidesSwapped;
         swapAt = total;
+        swapBanner = SWAP_BANNER_T;
     }
 }
 function pickStep() { // one physics step of an open pick screen
@@ -180,6 +183,7 @@ function resetMatch() { // R key
     pause = 0;
     sidesSwapped = false;
     swapAt = -1;
+    swapBanner = 0;
     allPlayers.forEach(p => { p.exploCarry = false; }); // a refund carries into the next ROUND, never into a new match
     newRound();
     pick.on = false;
@@ -232,6 +236,10 @@ function update() {
             pegs.splice(i, 1); // fizzled out
     if (!players.some(p => p.team === 0) || !players.some(p => p.team === 1))
         return; // a team with nobody on it: nothing to play
+    if (swapBanner > 0) { // the sides just changed: hold the world still while the banner plays
+        swapBanner = Math.max(0, swapBanner - DT);
+        return;
+    }
     if (pick.on) { // a pick screen is open: the world holds still until everybody has chosen
         pickStep();
         return;
@@ -258,6 +266,8 @@ function update() {
     for (const p of players)
         if (ai[p.id].on && p.alive)
             aiDrive(p.id);
+    for (const p of players)
+        p.auraStep(); // hyper / xeric / stun bookkeeping for everyone first, so no player's step depends on who happens to be stepped first
     for (const p of players)
         if (p.alive) {
             p.step(ball);
@@ -344,3 +354,6 @@ function update() {
     else if (!teamAlive(1))
         point(0, 'wipes out the other team!');
 }
+
+
+

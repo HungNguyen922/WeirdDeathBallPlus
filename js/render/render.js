@@ -27,6 +27,7 @@ function draw() {
     drawSmoke();
     drawMessage();
     drawPickScreen(); // the special-ability select grid, over the playing area, when one is open
+    drawSideChangeBanner(performance.now());
     drawSpecialMenu();
     cx.restore();
 }

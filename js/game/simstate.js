@@ -56,7 +56,7 @@ function saveState() {
         saw: { t: saw.t, v: saw.v },
         padFlash: [...padFlash],
         pick: cloneData(pick), pickFixed,
-        sidesSwapped, swapAt, swapOn, twoSpecials,
+        sidesSwapped, swapAt, swapOn, twoSpecials, swapBanner,
         inMatch: players.map(p => p.id), // who is in the current match, in order
         players: allPlayers.map(player),
         ball: body(ball),
@@ -83,6 +83,7 @@ function loadState(s) {
     sidesSwapped = !!s.sidesSwapped;
     swapAt = s.swapAt === undefined ? -1 : s.swapAt;
     swapOn = s.swapOn === undefined ? true : !!s.swapOn;
+    swapBanner = s.swapBanner === undefined ? 0 : s.swapBanner;
     twoSpecials = !!s.twoSpecials;
     if (s.pick)
         for (const k in s.pick)
@@ -184,3 +185,6 @@ function stateHash(s = saveState()) {
     walk(s);
     return h.toString(16).padStart(8, '0');
 }
+
+
+

@@ -23,7 +23,7 @@ mixin(Player, {
         }
         const gf = tg || this.y + this.r >= H - 1.5;
         this.y += o;
-        this.vy += vo;
+        this.vy += gf && this.xericT > 0 ? vo * XERIC_QUAKE : vo; // Xeric: standing weighted on the floor soaks up most of the pop's kick
         sawHit(this.x, this.hit);
         this.ground = collideTerrain(this, 0, 0, LEDGES, LEDGE_T) || gf;
         if (collideTerrain(this, 0.2, 0, NETSEGS, NET_T))
@@ -66,3 +66,6 @@ mixin(Player, {
             this.netSide = side;
     },
 });
+
+
+

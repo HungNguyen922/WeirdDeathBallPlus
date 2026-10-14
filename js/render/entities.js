@@ -483,16 +483,67 @@ function drawSwaps() { // Swap: the cone of vision while aiming (with the body i
                 cx.setLineDash([]);
             }
         }
-        const f = p.swapFx;
-        if (f) {
-            const u = Math.max(0, f.t / SWAP_FX);
-            cx.globalAlpha = u; cx.strokeStyle = p.color || '#fff'; cx.lineWidth = 3;
-            cx.beginPath(); line(f.ax, f.ay, f.bx, f.by); cx.stroke();
-            cx.beginPath(); cx.arc(f.ax, f.ay, 12 + 26 * (1 - u), 0, 7); cx.stroke();
-            cx.beginPath(); cx.arc(f.bx, f.by, 12 + 26 * (1 - u), 0, 7); cx.stroke();
-        }
+        if (p.swapFx)
+            drawSwapFlight(p, p.swapFx);
     }
     cx.restore();
+}
+// Swap flight: the bodies already sit at their new spots (the sim moves them at once), so a ghost of each one flies the old way round on opposite arcs, with a trail, while the
+// real bodies fade in at the far end (see swapArrive) and rings pop at both ends. Everything here is display only.
+function swapGhost(kind, x, y, r, col, ang, alpha) {
+    cx.save();
+    cx.globalAlpha = alpha;
+    if (kind === 'arrow') {
+        arrowShape(x, y, ang, ARROW_LEN, col, alpha);
+    } else if (kind === 'ball') {
+        cx.fillStyle = '#000'; cx.strokeStyle = '#b36bff'; cx.lineWidth = 3;
+        cx.beginPath(); cx.arc(x, y, r, 0, 7); cx.fill(); cx.stroke();
+    } else {
+        cx.fillStyle = col; cx.strokeStyle = kind === 'boomerang' ? '#d9a066' : '#fff'; cx.lineWidth = 2;
+        cx.beginPath(); cx.arc(x, y, r, 0, 7); cx.fill(); cx.stroke();
+    }
+    cx.restore();
+}
+function drawSwapFlight(p, f) {
+    const u = Math.max(0, f.t / SWAP_FX), prog = 1 - u, ease = v => v * v * (3 - 2 * v), dx = f.bx - f.ax, dy = f.by - f.ay, dist = Math.hypot(dx, dy) || 1;
+    const nx = -dy / dist, ny = dx / dist, arc = Math.min(70, 14 + dist * 0.18); // the arc bulges sideways; the two ghosts bulge to opposite sides so they pass each other
+    const at = (e, side, rev) => { // position along the path at eased progress e; rev flies from b to a
+        const t = rev ? 1 - e : e, bulge = Math.sin(Math.PI * e) * arc * side;
+        return { x: f.ax + dx * t + nx * bulge, y: f.ay + dy * t + ny * bulge };
+    };
+    cx.save();
+    cx.lineCap = 'round';
+    cx.globalAlpha = 0.5 * u; cx.strokeStyle = p.color || '#fff'; cx.lineWidth = 2; cx.setLineDash([4, 6]);
+    cx.beginPath(); line(f.ax, f.ay, f.bx, f.by); cx.stroke();
+    cx.setLineDash([]);
+    const lanes = [[false, 1, p.color || '#fff', f.pr, 'player', 0], [true, -1, f.bcol || '#b36bff', f.br, f.bk, f.bang]]; // [flies b -> a, arc side, colour, radius, kind, angle]
+    for (const [rev, side, col, r, kind, ang] of lanes) {
+        const e = ease(prog);
+        cx.save();
+        cx.globalCompositeOperation = 'lighter';
+        for (let k = 5; k >= 1; k--) { // trail: the same path a little earlier, fainter and thinner
+            const ek = ease(Math.max(0, prog - k * 0.045)), a = at(ek, side, rev), b = at(Math.max(0, ek - 0.03), side, rev);
+            cx.strokeStyle = col; cx.globalAlpha = 0.5 * (1 - k / 6) * u; cx.lineWidth = Math.max(1, r * 1.6 * (1 - k / 6));
+            cx.beginPath(); line(a.x, a.y, b.x, b.y); cx.stroke();
+        }
+        cx.restore();
+        const g = at(e, side, rev);
+        swapGhost(kind, g.x, g.y, r, col, ang, 0.9 * u + 0.1);
+    }
+    for (const [x, y, r] of [[f.ax, f.ay, f.pr], [f.bx, f.by, f.br]]) { // a ring at each end: it opens where the body left and closes in on where it lands
+        cx.strokeStyle = '#fff'; cx.lineWidth = 3 * u + 1;
+        cx.globalAlpha = 0.8 * u; cx.beginPath(); cx.arc(x, y, r + 6 + 26 * prog, 0, 7); cx.stroke();
+        cx.globalAlpha = 0.6 * prog * u; cx.beginPath(); cx.arc(x, y, r + 24 * u, 0, 7); cx.stroke();
+    }
+    cx.restore();
+}
+function swapArrive(q) { // how much of a player is shown right now: a player who just swapped fades in at the new spot while its ghost flies there
+    for (const p of players) {
+        const f = p.swapFx;
+        if (f && (p === q || f.bid === q.id))
+            return 0.2 + 0.8 * clamp01(1 - f.t / SWAP_FX);
+    }
+    return 1;
 }
 function anyArrowHeld(p) { return !!(p.keys.l || p.keys.r || p.keys.up || p.keys.dn); }
 function drawGrappleRange() { // range indicator when nothing is in reach
@@ -628,7 +679,7 @@ function drawGrappleRing(p) {
 }
 function drawPlayers() { // the player discs
     for (const p of players) {
-        cx.globalAlpha = p.alive ? 1 : 0.2;
+        cx.globalAlpha = p.alive ? swapArrive(p) : 0.2;
         cx.fillStyle = p.color;
         cx.strokeStyle = '#fff';
         cx.lineWidth = p.keys.x ? 6 : 2;

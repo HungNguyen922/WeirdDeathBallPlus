@@ -246,6 +246,7 @@ function update() {
                 pick.at = -1;
                 sidesSwapped = false; // a new match starts on the normal sides
                 swapAt = -1;
+                allPlayers.forEach(p => { p.exploCarry = false; }); // the Explode refund carries between points, never into a new match (resetMatch does the same)
             }
             msg = '';
             maybeSwapSides(); // before newRound, so the players spawn on their new sides

@@ -161,6 +161,18 @@ const killWithBall = (sim, i) => { // the Death Ball lands on player i (and not 
     check(near(P(sim, 'cd.explode'), 12, 0.02), 'a new match never inherits a carried refund');
 }
 
+// the refund survives a point but not the end of a match
+{
+    const sim = fresh();
+    put(sim, 1, 640, 500);
+    tap(sim);
+    sim.run('score = [WIN - 1, 0]'); // the kill below wins the match
+    killWithBall(sim, 1);
+    check(sim.run('over') === true && P(sim, 'exploCarry') === true, 'scenario: the kill wins the match with a refund waiting');
+    ticks(sim, 4.2);
+    check(sim.run('score')[0] === 0 && P(sim, 'exploCarry') === false && near(P(sim, 'cd.explode'), sim.run('EXPLODE_COOLDOWN'), 0.02), `the next match starts with the full cooldown (${P(sim, 'cd.explode').toFixed(1)} s), the refund is dropped`);
+}
+
 // save -> JSON -> load keeps the window
 {
     const sim = fresh(2);

@@ -31,9 +31,10 @@ run('decoys.push({ x: 250, y: 310, r: 14, vx: 0, vy: 0 }); arrows.push({ x: 400,
 check(run('swapPick(players[0], 0, false) === decoys[0]'), 'nearest in the cone is picked');
 check(run('swapPick(players[0], 0, true) === boomerangs[0]'), 'furthest in the cone is picked when far = true');
 run('arrows[0].stuck = true');
-check(run('swapPick(players[0], 0, false) === decoys[0] && swapPick(players[0], 0, true) === boomerangs[0]'), 'an arrow stuck in the terrain is not a target');
+check(run('swapPick(players[0], 0, false) === decoys[0] && swapPick(players[0], 0, true) === boomerangs[0]'), 'a stuck arrow does not change who is nearest / furthest here');
 run('decoys[0].dead = true');
-check(run('swapPick(players[0], 0, false) === boomerangs[0]'), 'a dead decoy is not a target');
+check(run('swapPick(players[0], 0, false) === arrows[0]'), 'a dead decoy is not a target, and an arrow stuck in the terrain is');
+run('arrows.length = 0');
 run('boomerangs[0].x = 100 + 480 + 40');
 check(run('swapPick(players[0], 0, true) === null'), 'beyond the cone\'s range nothing is picked (and the player never picks themselves)');
 run('boomerangs[0].x = 300; boomerangs[0].y = 300 + 300 * Math.tan(SWAP_HALF + 0.2)');
@@ -57,6 +58,18 @@ check(run('players[0].netSide === 1 && players[1].netSide === 0'), 'swapping acr
 reset();
 run('ball.x = 400; ball.y = 300; ball.vx = 3; doSwap(players[0], ball)');
 check(run('ball.x === 100 && ball.y === 300 && players[0].x === 400 && ball.vx === 3'), 'swapping with the ball moves both and keeps the ball\'s velocity');
+
+// 2b. a landed arrow comes loose and falls; the flight data for the animation is recorded
+reset();
+run('arrows.push({ x: 300, y: 320, r: 8, vx: 0, vy: 0, ang: 0.5, team: 1, stuck: true, life: 1, immune: 0, ghost: 0 }); doSwap(players[0], arrows[0])');
+check(run('arrows[0].stuck === false && arrows[0].x === 100 && arrows[0].y === 300 && players[0].x === 300 && players[0].y === 320'), 'swapping with a stuck arrow trades places and frees the arrow');
+check(run('arrows[0].ghost === ARROW_GHOST_T && arrows[0].life >= ARROW_KNOCK_LIFE'), 'the freed arrow ignores terrain for a moment and lives long enough to land');
+check(run('players[0].swapFx.bk') === 'arrow' && run('players[0].swapFx.bcol') === '#ef5350' && run('players[0].swapFx.pr') === 16, 'the swap records what was swapped, for the animation');
+reset();
+run('doSwap(players[0], ball)');
+check(run('players[0].swapFx.bk') === 'ball' && run('players[0].swapFx.bid') === -1, 'a ball is recorded as a ball (no player id)');
+run('players[1].x = 300; players[1].y = 300; doSwap(players[0], players[1])');
+check(run('players[0].swapFx.bk') === 'player' && run('players[0].swapFx.bid') === 1, 'a player is recorded with its id, so it can fade in at its new spot');
 
 // 3. the whole cast: hold, turn, release
 reset();

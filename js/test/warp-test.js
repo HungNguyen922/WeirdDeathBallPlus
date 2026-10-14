@@ -46,7 +46,11 @@ const P = (sim, expr) => sim.run('players[0].' + expr);
     check(!!P(sim, 'warp'), 'a new marker can be placed while the cooldown runs');
     sim.run('players[0].x = 400; players[0].y = 100');
     press(sim);
-    check(!!P(sim, 'warp') && Math.abs(P(sim, 'x') - 400) < 20, 'a second teleport during the cooldown does nothing; the marker waits');
+    check(!!P(sim, 'warp') && Math.abs(P(sim, 'x') - 400) < 20, 'a second teleport during the cooldown does nothing');
+    check(Math.abs(P(sim, 'warp.x') - 400) < 20 && Math.abs(P(sim, 'warp.y') - 100) < 80, 'pressing during the cooldown moves the marker to where you stand');
+    sim.run('players[0].x = 250; players[0].y = 200');
+    press(sim);
+    check(Math.abs(P(sim, 'warp.x') - 250) < 20 && P(sim, 'cd.warp') > 0, 'and it can be moved again and again while the cooldown runs, without costing anything');
     for (let i = 0; i < (WCD + 0.1) * 120; i++) sim.tick();
     check(P(sim, 'cd.warp') === 0, `cooldown runs out after ${WCD} s`);
 }

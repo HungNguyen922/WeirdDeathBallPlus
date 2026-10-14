@@ -325,7 +325,7 @@ const WARP_FX = 0.6;                  // how long (s) the arrival / departure ri
 // Press the special key to power up for AWAKENED_T s; when it wears off the cooldown (AWAKENED_COOLDOWN s) starts. While awake: the grapple meter does not drain, you cannot
 // be overcharged (a lockout already running is cleared as you awaken), the Death Ball cannot kill you (it bounces you off instead) and your crashes hit AWAKENED_CRASH times as hard:
 // the push you give a ball, a decoy or another player is multiplied (see crashPush in collision.js). Pressing again while awake does nothing.
-const AWAKENED_CRASH = 3;             // multiplier on the push your crashes give while awake
+const AWAKENED_CRASH = 2;             // multiplier on the push your crashes give while awake
 const AWAKENED_T = 10;                // s the power-up lasts
 const AWAKENED_COOLDOWN = 15;         // s before the next power-up (starts when it wears off)
 
@@ -353,12 +353,12 @@ const EXPLODE_AMP_SPEED = 900;        // body speed (u/s) at which that blend is
 const EXPLODE_AMP_GAIN = 0.5;         // extra speed added on top, as a share of the body's current speed
 
 // --- Hopper ---
-const HOPPER_MOVE = 0.25;             // share of normal run acceleration and top speed
+const HOPPER_MOVE = 0.5;             // share of normal run acceleration and top speed
 const HOPPER_CRAWL = 800;             // u/s you can crawl along a surface you are stuck to
 const HOPPER_CRAWL_FINE = 400;        // u/s you can crawl along a surface you are stuck to while holding the weight key (for fine positioning)
-const HOPPER_HOP_V = 1400;            // hop speed (u/s)
-const HOPPER_HOP_T = 0.8;             // longest a hop can last (s), a safety timeout
-const HOPPER_GRACE = 0.25;            // s you stay stuck after a hop lands without holding the key (so you can chain hops)
+const HOPPER_HOP_V = 1000;            // hop speed (u/s)
+const HOPPER_HOP_T = 1.0;             // longest a hop can last (s), a safety timeout
+const HOPPER_GRACE = 1.0;            // s you stay stuck after a hop lands without holding the key (so you can chain hops)
 const HOPPER_COOLDOWN = 1;            // s, starts when the hop starts
 
 // --- Boomerang ---    

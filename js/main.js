@@ -29,4 +29,3 @@ function frame(t) {
 
 newRound();
 requestAnimationFrame(frame);
-

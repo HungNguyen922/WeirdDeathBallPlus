@@ -42,6 +42,8 @@ class Player {
         this.exploT = 0; // Explode: seconds left in which a death refunds the cooldown (0 = no blast to reward)
         this.exploDead = 0; // Explode: how many players were already dead when the blast went off
         this.exploCarry = false; // Explode: a refund was earned, so the next round starts with it ready (see reset)
+        this.smokeT = 0; // Smoke Screen: seconds of cloud left (0 = none); the cloud is centred on the player
+        this.smokeX = 0; this.smokeY = 0; // where the cloud was cast
         this.explodeFx = null; // Explode: the last blast { t, x, y, hits: [{ x, y, r }] } (the zone, and a flash on each body it hit); t counts down from EXPLODE_FX
         this.warpFx = null; // Warp: the last teleport { t, ax, ay, bx, by } (a short visual: rings at both ends); t counts down from WARP_FX
         this.arrowAng = -Math.PI / 2; // last arrow aim, kept across rounds (so not in reset())
@@ -56,6 +58,7 @@ class Player {
         this.rope = null;
         this.pending = null;
         this.awakeT = 0; // Awakened never survives the round
+        this.smokeT = 0; // neither does the smog
         this.gCharge = GRAPPLE_MAX; // grapple meter: seconds of grip left
         this.gCool = 0;             // > 0: the meter was spent; no grappling at all until this runs out (then the meter restarts from 0 and refills passively)
         this.onBall = false;
@@ -111,6 +114,14 @@ class Player {
                 this.setAwake(false, false); // swapped to another special: the power-up ends, no cooldown
             else if ((this.awakeT -= DT) <= 0)
                 this.setAwake(false); // wore off: the cooldown starts now
+        }
+        if (this.smokeT > 0) {
+            if (!this.has('smoke'))
+                this.smokeT = 0; // swapped to another special: the cloud goes with it, no cooldown
+            else if ((this.smokeT -= DT) <= 0) {
+                this.smokeT = 0;
+                this.cd.smoke = SMOKE_COOLDOWN; // cleared: the cooldown starts now
+            }
         }
         if (this.warpFx && (this.warpFx = { ...this.warpFx, t: this.warpFx.t - DT }).t <= 0)
             this.warpFx = null;

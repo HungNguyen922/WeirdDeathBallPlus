@@ -43,6 +43,13 @@ mixin(Player, {
                 this.setAwake(true);
                 return true;
             }
+        } else if (id === 'smoke') { // instant, no cast: wrap yourself in smog if ready and not already smoking
+            if (this.cd.smoke <= 0 && this.smokeT <= 0) {
+                this.smokeT = SMOKE_T;
+                this.smokeX = this.x;
+                this.smokeY = this.y;
+                return true;
+            }
         } else if (id === 'explode') { // instant, no cast
             if (this.cd.explode <= 0) {
                 this.explode();

@@ -125,6 +125,10 @@ function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebel
         cx.beginPath(); cx.moveTo(4, -9); cx.lineTo(7, -6); cx.lineTo(3.5, -4.5);
         cx.moveTo(-4, 9); cx.lineTo(-7, 6); cx.lineTo(-3.5, 4.5);
         cx.stroke();
+    } else if (kind === 'smoke') { // three overlapping puffs
+        cx.arc(-4.5, 3, 5, 0, 7); cx.fill();
+        cx.beginPath(); cx.arc(4.5, 3.5, 4.5, 0, 7); cx.fill();
+        cx.beginPath(); cx.arc(0, -3.5, 6, 0, 7); cx.fill();
     } else if (kind === 'locked') { // padlock
         cx.fillRect(-6, -1, 12, 9);
         cx.beginPath(); cx.arc(0, -2, 4.5, Math.PI, 0); cx.stroke();
@@ -155,7 +159,7 @@ function drawKeyHints() {
         const row = players.filter(q => q.team === p.team).indexOf(p), hasMenu = pi < 2; // a team's first seat sits on top; only the first two players have the special dropdown (teammates always use Dash)
         cx.save();
         cx.translate(0, HINT_DY + row * HINT_ROW_H);
-        const k = p.keys;
+        const k = smokeHidesKeys(p) ? noKeys() : p.keys; // Smoke Screen: the other team sees no key pressed
         cx.font = 'italic 800 18px system-ui, sans-serif';
         cx.fillStyle = col;
         cx.fillText(name, x, 76);

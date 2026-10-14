@@ -10,7 +10,7 @@
 //    7  PIVOT SLAM             coming back down onto a floor pivot
 //    8  DEATH BALL & TETHER    ball physics, and the rope when you grapple the ball
 //    9  COLLISIONS             player vs ball, player vs player, impact sparks
-//   10  SPECIAL ABILITIES      shared rules, then Dash, Plinko, Marionette, Decoy, Arrow, Bat, Barbwire, Warp, Awakened, Explode
+//   10  SPECIAL ABILITIES      shared rules, then Dash, Plinko, Marionette, Decoy, Arrow, Bat, Barbwire, Warp, Awakened, Explode (+ Hopper, Boomerang, Portal, Swap, Smoke Screen below)
 //   11  MATCH                  which team is on which side
 // Units: u = one world unit. PL = 32 u = one player length (a player's diameter). s = seconds. The sim runs 120 ticks per second.
 // Order matters a little: a constant can only use constants defined ABOVE it (PL, H, G ... are all in section 1-2).
@@ -325,7 +325,7 @@ const WARP_FX = 0.6;                  // how long (s) the arrival / departure ri
 // Press the special key to power up for AWAKENED_T s; when it wears off the cooldown (AWAKENED_COOLDOWN s) starts. While awake: the grapple meter does not drain, you cannot
 // be overcharged (a lockout already running is cleared as you awaken), the Death Ball cannot kill you (it bounces you off instead) and your crashes hit AWAKENED_CRASH times as hard:
 // the push you give a ball, a decoy or another player is multiplied (see crashPush in collision.js). Pressing again while awake does nothing.
-const AWAKENED_CRASH = 2;             // multiplier on the push your crashes give while awake
+const AWAKENED_CRASH = 3;             // multiplier on the push your crashes give while awake
 const AWAKENED_T = 10;                // s the power-up lasts
 const AWAKENED_COOLDOWN = 15;         // s before the next power-up (starts when it wears off)
 
@@ -353,12 +353,12 @@ const EXPLODE_AMP_SPEED = 900;        // body speed (u/s) at which that blend is
 const EXPLODE_AMP_GAIN = 0.5;         // extra speed added on top, as a share of the body's current speed
 
 // --- Hopper ---
-const HOPPER_MOVE = 0.5;             // share of normal run acceleration and top speed
+const HOPPER_MOVE = 0.25;             // share of normal run acceleration and top speed
 const HOPPER_CRAWL = 800;             // u/s you can crawl along a surface you are stuck to
 const HOPPER_CRAWL_FINE = 400;        // u/s you can crawl along a surface you are stuck to while holding the weight key (for fine positioning)
-const HOPPER_HOP_V = 1000;            // hop speed (u/s)
-const HOPPER_HOP_T = 1.0;             // longest a hop can last (s), a safety timeout
-const HOPPER_GRACE = 1.0;            // s you stay stuck after a hop lands without holding the key (so you can chain hops)
+const HOPPER_HOP_V = 1400;            // hop speed (u/s)
+const HOPPER_HOP_T = 0.8;             // longest a hop can last (s), a safety timeout
+const HOPPER_GRACE = 0.25;            // s you stay stuck after a hop lands without holding the key (so you can chain hops)
 const HOPPER_COOLDOWN = 1;            // s, starts when the hop starts
 
 // --- Boomerang ---    
@@ -411,8 +411,17 @@ const SWAP_COOLDOWN = 10;              // s after a swap that happened
 const SWAP_MISS_CD = 0.5;             // s after letting go with nothing in the cone (stops key-mashing, costs almost nothing)
 const SWAP_FX = 0.35;                 // s the swap flash lasts (display only)
 
+// --- Smoke Screen ------------------------------------------------------------------------------------------------------------------------------------------------
+// Press the special key to wrap yourself in a cloud of smog that follows you for SMOKE_T s; when it clears the cooldown (SMOKE_COOLDOWN s) starts. To the OTHER team's screen the cloud
+// hides everything inside it (players, the ball, decoys, arrows, boomerangs, pegs, ropes, effects) and your key hints on the wall show no key pressed. Your own team sees through it.
+// The smog changes nothing in the physics: it is pure information (only player.smokeT is kept, so it travels in snapshots). Pressing again while it is out does nothing.
+const SMOKE_R = 5 * PL;               // radius of the cloud (u), centred on the player
+const SMOKE_T = 8;                    // s the cloud lasts
+const SMOKE_COOLDOWN = 10;            // s before the next one (starts when the cloud clears)
+const SMOKE_FADE = 0.4;               // s the cloud takes to billow out and to thin away (display only)
+
 // --- The ability table: reads every cooldown above, so it has to stay below them ------------------------------------------------------------------------------------
-const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN }, portal: { cd: PORTAL_COOLDOWN }, swap: { cd: SWAP_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
+const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN }, portal: { cd: PORTAL_COOLDOWN }, swap: { cd: SWAP_COOLDOWN }, smoke: { cd: SMOKE_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 
 // =====================================================================================================================================================================
 // 11  MATCH

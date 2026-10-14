@@ -15,6 +15,7 @@ const PICK_DESC = { // two short lines under the highlighted special
     hopper: ['Stick to walls and ceiling.', 'Special hops to the far side.'],
     boomerang: ['Curving throw that returns.', 'Nudges things. Up to 4 out.'],
     swap: ['Hold, turn the cone, release:', 'trade places. Weight = furthest.'],
+    smoke: ['A cloud hides you from the', 'enemy, keys too. Lasts 8 s.'],
     portal: ['Hold, turn with the arrows,', 'release. Two linked portals.'],
 };
 const pickSp = id => SPECIALS.find(a => a.id === id) || SPECIALS[0];

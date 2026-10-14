@@ -6,8 +6,8 @@ function draw() {
     drawArena();
     drawHud(); // the score (and the online status under it) live on the floor, drawn in arena coordinates right after the arena they sit on
     drawMenuTile(); // the Menu tile on Blue's wall, under the weight key
-    drawPegs();
-    drawAITags();
+    const hid = smokeBeginHide(); // Smoke Screen: everything from here to drawBoomerangs is cut out of the other team's cloud
+    drawPegs();    drawAITags();
     drawCasts();
     drawWarps();
     drawPortals();
@@ -23,6 +23,8 @@ function draw() {
     drawImpacts();
     drawArrows();
     drawBoomerangs();
+    smokeEndHide(hid);
+    drawSmoke();
     drawMessage();
     drawPickScreen(); // the special-ability select grid, over the playing area, when one is open
     drawSpecialMenu();

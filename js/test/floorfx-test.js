@@ -36,7 +36,19 @@ const xeric = sim => sim.run('players[0].keys.x = true; players[0].keys.z = fals
     const base = peak(idle, true), xe = peak(xeric, true), plain = peak(idle, false), plainX = peak(xeric, false);
     check(xe > base + 10, `xeric: weighted grapple jump peak y ${xe.toFixed(0)} vs ${base.toFixed(0)} without (lower = smaller jump)`);
     check(Math.abs(plainX - plain) < 1, `xeric: an unweighted grapple jump is untouched (${plainX.toFixed(1)} vs ${plain.toFixed(1)})`);
+    
 }
+
+{
+    const sim = fresh();
+    sim.run('players[0].xericT = 1; players[1].ground = false; players[1].rope = null; players[1].onBall = false');
+    check(sim.run('players[1].floorFx().xeric') === false, 'xeric: a player in the air is not affected');
+    sim.run('players[1].ground = true');
+    check(sim.run('players[1].floorFx().xeric') === true, 'xeric: a player on the floor is affected');
+    sim.run('players[1].ground = false; players[1].rope = { x: 0, y: 0 }; players[1].ropeGround = true');
+    check(sim.run('players[1].floorFx().xeric') === true, 'xeric: a player hooked to the floor is affected');
+}
+
 // 2b) display timers: boostFx / fizzleFx fire on the affected player only, when their jump is actually boosted / cut
 {
     const run = (setup, weighted) => { const sim = fresh(); sim.run(`players[1].keys.z = true; players[1].keys.x = ${weighted}`); for (let t = 0; t < 30; t++) { setup(sim); sim.tick(); } return sim; };

@@ -140,6 +140,11 @@ function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebel
     }
     cx.restore();
 }
+const HINT_ARROW = { up: 'ArrowUp', l: 'ArrowLeft', dn: 'ArrowDown', r: 'ArrowRight' };
+const hintKeys = (seat, acts) => acts.map(a => { // corner labels for a seat, straight from its current bindings
+    const t = keybinds.map[seat][a];
+    return t === HINT_ARROW[a] ? '' : keyLabel(t, false); // the arrow is already drawn on the cap, so only label the key if it's something else
+});
 // Layout of the key blocks on the wall. The solid wall is only GOAL_Y0 (= 384) tall (the tunnel opens below it), so two stacked blocks have to be compact:
 // each block is about 176 px tall (name 63 -> labels 239 before the shift), HINT_DY lifts the first block to the top of the wall, HINT_ROW_H is the step down to a team's second block.
 // special-menu.js reads HINT_ACT_Y / HINT_DY to place the special keycap's click area and its dropdown, so change them here only.
@@ -147,15 +152,16 @@ const HINT_DY = -55, HINT_ROW_H = 186, HINT_ACT_Y = 203, HINT_LABEL_Y = 239; // 
 const wallX = t => (sideSwap(t) === 0 ? -OX / 2 : W + OX / 2); // the wall mass beside the goal this team defends
 function drawKeyHints() {
     const cfg = [ // one block per seat (player id): Blue's two seats on the left wall, Red's two on the right; dirs = labels for up / left / down / right, act = labels for grapple / weight / special
-        { i: 0, p: p1, x: wallX(0), col: '#42a5f5', name: 'BLUE', dirs: ['', '', '', ''], act: ['X', 'C', 'Z'] },
-        { i: 1, p: p2, x: wallX(1), col: '#ef5350', name: 'RED', dirs: ['W', 'A', 'S', 'D'], act: ['F', 'G', 'H'] },
-        { i: 2, p: p3, x: wallX(0), col: '#42a5f5', name: 'BLUE 2', dirs: ['I', 'J', 'K', 'L'], act: ['U', 'O', 'P'] },
-        { i: 3, p: p4, x: wallX(1), col: '#ef5350', name: 'RED 2', dirs: ['8', '4', '5', '6'], act: ['7', '9', '0'] },
+        { i: 0, p: p1, x: wallX(0), col: '#42a5f5', name: 'BLUE'},
+        { i: 1, p: p2, x: wallX(1), col: '#ef5350', name: 'RED'},
+        { i: 2, p: p3, x: wallX(0), col: '#42a5f5', name: 'BLUE 2'},
+        { i: 3, p: p4, x: wallX(1), col: '#ef5350', name: 'RED 2'},
     ];
     cx.textAlign = 'center';
-    for (const { i: pi, p, x, col, name, dirs, act } of cfg) {
-        if (!players.includes(p)) // only seats that are in the current match (1v1 has two blocks, 2v2 four)
+    for (const { i: pi, p, x, col, name } of cfg) {
+        if (!players.includes(p))
             continue;
+        const dirs = hintKeys(pi, ['up', 'l', 'dn', 'r']), act = hintKeys(pi, ['z', 'x', 'sp', 'sp2']); // up / left / down / right, then grapple / weight / special / special 2
         const row = players.filter(q => q.team === p.team).indexOf(p), hasMenu = pi < 2; // a team's first seat sits on top; only the first two players have the special dropdown (teammates always use Dash)
         cx.save();
         cx.translate(0, HINT_DY + row * HINT_ROW_H);
@@ -201,7 +207,7 @@ function drawKeyHints() {
             }
             cx.font = 'bold 8px system-ui, sans-serif';
             cx.fillStyle = on ? '#0b0e12' : '#98a2ad';
-            cx.fillText(i < 3 ? act[i] : keyLabel(keybinds.map[pi].sp2, false), kx + h - 7, yy + h - 5);
+            cx.fillText(act[i], kx + h - 7, yy + h - 5);
             cx.fillStyle = '#98a2ad';
             if (!(spec && hasMenu && ui.open === pi && ui.slot === slotOf)) { // the open menu covers the label
                 if (label.length > 8)

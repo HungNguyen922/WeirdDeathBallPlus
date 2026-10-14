@@ -169,7 +169,7 @@ const XERIC_KICK = 0.15;              // share of a weight kick other players ke
 const XERIC_JUMP = 0.3;               // share of a WEIGHTED grapple jump's pull other players keep while a xeric is active
 const XERIC_QUAKE = 0.2;              // share of the seesaw pop's speed a player standing on the floor keeps while THEY hold xeric (0 = fully absorbed, 1 = no defense)
 
-const FLOOR_FX_TEAMMATES = true;         // false = stuns (and the hyper / xeric auras) spare the owner's teammates ("all other players" = true)
+const FLOOR_FX_TEAMMATES = true;         // false =  hyper / xeric auras spare the owner's teammates ("all other players" = true)
 const BOOST_FX = 0.4;                 // s the burst lasts on a player whose jump / kick was just boosted by another player's hyper (display only)
 const FIZZLE_FX = 0.45;               // s the burst lasts on a player whose weighted jump / kick was just cut by another player's xeric (display only)
 const PRIME_T = 0.1;                  // s a WEIGHT press stays "primed" after you let go: a grapple that lands inside this window gets its kick at once (WEIGHT held = always primed)

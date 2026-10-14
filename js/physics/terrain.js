@@ -40,7 +40,7 @@ for (const side of [0, 1]) {
 // by the goal) can pop the opposite far half up a little, kicking whatever is standing there. Nothing happens near the net.
 // One signed tilt carries every hit's momentum, so hits from the two sides cancel: a slam on the side that is popping pushes it back down.
 const SAW_HALF = NETX / 2; // half of a side's floor: only the half by the goal takes part
-const SAW_MIN = 480; // impact momentum (mass x speed into the floor, u/s) a hit needs to move the seesaw: only real slams (a weighted drop after a grapple jump), not jumps or dribbling
+const SAW_MIN = 500; // impact momentum (mass x speed into the floor, u/s) a hit needs to move the seesaw: only real slams (a weighted drop after a grapple jump), not jumps or dribbling
 const SAW_GAIN = 1.2, SAW_VMAX = 240; // tilt speed (u/s) = (momentum - SAW_MIN) * SAW_GAIN, capped; this is also the kick given to things resting on the rising end
 const SAW_K = 100, SAW_C = 20; // floor spring (critically damped): it pops up fast and settles back down without bouncing
 const padFlash = [0, 0]; // per-side hatchet "just hit" glow: set to 1 by padBounce, decayed by the renderer (kept here so the AI can snapshot/restore it)

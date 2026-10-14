@@ -10,16 +10,19 @@ mixin(Player, {
         const xericOn = this.alive && this.ground && k.x && !zEff;                                   // weight on the floor, grapple not held
         this.hyperT = hyperOn ? HYPER_LINGER : Math.max(0, this.hyperT - DT);
         this.xericT = xericOn ? XERIC_LINGER : Math.max(0, this.xericT - DT);
+        this.boostFx = Math.max(0, this.boostFx - DT);
+        this.fizzleFx = Math.max(0, this.fizzleFx - DT);
     },
     // What the OTHER players' floor auras do to me right now: { hyper, xeric } (true = at least one other player has it up). The AI's planning copies see neither.
     floorFx() {
         const fx = { hyper: false, xeric: false };
         if (this.sim)
             return fx;
+        const onFloor = this.ground || (this.rope && this.ropeGround && !this.onBall); // standing on the floor, or tethered to it
         for (const o of players)
             if (o !== this && o.alive && (FLOOR_FX_TEAMMATES || o.team !== this.team)) {
                 if (o.hyperT > 0) fx.hyper = true;
-                if (o.xericT > 0) fx.xeric = true;
+                if (o.xericT > 0 && onFloor) fx.xeric = true; // xeric only reaches players who are on the floor, or hooked to it
             }
         return fx;
     },

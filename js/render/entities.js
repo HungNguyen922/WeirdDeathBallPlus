@@ -678,42 +678,63 @@ function drawGrappleRing(p) {
     }
 }
 // ---- Hyper / Xeric visuals (display only: reads the player's timers, never writes them) ----
-// Paste above drawPlayers() in js/render/entities.js and call drawFloorFx(p) right after drawGrappleRing(p).
+// Drop-in replacement for drawFloorFx(p) in the render file (drawPlayers() already calls it right after drawGrappleRing(p)).
+//
+//   Hyper owner       yellow arcs spinning around you + a yellow ripple on the floor      (the mirror of the xeric owner effect)
+//   Hyper'd players   yellow chevrons rising up through them (+ the orange rim and speed streaks as before)   (the mirror of xeric's down chevrons)
+//   Xeric owner       cyan arcs + floor ripple                                            (unchanged)
+//   Xeric'd players   cyan tint + chevrons pressing down                                  (unchanged)
+//   Bursts            yellow = a jump / kick was just boosted (boostFx), cyan = one was just cut (fizzleFx).
+//                     They are independent, so a player under both a hyper and a xeric gets both; the cyan one is a bit smaller and its sparks sit
+//                     between the yellow ones so the two stay readable when they overlap.
 function drawFloorFx(p) {
     const tm = performance.now(), R = p.r;
     cx.save();
-    if (p.hyperT > 0) { // HYPER: hot orange pulses and chevrons streaming up off the player
-        const f = Math.min(1, p.hyperT / HYPER_LINGER), pulse = 0.5 + 0.5 * Math.sin(tm / 55);
-        cx.globalCompositeOperation = 'lighter';
-        cx.shadowColor = '#ff8a1a'; cx.shadowBlur = 14;
-        cx.strokeStyle = '#ffb21f'; cx.lineWidth = 2 + 2 * pulse; cx.globalAlpha = 0.35 + 0.5 * f;
-        cx.beginPath(); cx.arc(p.x, p.y, R + 7 + 3 * pulse, 0, 7); cx.stroke();
-        cx.lineCap = 'round'; cx.lineJoin = 'round'; cx.lineWidth = 2.5; cx.strokeStyle = '#ffe45a';
-        for (let i = 0; i < 3; i++) { // chevrons rising, staggered
-            const u = ((tm / 420 + i / 3) % 1), cy = p.y - R - 4 - u * 34, w = 8 - 3 * u;
-            cx.globalAlpha = (1 - u) * (0.3 + 0.6 * f);
-            cx.beginPath(); cx.moveTo(p.x - w, cy + 5); cx.lineTo(p.x, cy - 2); cx.lineTo(p.x + w, cy + 5); cx.stroke();
+    cx.lineCap = 'round'; cx.lineJoin = 'round';
+
+    if (p.hyperT > 0) { // HYPER owner: six yellow arcs turning the opposite way to the xeric ring (a touch quicker), plus a ripple under the feet
+        cx.save();
+        const f = Math.min(1, p.hyperT / HYPER_LINGER), rot = -tm / 520;
+        cx.shadowColor = '#ff8a1a'; cx.shadowBlur = 12;
+        cx.strokeStyle = '#ffd23a'; cx.lineWidth = 3; cx.globalAlpha = 0.4 + 0.5 * f;
+        for (let i = 0; i < 6; i++) {
+            const a = rot + i * Math.PI / 3;
+            cx.beginPath(); cx.arc(p.x, p.y, R + 8, a, a + 0.75); cx.stroke();
         }
+        cx.strokeStyle = '#ffb21f'; cx.globalAlpha = 0.3 * f; cx.lineWidth = 2;
+        cx.beginPath(); cx.ellipse(p.x, p.y + R, R + 10, 4, 0, 0, 7); cx.stroke();
+        cx.restore();
     }
-    if (p.xericT > 0) { // XERIC: a cool, steady shield of six arcs turning slowly, plus a ripple on the floor under the feet
+
+    if (p.xericT > 0) { // XERIC owner: a cool, steady shield of six arcs turning slowly, plus a ripple on the floor under the feet
+        cx.save();
         const f = Math.min(1, p.xericT / XERIC_LINGER), rot = tm / 700;
         cx.shadowColor = '#4fd8e8'; cx.shadowBlur = 10;
-        cx.strokeStyle = '#7ee8f4'; cx.lineWidth = 3; cx.lineCap = 'round'; cx.globalAlpha = 0.4 + 0.5 * f;
+        cx.strokeStyle = '#7ee8f4'; cx.lineWidth = 3; cx.globalAlpha = 0.4 + 0.5 * f;
         for (let i = 0; i < 6; i++) {
             const a = rot + i * Math.PI / 3;
             cx.beginPath(); cx.arc(p.x, p.y, R + 8, a, a + 0.75); cx.stroke();
         }
         cx.globalAlpha = 0.3 * f; cx.lineWidth = 2;
         cx.beginPath(); cx.ellipse(p.x, p.y + R, R + 10, 4, 0, 0, 7); cx.stroke();
+        cx.restore();
     }
+
     const fx = p.floorFx(); // what OTHER players' auras are doing to me
-    if (fx.hyper || p.boostFx > 0) { // BOOSTED by a hyper: an orange rim; mid grapple jump, speed streaks trail behind me; a burst when a jump / kick is actually boosted
+
+    if (fx.hyper || p.boostFx > 0) { // BOOSTED by a hyper: an orange rim, chevrons lifting me up, speed streaks mid grapple jump; a burst when a jump / kick is actually boosted
         cx.save();
         const live = p.driveT > 0 || p.gjT < 0.5 || p.dribT > 0 ? 1 : 0.55;
-        cx.globalCompositeOperation = 'lighter'; cx.shadowColor = '#ff8a1a'; cx.shadowBlur = 10; cx.lineCap = 'round';
+        cx.globalCompositeOperation = 'lighter'; cx.shadowColor = '#ff8a1a'; cx.shadowBlur = 10;
         if (fx.hyper) {
             cx.strokeStyle = '#ff9b2e'; cx.lineWidth = 2.5; cx.globalAlpha = 0.35 + 0.45 * live;
             cx.beginPath(); cx.arc(p.x, p.y, R + 3, 0, 7); cx.stroke();
+            cx.strokeStyle = '#ffe45a'; cx.lineWidth = 3; // chevrons pointing up, rising toward me from below (xeric's down chevrons, flipped)
+            for (let i = 0; i < 2; i++) {
+                const u = (tm / 700 + i / 2) % 1, cy = p.y + R + 24 - u * 16;
+                cx.globalAlpha = (0.35 + 0.6 * live) * Math.sin(u * Math.PI);
+                cx.beginPath(); cx.moveTo(p.x - 9, cy + 5); cx.lineTo(p.x, cy - 4); cx.lineTo(p.x + 9, cy + 5); cx.stroke();
+            }
             if (live === 1) {
                 const sp = Math.hypot(p.vx, p.vy) || 1, ux = p.vx / sp, uy = p.vy / sp, nx = -uy, ny = ux, len = Math.min(95, 16 + sp * 0.12);
                 cx.strokeStyle = '#ffd23a';
@@ -736,10 +757,10 @@ function drawFloorFx(p) {
         }
         cx.restore();
     }
-    if (fx.xeric || p.fizzleFx > 0) { // WEAKENED by a xeric: a cold tint and slow chevrons pressing down on me; a ring collapsing inward when a weighted jump / kick is actually cut
+
+    if (fx.xeric || p.fizzleFx > 0) { // WEAKENED by a xeric: a cold tint and slow chevrons pressing down on me; a burst when a weighted jump / kick is actually cut
         cx.save();
         const live = p.keys.x || p.dribT > 0 || p.kickReq ? 1 : 0.55;
-        cx.lineCap = 'round'; cx.lineJoin = 'round';
         if (fx.xeric) {
             cx.globalAlpha = 0.32 * live; cx.fillStyle = '#7ee8f4';
             cx.beginPath(); cx.arc(p.x, p.y, R, 0, 7); cx.fill();
@@ -750,15 +771,15 @@ function drawFloorFx(p) {
                 cx.beginPath(); cx.moveTo(p.x - 9, cy - 5); cx.lineTo(p.x, cy + 4); cx.lineTo(p.x + 9, cy - 5); cx.stroke();
             }
         }
-        if (p.fizzleFx > 0) { // burst: the force is swallowed (a ring shrinking onto me) and puffs sink away
+        if (p.fizzleFx > 0) { // burst (the cyan twin of the yellow one): a ring blowing outward and sparks flying off, a little smaller and offset so both read when they overlap
             const u = 1 - p.fizzleFx / FIZZLE_FX;
-            cx.shadowColor = '#4fd8e8'; cx.shadowBlur = 10;
-            cx.globalAlpha = Math.sin(u * Math.PI) * 0.9; cx.strokeStyle = '#b8f6ff'; cx.lineWidth = 1.5 + 3 * u;
-            cx.beginPath(); cx.arc(p.x, p.y, R + 2 + (1 - u) * 30, 0, 7); cx.stroke();
-            cx.fillStyle = '#9fdfe8';
-            for (let i = 0; i < 4; i++) {
-                cx.globalAlpha = (1 - u) * 0.6;
-                cx.beginPath(); cx.arc(p.x + (i - 1.5) * 7, p.y + R * 0.5 + u * 20 + (i % 2) * 4, 2.5 * (1 - u) + 0.8, 0, 7); cx.fill();
+            cx.globalCompositeOperation = 'lighter'; cx.shadowColor = '#4fd8e8'; cx.shadowBlur = 10;
+            cx.globalAlpha = (1 - u) * 0.9; cx.strokeStyle = '#7ee8f4'; cx.lineWidth = 1 + 4 * (1 - u);
+            cx.beginPath(); cx.arc(p.x, p.y, R + 2 + u * 26, 0, 7); cx.stroke();
+            cx.strokeStyle = '#b8f6ff'; cx.lineWidth = 2;
+            for (let i = 0; i < 6; i++) {
+                const a = i * Math.PI / 3 + 0.4 + Math.PI / 6, d0 = R + 6 + u * 24; // half a step round from the yellow sparks
+                cx.beginPath(); cx.moveTo(p.x + Math.cos(a) * d0, p.y + Math.sin(a) * d0); cx.lineTo(p.x + Math.cos(a) * (d0 + 8 * (1 - u)), p.y + Math.sin(a) * (d0 + 8 * (1 - u))); cx.stroke();
             }
         }
         cx.restore();

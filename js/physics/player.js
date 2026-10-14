@@ -133,6 +133,8 @@ class Player {
             this.explodeFx = null;
         this.gBurst = Math.max(0, this.gBurst - DT);
         this.stickGrace = Math.max(0, this.stickGrace - DT);
+        this.boostFx = Math.max(0, this.boostFx - DT);
+        this.fizzleFx = Math.max(0, this.fizzleFx - DT);
         if (!this.has('hopper')) { this.hopT = 0; this.clinging = false; this.surf = null; }
     }
     step(ball) {

@@ -18,14 +18,14 @@
 // =====================================================================================================================================================================
 // 1  ARENA & UNITS
 // =====================================================================================================================================================================
-const W = 950, H = 600, NETX = W / 2; // arena width and height (u); NETX = x of the net, in the middle. Everything else in the game is measured from these
 const PL = 32;                        // one "player length" (a player's diameter). Most distances below are written as multiples of it. Changing it rescales the slopes and goals, NOT the players (their radius is 16 in player.js)
+const W = 30 * PL, H = 20 * PL, NETX = W / 2; // arena width and height (u); NETX = x of the net, in the middle. Everything else in the game is measured from these
 
 // Slopes: the floor rises on both sides of the net.
 const RUN = 2 * PL;                   // how long each slope is (horizontal). Longer = gentler ramps
 const RISE = 3/4 * PL;               // how tall each slope is. Taller = steeper ramps
 const PK = 5;                         // half the gap between the two middle peaks, either side of the net (u)
-const NOTCH = 2;                      // how far the floor dips between the two middle peaks (u)
+const NOTCH = 1;                      // how far the floor dips between the two middle peaks (u)
 
 // Goals: an opening in each side wall.
 const GOAL_Y1 = H - RISE;             // bottom of the goal opening: just above the goal ramps
@@ -115,8 +115,8 @@ const HOP_AIM = 0.5;                  // sideways share of the pull's direction.
 // --- The rope spring (past the rope's length) ---------------------------------------------------------------------------------------------------------------------
 const KS = 100;                       // stiffness (force per u of stretch). Higher = snaps back harder and stops you sooner, so kicks and jumps overshoot less / lower = long, stretchy swings
 const DAMP = 0.75;                     // damping while the rope is being STRETCHED (the way back is undamped on purpose, so the pull-back keeps its energy). Higher = overshoot dies out faster
-const STRETCH_X0 = 600;               // the rope stiffens as it stretches: its force is multiplied by (1 + stretch / this). Smaller = stiffens sooner = a harder wall past the rope's length
-const HEAVY_KS = 0.5;                 // multiplier on the rope's AND the float's stiffness while WEIGHT is held (1 = weight changes nothing, 1.5 = a firmer rope while weighted)
+const STRETCH_X0 = 500;               // the rope stiffens as it stretches: its force is multiplied by (1 + stretch / this). Smaller = stiffens sooner = a harder wall past the rope's length
+const HEAVY_KS = 0.25;                 // multiplier on the rope's AND the float's stiffness while WEIGHT is held (1 = weight changes nothing, 1.5 = a firmer rope while weighted)
 const RETURN_DAMP = 1;                // brakes the pull-back while you are heading toward the pivot (surface ropes only). Higher = softer, slower rubberband
 const WALL_KICK_SCALE = 0.5;          // weight kick strength on walls / ceiling / net / ledges (1 = same as floor ropes)
 const WALL_KS_SCALE = 0.7;            // rope spring stiffness on those surfaces (1 = same as floor ropes)
@@ -141,7 +141,7 @@ const DRIB_T = 0.45;                  // s: how long the post-kick window lasts 
 const DRIB_FLOAT_FADE = 1;            // a below-float press now fully switches the float off, so you fall to the pivot
 const DRIB_BELOW_TOL = PL;            // u under the float point where a press still kicks you upward
 
-const FLOAT_RELEASE_DEPTH = 22;       // u under the float point where the float lets go (dribble)
+const FLOAT_RELEASE_DEPTH = PL/3;       // u under the float point where the float lets go (dribble)
 const FLOAT_OFF_RATE = 25;            // how fast (per second) the float fades OUT when DRIB_FLOAT_FADE asks for it (only matters if you raise DRIB_FLOAT_FADE)
 const FLOAT_ON_RATE = 3;              // how fast (per second) the float fades back IN afterwards. Lower = a longer, floppier recovery
 
@@ -152,7 +152,7 @@ const FLOAT_ON_RATE = 3;              // how fast (per second) the float fades b
 // A press tops you up to the kick's speed rather than adding on top of what you have, and it fades out the further you already are, so spamming cannot snowball:
 //   outward speed after a press = WEIGHT_KICK x (1 - how far past the float point you are / WEIGHT_KICK_REACH), if you were slower than that.
 // =====================================================================================================================================================================
-const WEIGHT_KICK = 600;              // u/s of outward speed a press tries to reach, from the float point. THE main knob for how hard a kick throws you:
+const WEIGHT_KICK = 500;              // u/s of outward speed a press tries to reach, from the float point. THE main knob for how hard a kick throws you:
                                       //   300 = ~1 PL out | 600 = ~1.6 PL | 800 = ~2 PL (default) | 1000+ = hard enough to slam you right down to the pivot on the way back
 const WEIGHT_KICK_REACH = 10 * PL;     // u past the float point where a press stops adding anything (the cap on how far a second kick can throw you). Raise = allows bigger stacked bobs
 // --- Floor weight mechanics: HYPER, XERIC and STUN (see auraStep() in physics/player-grapple.js) ---
@@ -191,7 +191,7 @@ const KICK_STEER = 1;   // left / right held: extra sideways push toward the hel
 // When you come back down onto the floor right at a floor/slope pivot (within PIVOT_ZONE of it), the speed the floor would absorb is turned into sideways speed along the
 // surface instead (a rotation, so your speed is kept) and sends you out the other side. This is what a hard fall onto the pivot does.
 // =====================================================================================================================================================================
-const PIVOT_ZONE = 3 * PL;            // how close to the pivot (u) you must land for the slam to turn into sideways speed. Bigger = it works from further away
+const PIVOT_ZONE = 2 * PL;            // how close to the pivot (u) you must land for the slam to turn into sideways speed. Bigger = it works from further away
 const PIVOT_MIN_HIT = 30;             // the slowest impact (u/s into the floor) that counts as a slam. Raise = gentle landings never trigger it
 const PIVOT_TRANSFER = 0.85;          // share of the absorbed speed turned into sideways speed (1 = all of it, 0 = a normal landing)
 const PIVOT_TURN_KEEP = 1;            // share of your existing sideways speed kept when you change direction across the pivot (1 = all, 0 = the old behavior)
@@ -201,20 +201,20 @@ const PIVOT_TURN_KEEP = 1;            // share of your existing sideways speed k
 // --- The ball itself ------------------------------------------------------------------------------------------------------------------------------------------------
 const BALL_G = 170;                   // ball gravity (u/s^2). Lower = a floatier ball
 const BALL_VMAX = 920;                // ball speed cap (u/s) in normal play (hard hits can raise it for a while)
-const BALL_R = 14;                    // ball radius (u)
+const BALL_R = PL/2;                    // ball radius (u)
 const BALL_M = 0.25;                  // ball mass against a player's 1: players knock it around easily. Also how the decoys and crash shots weigh it
-const BALL_I = 3 * BALL_M * BALL_R * BALL_R; // spin inertia (was 6x that: lower = spins up easier)
-const BALL_W_MAX = 60;                // top spin speed (rad/s; it was a hard-coded 45)
+const BALL_I = 1 * BALL_M * BALL_R * BALL_R; // spin inertia (was 6x that: lower = spins up easier)
+const BALL_W_MAX = 200;                // top spin speed (rad/s; it was a hard-coded 45)
 const BALL_ROLL_DRAG = 0.15;          // how fast the ball slows rolling on the floor (per second, share of speed lost). The original was 0.4; lower = rolls further
 
 // --- The tether: grappling the ball (or a decoy) ------------------------------------------------------------------------------------------------------------------
 // Same elastic rope as on platforms (progressive spring, firmer with weight) but much stiffer, so the stretch stays small and the maximum length is enforced. Inside
 // that length the rope is slack and does nothing: the ball and the player can move toward each other freely.
 const KB = 150;                       // tether stiffness (the ball's version of KS). Higher = the leash is harder
-const DB = 0.6;                       // tether damping while it is being stretched (the ball's version of DAMP)
-const BALL_RIGID = 0.6;               // share of the outward speed the rope cancels outright; the spring takes the rest. 1 = a hard rod, 0 = pure spring
-const BALL_PULL = 0.1;                // share of the tether's pull the PLAYER feels (1 = the original, 0 = a weightless ball you cannot be dragged by). The ball always feels all of it
-const BALL_TM = 0.7;                  // ball mass as the tether sees it (higher = the rope moves the ball less and you more)
+const DB = 0.5;                       // tether damping while it is being stretched (the ball's version of DAMP)
+const BALL_RIGID = 0.25;               // share of the outward speed the rope cancels outright; the spring takes the rest. 1 = a hard rod, 0 = pure spring
+const BALL_PULL = 0.25;                // share of the tether's pull the PLAYER feels (1 = the original, 0 = a weightless ball you cannot be dragged by). The ball always feels all of it
+const BALL_TM = 0.25;                  // ball mass as the tether sees it (higher = the rope moves the ball less and you more)
 
 // =====================================================================================================================================================================
 // 9  COLLISIONS

@@ -151,7 +151,7 @@ function aiBallHit(b, me) {
 
 // The closest we and the free ball get over the next 0.6 s if we hold this steering (dir -1/0/1, up = jump / float). Both move ballistically (cheap and rough): this is what
 // lets the AI see that it is about to fall onto a ball lying on the floor, or that a rolling ball will reach it, and pick the way out.
-function aiPathMin(me, b, dir, up, lo, hi) {
+function aiPathMin(me, b, dir, up, lo, hi, dn = false) { // dn: DOWN held (fall faster; it overrides the float of `up`, as in Player.step)
     let x = me.x, y = me.y, vx = me.vx, vy = me.vy, grounded = me.ground, bx = b.x, by = b.y, bvx = b.vx, bvy = b.vy, min = 1e9;
     const dt = 1 / 60;
     if (up && grounded) {
@@ -165,9 +165,13 @@ function aiPathMin(me, b, dir, up, lo, hi) {
         } else if (grounded)
             vx *= 1 - GROUND_BRAKE * dt;
         if (!grounded)
-            vy += (up ? G_FLOAT : G) * dt;
+            vy += (dn ? G * DOWN_G : up ? G_FLOAT : G) * dt;
         x = Math.max(lo, Math.min(hi, x + vx * dt));
         y += vy * dt;
+        if (y < me.r) {                        // the ceiling
+            y = me.r;
+            vy = Math.max(vy, 0);
+        }
         const f = aiFloorY(x) - me.r;
         grounded = y >= f;
         if (grounded) {
@@ -503,7 +507,7 @@ function aiAdvance(A) { // run one slice of the current job
 
 function aiFree(i, me, A, k) { // keys for an AI that is not tethered
     const s = aiSide(me), b = ball, dx = b.x - me.x, away = (me.x - NETX) * s > 0; // away: we are over the net, on their half (a dash shot carries us there)
-    const left = aiLeft(me.team), lo = left || away ? me.r : NETX + me.r, hi = left && !away ? NETX - me.r : W - me.r; // the room to dodge in: our half, or the whole arena when we are on theirs (the dodge model clamps to it, so a clamp to the wrong half 'teleports' us to the net and hides the ball)
+    const left = aiLeft(me.team), clear = me.y < NET_GAP - 2 * me.r, lo = left || away || clear ? me.r : NETX + me.r, hi = left && !away && !clear ? NETX - me.r : W - me.r; // (clear: high above the net's top the net is no wall) // the room to dodge in: our half, or the whole arena when we are on theirs (the dodge model clamps to it, so a clamp to the wrong half 'teleports' us to the net and hides the ball)
     const mine = (b.x - NETX) * s < 40;        // the ball is on our half (or right at the net)
     if (A.E) {                                 // in an engage jump: carry it out
         aiEngageKeys(me, b, A.E, k);
@@ -569,12 +573,12 @@ function aiFree(i, me, A, k) { // keys for an AI that is not tethered
     // a shot coming at us: schedule a jump so that we are up over its path when it arrives
     const grip = aiCanGrip(me), arr = grip && me.ground && A.cool <= 0 && (A.jcool || 0) <= 0 ? aiArrival(me) : null; // (no grip, no grab: with the grapple spent or locked out we only keep clear)
     if (arr && arr.t > 0.3 && arr.t < 1.9) {
-        // launch as early as the reaction time allows, then later: the look-ahead takes the first (earliest) one that latches the ball and holds it. 2 or 4 grapple-jump taps are the usual winners;
-        // fast, high shots need the taps, slow ones a plain jump.
+        // launch as early as the reaction time allows, then later: the look-ahead takes the first (earliest) one that latches the ball and holds it. ONE tap is the winner for fast shots at low and middle height (a single grapple-jump lifts just enough; 2+ shoot past the ball), 2 or 4 for higher
+        // ones, and a plain jump for slow ones.
         const last = Math.round(arr.t * 120) + 6, delays = [...new Set([0, 6, 14, 24, 36, 50, 66].map(d => Math.max(AI_PRE, AI_PRE + d)).filter(d => d <= last))];
         if (!delays.length) delays.push(AI_PRE);
         A.out = {};
-        A.job = { kind: 'jump', gen: aiJumpJob(me, aiNoKeys(), delays, ['toward', 'none'], A.out, [2, 4, 0, 3, 6]), out: A.out, frozen: aiNoKeys(), age: 0, done: false };
+        A.job = { kind: 'jump', gen: aiJumpJob(me, aiNoKeys(), delays, ['toward', 'none'], A.out, [1, 2, 4, 0, 3, 6]), out: A.out, frozen: aiNoKeys(), age: 0, done: false };
         return;
     }
     // the ball is behind us (between us and our own goal), slow and low: get round it first (see aiCrossJob). If crossing keeps failing, the normal approach below takes over.
@@ -617,16 +621,19 @@ function aiFree(i, me, A, k) { // keys for an AI that is not tethered
     if (Math.hypot(dx, b.y - me.y) < 420 && aiPathMin(me, b, 0, false, lo, hi) < AI_THREAT) { // the ball is going to reach us: pick the steering that keeps us furthest from it
         let best = null, bestD = -1;
         for (const dir of [0, -1, 1])
-            for (const up of [false, true]) {
-                const d = aiPathMin(me, b, dir, up, lo, hi) + (dir === 0 && !up ? 4 : 0); // (a slight preference for doing nothing)
+            for (const mode of ['', 'up', 'dn']) {  // '' = just steer, 'up' = jump / float, 'dn' = drop (only means something in the air)
+                if (mode === 'dn' && me.ground)
+                    continue;
+                const d = aiPathMin(me, b, dir, mode === 'up', lo, hi, mode === 'dn') + (dir === 0 && !mode ? 4 : 0); // (a slight preference for doing nothing)
                 if (d > bestD) {
                     bestD = d;
-                    best = { dir, up };
+                    best = { dir, up: mode === 'up', dn: mode === 'dn' };
                 }
             }
         k.l = best.dir < 0;
         k.r = best.dir > 0;
         k.up = best.up;
+        k.dn = best.dn;
     }
 }
 function aiDrive(i) {
@@ -675,3 +682,7 @@ function aiDrive(i) {
     }
     Object.assign(me.keys, k);
 }
+
+
+
+

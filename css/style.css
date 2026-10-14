@@ -85,3 +85,13 @@ body.touch #touchui{display:block}
 #rotate small{color:#98a2ad;font-size:13px}
 @media (orientation:portrait) and (pointer:coarse){#rotate{display:flex}}
 #rotate[hidden]{display:none !important}
+
+
+
+/* chat (js/chat.js): top left of the game, over the canvas. The log never takes the mouse; only the text box does. */
+#chat{position:fixed;z-index:7;pointer-events:none;box-sizing:border-box;display:flex;flex-direction:column;gap:4px;font:13px/1.35 system-ui,sans-serif;user-select:text;-webkit-user-select:text}
+#chat[hidden],#chatlog[hidden],#chatinput[hidden]{display:none}
+#chatlog{background:rgba(11,14,18,.62);border-radius:6px;padding:5px 8px;color:#e8e8e4;overflow:hidden;word-break:break-word;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.cline.sys{color:#98a2ad;font-style:italic}
+#chatinput{pointer-events:auto;font:inherit;color:#e8e8e4;background:rgba(11,14,18,.9);border:2px solid #9a63f0;border-radius:6px;padding:4px 8px;outline:none;width:100%;box-sizing:border-box;touch-action:manipulation;user-select:text;-webkit-user-select:text}
+#chatinput::placeholder{color:#7b8691}

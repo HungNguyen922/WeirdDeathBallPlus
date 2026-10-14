@@ -124,6 +124,9 @@ const net = {
             this.rtt = this.rtt ? this.rtt + (sample - this.rtt) * 0.2 : sample; // smoothed: one slow packet must not make the prediction lurch ahead
             this.tps = m.tps || 0;
             this.setStatus(this.describe());
+        } else if (m.t === 'chat') {
+            if (typeof chat !== 'undefined')
+                chat.receive(m);
         } else if (m.t === 'error')
             this.setStatus('Server: ' + m.msg);
     },
@@ -184,6 +187,12 @@ const net = {
     setLobby2v2(v) { // host only (the server checks): make the room a 2v2 lobby, or turn that off
         if (this.ws && this.ws.readyState === 1)
             this.ws.send(JSON.stringify({ t: 'lobby2v2', v: !!v }));
+    },
+    sendChat(text) { // returns false when there is no open connection (chat.js then tells the player)
+        if (!this.ws || this.ws.readyState !== 1)
+            return false;
+        this.ws.send(JSON.stringify({ t: 'chat', text }));
+        return true;
     },
     assign(cid, to) {
         if (this.ws && this.ws.readyState === 1)
@@ -317,3 +326,5 @@ if (onlineBtn)
     if (room && /^[A-Za-z0-9_-]{1,24}$/.test(room))
         net.join(room);
 }
+
+

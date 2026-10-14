@@ -15,6 +15,10 @@
 //        - arrows and plinko pegs I made (they appear the instant I release),
 //        - my bat-hit / impact effects, fired at predicted time; the server's later copy of the same event is dropped.
 //      An opponent who is tethered to the ball gets their rope end moved onto the predicted ball so the rope never detaches from it.
+//        - the OPPONENT's arrows, plinko pegs and boomerangs too (PRED_SHOTS). Their shots used to be drawn on the delayed timeline, so on a slow connection you saw an arrow
+//          roughly ping + buffer late, while your own player (predicted, ahead of the server) was already about to be hit by it. Now a shot appears the moment the snapshot that
+//          contains it arrives, already advanced to where it is on MY clock, which is where it will be when it reaches me. The price: a shot the opponent steers or deflects after
+//          that can jump a little when the next snapshot corrects it. Add  ?predshots=0  to compare with the old behaviour.
 //      Deaths / round changes are always the server's word. Add  ?predworld=0  to the page URL to go back to predicting only my own player.
 const PRED_MAX_AHEAD = 40;   // never predict more than this many ticks past the last server state (spikes / stalls)
 const PRED_SNAP_DIST = 120;  // a correction bigger than this (u) is a teleport (respawn, hatchet): show it at once
@@ -22,6 +26,8 @@ const PRED_BALL_SNAP = 220;  // same, for the ball (it is fast: a late opponent 
 const PRED_ERR_DECAY = 0.86; // per rendered frame, share of the visual correction that is left
 const PRED_EVENT_SLACK = 24; // a server event this many ticks from a predicted one of the same kind is the same event
 const PRED_WORLD = !(typeof location !== 'undefined' && /[?&]predworld=0/.test(location.search || ''));
+
+let PRED_SHOTS = PRED_WORLD && !(typeof location !== 'undefined' && /[?&]predshots=0/.test(location.search || '')); // opponent projectiles also come from the predicted world (see above)
 
 const pred = { state: null, tick: 0, ack: 0, log: [], err: { x: 0, y: 0 }, errBall: { x: 0, y: 0 }, lastT: -1, lastFix: 0, visited: 0, fired: [] }; // state = saveState() at pred.tick; log = my inputs { seq, pt, bits }
 
@@ -162,9 +168,15 @@ function predShape(mixed) {
     if (PRED_WORLD && ps.pause <= 0) { // (a goal scored in the predicted world freezes it: until the drawn world gets there too, only my player is predicted)
         const b = ps.ball;
         out.ball = { ...b, x: b.x + pred.errBall.x, y: b.y + pred.errBall.y };
-        out.pegs = mixed.pegs.filter(q => q.owner !== slot).concat(ps.pegs.filter(q => q.owner === slot));
-        out.arrows = mixed.arrows.filter(a => a.owner !== slot).concat(ps.arrows.filter(a => a.owner === slot));
-        out.boomerangs = (mixed.boomerangs || []).filter(b => b.owner !== slot).concat((ps.boomerangs || []).filter(b => b.owner === slot));
+        if (PRED_SHOTS) { // everybody's projectiles live on my clock (they are tied to their owner by id, not by list position, so nothing else needs re-pointing)
+            out.pegs = ps.pegs.slice();
+            out.arrows = ps.arrows.slice();
+            out.boomerangs = (ps.boomerangs || []).slice();
+        } else {
+            out.pegs = mixed.pegs.filter(q => q.owner !== slot).concat(ps.pegs.filter(q => q.owner === slot));
+            out.arrows = mixed.arrows.filter(a => a.owner !== slot).concat(ps.arrows.filter(a => a.owner === slot));
+            out.boomerangs = (mixed.boomerangs || []).filter(b => b.owner !== slot).concat((ps.boomerangs || []).filter(b => b.owner === slot));
+        }
         // Decoys: mine, and the one I am tethered to, come from the predicted world (the rope end is computed there, so it must hang on the decoy that is drawn).
         // The others stay on the drawn timeline. Decoys are told apart by owner (one per player), because their index in the list differs between the two worlds.
         const tethered = me.tball > 0 ? ps.decoys[me.tball - 1] : null;
@@ -228,5 +240,7 @@ if (typeof net.onSnapshot === 'function') {
     };
     net.shape = predShape;
     net.skipEvent = predSkipServerEvent;
-    net.extra = () => `prediction on${PRED_WORLD ? '' : ' (player only)'}, ${pred.state ? pred.tick - pred.lastT : 0} ticks ahead, last fix ${pred.lastFix.toFixed(1)} u`; // shown in the status line next to the ping
+    net.extra = () => `prediction on${PRED_WORLD ? (PRED_SHOTS ? '' : ', shots delayed') : ' (player only)'}, ${pred.state ? pred.tick - pred.lastT : 0} ticks ahead, last fix ${pred.lastFix.toFixed(1)} u`; // shown in the status line next to the ping
 }
+
+

@@ -17,19 +17,23 @@
 //                      {t:'swap', v}                       host only: switch sides every 5 points (true) or never (false); restarts the match
 //                      {t:'lobby2v2', v}                   host only: 2v2 lobby on (newcomers fill Blue, Red, Blue 2, Red 2 and the match waits for all four seats) or off
 //                      {t:'assign', c, to}                 host only: move member c to team 0 (Blue), 1 (Red) or -1 (waiting); restarts the match if seats change
+//                      {t:'chat', text}                    say something to everybody in the room (trimmed, at most CHAT_MAX characters, rate limited)
 //                      {t:'ping', c}                       latency probe
 //   server -> client   {t:'welcome', room, slot, cid, tick, hz, snapEvery}   slot: 0..3 = a seat, -1 = waiting / spectating; cid = your member id
 //                      {t:'slot', slot}                    your seat changed (the host moved you)
 //                      {t:'roster', slots:[bool x4], spectators, running, lobby2v2, host, you, members:[{c, team, slot, host}]}
 //                      {t:'snap', tick, ack, s, ev}         s = saveState(), ack = my last input counter the server has applied, ev = [[name, tick, ...args], ...]
+//                      {t:'chat', c, team, text}           somebody in the room said something (c = their member id, team = 0 Blue / 1 Red / -1 waiting); also sent back to the sender.  {t:'chat', sys:true, text} is a note from the server to one player
 //                      {t:'pong', c, tick, tps}    {t:'error', msg}
 const http = require('http'), fs = require('fs'), path = require('path');
 const { attachWebSocket } = require('./ws.js');
 const { loadSim, ROOT } = require('./sim-node.js');
 
-const TICK_HZ = 120, DT_MS = 1000 / TICK_HZ, SNAP_EVERY = 4; // snapshots at 30 Hz
+const TICK_HZ = 120, DT_MS = 1000 / TICK_HZ;
+const SNAP_EVERY = [1, 2, 3, 4, 5, 6].includes(+process.env.SNAP_EVERY) ? +process.env.SNAP_EVERY : 4; // a snapshot every 4 ticks = 30 Hz. SNAP_EVERY=2 node js/server/server.js sends 60 Hz: a little less lag, about twice the bandwidth (clients adapt, the value is sent in 'welcome')
 const MAX_CATCHUP = 8; // never run more than this many ticks in one go (after a stall, drop the debt instead of spiralling)
 const MAX_ROOMS = 50, MAX_SPECTATORS = 8, MSG_PER_SEC = 400;
+const CHAT_MAX = 120, CHAT_BURST = 5, CHAT_WINDOW_MS = 5000; // chat: longest message, and at most CHAT_BURST messages per CHAT_WINDOW_MS per player
 const TEAM_MAX = 2; // players per team (seats 0 / 2 are Blue, 1 / 3 are Red)
 const SPECIAL_IDS = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened', 'explode', 'hopper', 'boomerang', 'portal', 'swap', 'smoke'];
 
@@ -215,6 +219,21 @@ class Room {
         this.fillSeats();
         this.settle(this.reseat());
     }
+    chat(conn, raw) { // relay one chat message to everybody in the room (the sender included, so everyone sees the same order)
+        if (typeof raw !== 'string')
+            return;
+        const text = raw.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, CHAT_MAX);
+        if (!text)
+            return;
+        const now = Date.now();
+        conn.chatAt = (conn.chatAt || []).filter(t => now - t < CHAT_WINDOW_MS);
+        if (conn.chatAt.length >= CHAT_BURST)
+            return conn.send(JSON.stringify({ t: 'chat', sys: true, text: 'Slow down: too many messages.' }));
+        conn.chatAt.push(now);
+        const msg = JSON.stringify({ t: 'chat', c: conn.cid, team: conn.team, text });
+        for (const c of this.conns)
+            c.send(msg);
+    }
     roster() {
         const members = [...this.conns]
             .sort((a, b) => (a.slot < 0) - (b.slot < 0) || a.slot - b.slot || a.order - b.order) // seated by seat, then the waiting list in order
@@ -340,6 +359,8 @@ function startServer(port = 8080, host = '0.0.0.0') {
                 room.setLobby2v2(m.v);
             else if (m.t === 'assign' && room && room.host === conn)
                 room.assign(Number(m.c), Number(m.to));
+            else if (m.t === 'chat' && room)
+                room.chat(conn, m.text);
             else if (m.t === 'ping')
                 conn.send(JSON.stringify({ t: 'pong', c: Number(m.c) || 0, tick: room ? room.tick : 0, tps: room ? room.tps : 0 }));
         });
@@ -372,3 +393,5 @@ if (require.main === module) {
         console.log('  stop:  Ctrl+C');
     });
 }
+
+

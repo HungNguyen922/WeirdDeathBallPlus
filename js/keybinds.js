@@ -13,7 +13,7 @@ const KEY_DEFAULTS = [
     { l: 'Numpad4', r: 'Numpad6', up: 'Numpad8', dn: 'Numpad5', z: 'Numpad7', x: 'Numpad9', sp: 'Numpad0', sp2: 'NumpadDecimal' }, // Red's teammate (2v2)
 ];
 const KEY_STORE = 'wdb-keybinds';
-const KEY_RESERVED = { Escape: 'Esc closes menus', r: 'R restarts the match', t: 'T switches 1v1 / 2v2', m: 'M turns the music on / off', 1: '1-4 toggle the AI', 2: '1-4 toggle the AI', 3: '1-4 toggle the AI', 4: '1-4 toggle the AI' }; // keys the game itself uses
+const KEY_RESERVED = { Escape: 'Esc closes menus', r: 'R restarts the match', t: 'T switches 1v1 / 2v2', m: 'M turns the music on / off', Enter: 'Enter opens the chat', 1: '1-4 toggle the AI', 2: '1-4 toggle the AI', 3: '1-4 toggle the AI', 4: '1-4 toggle the AI' }; // keys the game itself uses
 const KEY_REFUSED = ['Control', 'Alt', 'Meta', 'Tab', 'CapsLock', 'ContextMenu', 'Dead', 'Unidentified', 'Process']; // modifiers and keys the browser or OS keeps for itself
 
 const keybinds = { map: KEY_DEFAULTS.map(s => ({ ...s })), listeners: [] }; // map[seat][action] = token
@@ -120,3 +120,5 @@ function saveKeybinds() {
         keybinds.map = next;
     } catch (e) {}
 })();
+
+

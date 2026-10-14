@@ -20,6 +20,7 @@
 </div>
 <div id="stick"><div class="knob"></div></div>
 </div>
+<div id="chat" hidden aria-live="polite"><div id="chatlog"></div><input id="chatinput" type="text" maxlength="120" autocomplete="off" spellcheck="false" placeholder="Type a message, Enter to send, Esc to cancel" hidden></div>
 <div id="rotate"><div class="ico">&#8635;</div><div>Rotate your phone to landscape</div><small>or tap here to play anyway</small></div>
 
 <div id="menu" class="overlay" hidden>
@@ -65,6 +66,13 @@
 </div>
 </div>
 <div class="group">
+<h3>Chat</h3>
+<div class="row">
+<button id="chatmode" class="mode on" title="Show or hide the chat in the top left corner. Press Enter in the game to type a message.">Chat: On</button>
+</div>
+<p class="hint">Press Enter to write a message. Online it goes to everyone in the room; offline it is just a notepad.</p>
+</div>
+<div class="group">
 <h3>Online</h3>
 <div class="row">
 <button id="online" class="mode" title="Play online: asks for a room name; a friend joins the same room">Online: Off</button>
@@ -100,6 +108,7 @@
 <li><kbd>T</kbd> switch between 1v1 and 2v2</li>
 <li><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> toggle AI for Blue, Red, Blue 2, Red 2 (3 and 4 only exist in 2v2)</li>
 <li><kbd>M</kbd> music on / off</li>
+<li><kbd>Enter</kbd> write a chat message (Enter sends it, Esc cancels). Online it goes to the whole room; offline it is a notepad</li>
 <li>On a pick screen: arrows move, grapple or special locks in, weight takes it back</li>
 </ul>
 </div>
@@ -156,6 +165,9 @@
 <script src="js/net/client.js"></script>
 <script src="js/net/predict.js"></script>
 <script src="js/touch.js"></script>
+<script src="js/chat.js"></script>
 <script src="js/menu.js"></script>
 <script src="js/main.js"></script>
 </body></html>
+
+

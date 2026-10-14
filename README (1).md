@@ -28,6 +28,7 @@ js/
     entities.js         pegs, casts, ropes, players, balls, banner
     render.js           draw(): one frame, back to front
   input.js            keyboard, AI toggle buttons, menu clicks
+  chat.js             chat log (top left) + Enter-key text box; online it talks to the room, offline it is a notepad
   main.js             wires render -> game events, runs the 120 Hz loop
 ```
 
@@ -83,3 +84,5 @@ the HUD, and `ball.pull` / `player.dashT` are effect timers the physics sets and
   the second 2 player lengths from the goal scoop (`SPAWN_BALL_D`, `SPAWN_SCOOP_D` in physics/bodies.js). Teammates start as AI; switch them to
   Human with their buttons or keys 3 / 4 (Blue 2: IJKL + U/O/P, Red 2: numpad 8/4/5/6 + 7/9/0). A team is out when all its players are dead.
   Plinko pegs and decoys are limited per player, not per team. Teammates use Dash (the special menu only covers the first two players).
+
+

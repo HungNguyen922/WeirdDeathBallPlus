@@ -21,7 +21,7 @@ function makeClient() {
     vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/net/predict.js'), 'utf8'), sim.ctx, { filename: 'js/net/predict.js' });
     return sim;
 }
-function bitsToKeys(bits) { return `{l:${!!(bits & 1)},r:${!!(bits & 2)},up:${!!(bits & 4)},dn:${!!(bits & 8)},z:${!!(bits & 16)},x:${!!(bits & 32)},sp:${!!(bits & 64)}}`; }
+function bitsToKeys(bits) { return `{l:${!!(bits & 1)},r:${!!(bits & 2)},up:${!!(bits & 4)},dn:${!!(bits & 8)},z:${!!(bits & 16)},x:${!!(bits & 32)},sp:${!!(bits & 64)},sp2:${!!(bits & 128)}}`; } // (sp2 was missing: the predicting client pressed it, the test's "server" never did, so the two worlds' saved keys differed whenever that random bit was set)
 
 // The client predicts LAG*2 ticks AHEAD of what the server has computed in real time, so to compare we let the harness compare against ticks the server has already reached:
 // the prediction made at frame n for tick n + LAG is checked later, once the server reaches that tick.
@@ -147,6 +147,7 @@ console.log('\nwhat is drawn from which timeline');
     mixed.ball.x = 500; mixed.arrows = [{ owner: 0, x: 2 }, { owner: 1, x: 3 }]; mixed.pegs = [{ owner: 1, x: 12 }, { owner: 0, x: 13 }];
     mixed.players[1].onBall = true; mixed.players[1].tball = 0; mixed.players[1].hookAng = 0; mixed.players[1].rope = { x: 500, y: 0 };
     C.ctx.__m = mixed;
+    C.run('PRED_SHOTS = false'); // first the old split (?predshots=0)
     const out = C.run('predShape(__m)');
     check(out.ball.x === 600, 'the death ball comes from the predicted timeline (the swing and the hit are on the same clock)');
     check(JSON.stringify(out.arrows.map(a => a.x)) === '[3,1]', 'arrows: the opponent\'s from the drawn world, mine from the prediction (no duplicate of mine)');
@@ -158,6 +159,10 @@ console.log('\nwhat is drawn from which timeline');
     C.run('pred.errBall.x = 0; pred.state.pause = 1');
     check(C.run('predShape(__m)').ball.x === 500, 'while the predicted world is frozen on a goal the drawn ball stays on the drawn timeline');
     C.run('pred.state.pause = 0; PRED_WORLD_OFF = 1');
+    C.run('PRED_SHOTS = true; pred.state.arrows = [{ owner: 0, x: 1 }, { owner: 1, x: 4 }]; pred.state.pegs = [{ owner: 0, x: 11 }, { owner: 1, x: 14 }];');
+    const shots = C.run('predShape(__m)');
+    check(JSON.stringify(shots.arrows.map(a => a.x)) === '[1,4]' && JSON.stringify(shots.pegs.map(q => q.x)) === '[11,14]', 'with predicted shots on, EVERY arrow and peg (the opponent\'s too) comes from the predicted world, none doubled');
+    check(mixed.arrows.length === 2 && mixed.arrows[1].x === 3, 'the interpolated state is still not modified');
 }
 {
     console.log('\nball corrections are smoothed, not snapped');
@@ -300,3 +305,5 @@ for (const [LAG, DELAY] of [[12, 12], [24, 20]]) {
 
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nall good');
 process.exit(fails ? 1 : 0);
+
+

@@ -5,9 +5,11 @@
   "description": "Weird Death Ball: browser game plus an authoritative WebSocket room server",
   "scripts": {
     "start": "node js/server/server.js",
-    "test": "for f in js/test/*-test.js; do node \"$f\"; done"
+    "test": "node js/test/run-all.js"
   },
   "engines": {
     "node": ">=20"
   }
 }
+
+

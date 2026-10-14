@@ -155,31 +155,23 @@ const FLOAT_ON_RATE = 3;              // how fast (per second) the float fades b
 const WEIGHT_KICK = 500;              // u/s of outward speed a press tries to reach, from the float point. THE main knob for how hard a kick throws you:
                                       //   300 = ~1 PL out | 600 = ~1.6 PL | 800 = ~2 PL (default) | 1000+ = hard enough to slam you right down to the pivot on the way back
 const WEIGHT_KICK_REACH = 10 * PL;     // u past the float point where a press stops adding anything (the cap on how far a second kick can throw you). Raise = allows bigger stacked bobs
-// --- Floor weight mechanics: HYPER, XERIC and STUN (see auraStep() in physics/player-grapple.js) ---
+// --- Floor weight mechanics: HYPER, and XERIC(see auraStep() in physics/player-grapple.js) ---
 // HYPER = standing on the floor holding WEIGHT + GRAPPLE (also counts in passing, as a weighted floor grapple jump leaves the floor).  XERIC = standing on the floor holding WEIGHT
-// without the grapple.  Both are auras that act on every OTHER player. STUN = a hyper and a xeric from the same player close together (either order): it stuns every other player
-// who is in the air off a floor grapple. A stunned player loses glide and most air control, cannot latch on, and has no rope until they land (or STUN_T runs out).
+// without the grapple.  Both are auras that act on every OTHER player.
 // (QUAKE is only the seesaw floor's pop, see terrain.js; Xeric soaks most of it up.)
 const HYPER_LINGER = 0.3;             // s a hyper stays active after the owner lets go or leaves the floor (the window a weighted grapple jump launches inside)
 const HYPER_DRIVE = 1.6;              // multiplier on the grapple-jump pull (its acceleration AND top speed) of any other player while a hyper is active
 const HYPER_REACH = 1.6;              // multiplier on how far a grapple jump's rope reaches (GJ_REACH_GROUND) when its hook lands during another player's hyper: the faster pull needs room to carry them higher
 const HYPER_KICK = 1.3;               // multiplier on the weight-kick strength of any other player while a hyper is active
+
 const XERIC_LINGER = 0.15;            // s a xeric stays active after the owner lets go of weight / leaves the floor
 const XERIC_KICK = 0.15;              // share of a weight kick other players keep while a xeric is active (0.15 = practically a misfire)
 const XERIC_JUMP = 0.3;               // share of a WEIGHTED grapple jump's pull other players keep while a xeric is active
 const XERIC_QUAKE = 0.2;              // share of the seesaw pop's speed a player standing on the floor keeps while THEY hold xeric (0 = fully absorbed, 1 = no defense)
-const STUN_WINDOW = 0.35;            // s: a hyper then a xeric (or a xeric then a hyper) from one player within this gap makes a stun
-const STUN_HOLD_MIN = 0.05;          // xeric then hyper: the weight must have been held on the floor at least this long (s) before the grapple, so pressing both keys together is just a hyper...
-const STUN_HOLD_MAX = 0.5;           // ...and no longer than this, so walking around with weight held and then grappling is not a stun either (it has to be a quick follow-up)
-const STUN_CD = 0.3;                 // s between stuns caused by the same player (a fast dribble should not machine-gun stuns)
-const STUN_GJ_T = 0.6;               // s after a floor grapple jump during which a player still counts as "grappling the floor" even if the rope is gone
+
 const FLOOR_FX_TEAMMATES = true;         // false = stuns (and the hyper / xeric auras) spare the owner's teammates ("all other players" = true)
 const BOOST_FX = 0.4;                 // s the burst lasts on a player whose jump / kick was just boosted by another player's hyper (display only)
 const FIZZLE_FX = 0.45;               // s the burst lasts on a player whose weighted jump / kick was just cut by another player's xeric (display only)
-const STUN_FX = 0.5;                 // s the stun shockwave lasts on screen (display only)
-const STUN_T = 0.9;                   // s a stun lasts at most (it also ends the moment the player lands)
-const STUN_IMMUNE = 0.8;              // s after a stun ends during which the player cannot be stunned again (no stun-lock)
-const STUN_MOVE = 0.35;               // share of air acceleration a stunned player keeps
 const PRIME_T = 0.1;                  // s a WEIGHT press stays "primed" after you let go: a grapple that lands inside this window gets its kick at once (WEIGHT held = always primed)
 // Things elsewhere that shape the bob: KS (rubber band above), TAUT_DAMP / TAUT_K / BOB_* (below the float point), G and HEAVY_KS (gravity is x1.35 while WEIGHT is held), DOWN (fast-fall).
 
@@ -199,7 +191,7 @@ const PIVOT_TURN_KEEP = 1;            // share of your existing sideways speed k
 // 8  DEATH BALL & TETHER
 // =====================================================================================================================================================================
 // --- The ball itself ------------------------------------------------------------------------------------------------------------------------------------------------
-const BALL_G = 170;                   // ball gravity (u/s^2). Lower = a floatier ball
+const BALL_G = 150;                   // ball gravity (u/s^2). Lower = a floatier ball
 const BALL_VMAX = 920;                // ball speed cap (u/s) in normal play (hard hits can raise it for a while)
 const BALL_R = PL/2;                    // ball radius (u)
 const BALL_M = 0.25;                  // ball mass against a player's 1: players knock it around easily. Also how the decoys and crash shots weigh it
@@ -389,11 +381,11 @@ const HOPPER_COOLDOWN = 1;            // s, starts when the hop starts
 // --- Boomerang ---    
 const BOOMERANG_MAX = 10;              // most one player can have out at once (2 volleys)
 const BOOMERANG_VOLLEY = 5;            // thrown per press
-const BOOMERANG_FAN = 0.5;             // rad, total spread of launch angles across the volley
-const BOOMERANG_RANGE_SPREAD = 0.75;    // outer boomerangs go this much farther / inner ones shorter (0.5 = +/-25%)
+const BOOMERANG_FAN = 0.75;             // rad, total spread of launch angles across the volley
+const BOOMERANG_RANGE_SPREAD = 1;    // outer boomerangs go this much farther / inner ones shorter (0.5 = +/-25%)
 const BOOMERANG_COOLDOWN = 4;        // s between throws
 const BOOMERANG_HOLD = true;
-const BOOMERANG_V = 800;
+const BOOMERANG_V = 600;
 const BOOMERANG_RANGE = 800;
 const BOOMERANG_TURN = 2;
 const BOOMERANG_BACK_V = 1000;         // faster return = harder shove
@@ -404,7 +396,7 @@ const BOOMERANG_BACK_COMMIT = 1;     // rad: past this the return loops round in
 const BOOMERANG_CATCH = 2;
 const BOOMERANG_LIFE = 15;
 const BOOMERANG_R = 10;
-const BOOMERANG_M_OUT = 0.001;         // outbound: practically no push
+const BOOMERANG_M_OUT = 0;         // outbound: practically no push
 const BOOMERANG_E_OUT = 0;
 const BOOMERANG_M_BACK = 0.25;         // return: each one is a real shove (ball takes ~half the closing speed per hit)
 const BOOMERANG_E_BACK = 0.05;
@@ -441,7 +433,7 @@ const SWAP_FX = 0.35;                 // s the swap flash lasts (display only)
 // hides everything inside it (players, the ball, decoys, arrows, boomerangs, pegs, ropes, effects) and your key hints on the wall show no key pressed. Your own team sees through it.
 // The smog changes nothing in the physics: it is pure information (only player.smokeT is kept, so it travels in snapshots). Pressing again while it is out does nothing.
 const SMOKE_R = 5 * PL;               // radius of the cloud (u), centred on the player
-const SMOKE_T = 8;                    // s the cloud lasts
+const SMOKE_T = 10;                    // s the cloud lasts
 const SMOKE_COOLDOWN = 10;            // s before the next one (starts when the cloud clears)
 const SMOKE_FADE = 0.4;               // s the cloud takes to billow out and to thin away (display only)
 

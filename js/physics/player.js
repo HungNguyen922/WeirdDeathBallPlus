@@ -89,11 +89,7 @@ class Player {
         this.arrowQueued = false;
         this.gBurst = 0;
         this.hyperT = 0; this.xericT = 0;           // seconds left on this player's hyper / xeric aura (they act on every OTHER player)
-        this.hyperGap = 99; this.xericGap = 99;     // seconds since the hyper / xeric condition was last true (stun = one close behind the other)
-        this.hyperWas = false; this.xericWas = false; this.xericLen = 0; // last tick's condition, to spot the moment one starts; how long the latest xeric run lasted
         this.boostFx = 0; this.fizzleFx = 0;        // display timers: a jump / kick was just boosted by another's hyper, or cut by another's xeric
-        this.stunCd = 0; this.stunFx = 0;         // stun-combo cooldown, and the display timer of its shockwave
-        this.stunT = 0; this.stunImm = 0;           // stunned seconds left, and the immunity that follows a stun
     }
     get grounded() { return this.ground; }
     // The specials that are active right now, as [key, ability id]: the first always, the second only when the match uses two and it is not the same ability.
@@ -149,7 +145,7 @@ class Player {
         // Constant acceleration toward the max speed (the demo shows a steady ramp, not a hard build-up curve).
         // Movement is halved for Hopper Special
         const mv = this.has('hopper') ? HOPPER_MOVE : 1;
-        const acc = RUN_ACC * mv * (this.grounded ? 1 : 0.55) * (dir * this.vx < 0 ? 1.4 : 1) * (this.stunT > 0 ? STUN_MOVE : 1);
+        const acc = RUN_ACC * mv * (this.grounded ? 1 : 0.55) * (dir * this.vx < 0 ? 1.4 : 1);;
         if (dir && dir * this.vx < 330 * mv)
             this.vx += dir * acc * DT;
         else if (!dir && this.grounded && !this.rope)
@@ -161,7 +157,7 @@ class Player {
         // holding UP, a floaty arc keeps swings and floats working.
         if (k.up && this.grounded)
             this.vy = -JUMP_V;
-        let g = (k.up && this.stunT <= 0 ? G_FLOAT : G) * (heavy ? 1.35 : 1); // (a stunned player cannot glide)
+        let g = (k.up ? G_FLOAT : G) * (heavy ? 1.35 : 1);
         if (k.up && this.rope) {
             g = (this.onBall ? G * 0.4 : G_FLOAT) * (heavy ? 1.35 : 1);
             const cap = this.onBall ? 170 : 70;

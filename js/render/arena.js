@@ -132,3 +132,72 @@ function drawArena() { // background, terrain, goals, net line
     cx.stroke();
     cx.lineCap = 'butt';
 }
+
+
+
+
+// QUAKE graphic (the seesaw floor popping up): dust rings and cracks where the slam landed, debris thrown up, a bright pulse racing along the floor to the end that
+// pops, and dust and grit streaming off that raised end. Display only: it reads quakeFx (set by sawHit) and the live floor shape, and never writes anything.
+function drawQuakeFx() {
+    const q = quakeFx;
+    if (q.t <= 0)
+        return;
+    const u = 1 - q.t / QUAKE_FX_T, s = q.s, hitSide = q.x < NETX ? 0 : 1, popSide = 1 - hitSide, fade = 1 - u;
+    const fy = x => H + sawY(x); // the floor's surface at x, following the quake
+    const rnd = (i, k) => { const t = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return t - Math.floor(t); }; // fixed "random" numbers: no flicker between frames
+    cx.save();
+    cx.lineCap = 'round'; cx.lineJoin = 'round';
+    cx.shadowColor = 'rgba(255,240,200,.8)'; cx.shadowBlur = 8;
+    // 1) where the slam landed: two flat shock rings, and cracks running down into the floor
+    const hx = q.x, hy = fy(hx);
+    for (let i = 0; i < 2; i++) {
+        const v = Math.min(1, Math.max(0, (u - i * 0.12) / 0.55));
+        if (v <= 0 || v >= 1) continue;
+        cx.globalAlpha = (1 - v) * 0.85; cx.strokeStyle = i ? '#cfc4a8' : '#fff6dc'; cx.lineWidth = 1.5 + 3.5 * (1 - v);
+        cx.beginPath(); cx.ellipse(hx, hy, 14 + v * (80 + 110 * s), 3 + v * (8 + 9 * s), 0, Math.PI, 2 * Math.PI); cx.stroke();
+    }
+    cx.shadowBlur = 0; cx.strokeStyle = '#fff6dc'; cx.lineWidth = 1.5; cx.globalAlpha = fade * fade * 0.7;
+    for (let i = 0; i < 5; i++) {
+        const a = Math.PI * (0.18 + 0.64 * i / 4) + (rnd(i, 1) - 0.5) * 0.2, len = (16 + 26 * s) * (0.6 + 0.6 * rnd(i, 2)), m = len * 0.5;
+        cx.beginPath(); cx.moveTo(hx, hy + 1);
+        cx.lineTo(hx + Math.cos(a) * m + (rnd(i, 3) - 0.5) * 6, hy + Math.sin(a) * m);
+        cx.lineTo(hx + Math.cos(a) * len, hy + Math.sin(a) * len); cx.stroke();
+    }
+    // 2) debris thrown up from the impact (simple ballistic arcs)
+    const t = u * QUAKE_FX_T;
+    cx.fillStyle = '#d8cfb8';
+    for (let i = 0; i < 4 + Math.round(6 * s); i++) {
+        const vx = (rnd(i, 4) - 0.5) * 220, vy = -(90 + 200 * rnd(i, 5)) * (0.5 + 0.7 * s);
+        const x = hx + vx * t, y = hy - 2 + vy * t + 300 * t * t;
+        if (y > fy(x)) continue; // it has landed in the floor
+        cx.globalAlpha = Math.min(1, fade * 1.6); cx.save(); cx.translate(x, y); cx.rotate(t * (6 + 10 * rnd(i, 6)));
+        const w = 2 + 2.5 * rnd(i, 7); cx.fillRect(-w / 2, -w / 2, w, w * 0.7); cx.restore();
+    }
+    // 3) the pulse: a bright streak racing along the floor from the hit to the end that pops
+    const tx = popSide === 1 ? W - 60 : 60, run = Math.min(1, u / 0.35), px = hx + (tx - hx) * run, dir = Math.sign(tx - hx) || 1;
+    cx.shadowColor = '#fff2c0'; cx.shadowBlur = 10; cx.strokeStyle = '#fff6dc'; cx.lineWidth = 5 - 2.5 * u; cx.globalAlpha = Math.min(1, fade * 1.3) * (0.6 + 0.4 * s);
+    cx.beginPath();
+    for (let x = px, n = 0; n <= 16 && (x - hx) * dir >= 0; x -= dir * 8, n++)
+        n === 0 ? cx.moveTo(x, fy(x) - 2) : cx.lineTo(x, fy(x) - 2);
+    cx.stroke();
+    // 4) the popping end: grit and dust streaming up off the raised floor, and a glow on its edge, once the pulse gets there
+    const arrive = Math.min(1, Math.max(0, (u - 0.25) / 0.2)), x0 = popSide === 1 ? W - SAW_HALF / 2 : 0, span = SAW_HALF / 2;
+    if (arrive > 0) {
+        const lift = Math.min(1, sawQ(popSide) / 14);
+        cx.shadowBlur = 8; cx.strokeStyle = '#fff2c0'; cx.lineWidth = 3; cx.globalAlpha = arrive * Math.min(1, fade * 1.4) * (0.4 + 0.6 * lift);
+        cx.beginPath(); for (let x = x0; x <= x0 + span; x += 8) x === x0 ? cx.moveTo(x, fy(x) - 3) : cx.lineTo(x, fy(x) - 3); cx.stroke();
+        cx.shadowBlur = 0; cx.fillStyle = '#e8e0cc';
+        for (let i = 0; i < 6 + Math.round(8 * s); i++) {
+            const ph = (u * 1.6 + rnd(i, 8)) % 1, x = x0 + span * rnd(i, 9) + (rnd(i, 10) - 0.5) * 16 * ph, y = fy(x) - 4 - ph * (26 + 34 * s) * (0.5 + rnd(i, 11));
+            cx.globalAlpha = arrive * Math.min(1, fade * 1.5) * (1 - ph) * 0.95;
+            cx.beginPath(); cx.arc(x, y, 1.8 + 3 * ph * rnd(i, 12), 0, 7); cx.fill();
+        }
+        cx.strokeStyle = '#fff6dc'; cx.lineWidth = 2.2; // speed lines straight up off the raised end
+        for (let i = 0; i < 5; i++) {
+            const x = x0 + span * (0.1 + 0.8 * i / 4), ph = (u * 2 + i * 0.37) % 1, y = fy(x) - 8 - ph * 30 * (0.5 + s);
+            cx.globalAlpha = arrive * Math.min(1, fade * 1.5) * (1 - ph) * (0.35 + 0.5 * lift);
+            cx.beginPath(); cx.moveTo(x, y); cx.lineTo(x, y - 6 - 8 * s); cx.stroke();
+        }
+    }
+    cx.restore();
+}

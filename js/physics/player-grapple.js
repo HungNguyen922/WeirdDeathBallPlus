@@ -1,35 +1,15 @@
 // PHYSICS - Player grapple: the overcharge lockout, what the hook can reach, attaching / landing, and the per-tick rope, tether and weight-kick physics (stepGrapple).
 // Adds methods to Player (see mixin() in player.js); load after player.js.
 mixin(Player, {
-    // ---- Hyper / Xeric / Stun (constants.js has the numbers and the rules in one place) ----
+    // ---- Hyper / Xeric (constants.js has the numbers and the rules in one place) ----
     // Called for every player once per tick BEFORE anyone steps, so the order players are stepped in never matters.
     auraStep() {
-        const k = this.keys, zEff = k.z && this.gCool <= 0 && this.stunT <= 0; // the grapple key only counts when the grapple can actually work
-        const hyperOn = this.alive && this.ground && k.x && zEff && !this.onBall;   // weight + grapple on the floor
-        const xericOn = this.alive && this.ground && k.x && !zEff;                  // weight on the floor, grapple not held
+        const k = this.keys, zEff = k.z && this.gCool <= 0; // the grapple key only counts when the grapple can actually work
+        const onFloorRope = (this.rope && this.ropeGround && !this.onBall) || (this.pending && this.pending.ground);
+        const hyperOn = this.alive && k.x && zEff && (this.ground || onFloorRope) && !this.onBall; // weight + grapple, on the floor or hooked to it
+        const xericOn = this.alive && this.ground && k.x && !zEff;                                   // weight on the floor, grapple not held
         this.hyperT = hyperOn ? HYPER_LINGER : Math.max(0, this.hyperT - DT);
         this.xericT = xericOn ? XERIC_LINGER : Math.max(0, this.xericT - DT);
-        this.hyperGap = hyperOn ? 0 : this.hyperGap + DT;
-        this.xericGap = xericOn ? 0 : this.xericGap + DT;
-        this.xericLen = xericOn ? (this.xericWas ? this.xericLen + DT : DT) : this.xericLen; // how long the latest xeric run has lasted (kept after it ends)
-        this.stunCd = Math.max(0, this.stunCd - DT);
-        this.stunFx = Math.max(0, this.stunFx - DT);
-        this.boostFx = Math.max(0, this.boostFx - DT);
-        this.fizzleFx = Math.max(0, this.fizzleFx - DT);
-        // Stun combo: one aura starts while the other was on a moment ago (hyper then xeric, or xeric then hyper)
-        const hyperStart = hyperOn && !this.hyperWas && this.xericGap <= STUN_WINDOW && this.xericLen >= STUN_HOLD_MIN && this.xericLen <= STUN_HOLD_MAX; // xeric, then a quick grapple
-        const xericStart = xericOn && !this.xericWas && this.hyperGap <= STUN_WINDOW;                                                                   // hyper, then a quick xeric (the dribble)
-        if (this.stunCd <= 0 && (hyperStart || xericStart))
-            this.stunOthers();
-        this.hyperWas = hyperOn;
-        this.xericWas = xericOn;
-        // Stun: counts down, ends the moment the player is back on the floor, then a short immunity
-        if (this.stunT > 0) {
-            this.stunT = this.ground || !this.alive ? 0 : Math.max(0, this.stunT - DT);
-            if (this.stunT === 0)
-                this.stunImm = STUN_IMMUNE;
-        } else
-            this.stunImm = Math.max(0, this.stunImm - DT);
     },
     // What the OTHER players' floor auras do to me right now: { hyper, xeric } (true = at least one other player has it up). The AI's planning copies see neither.
     floorFx() {
@@ -42,29 +22,6 @@ mixin(Player, {
                 if (o.xericT > 0) fx.xeric = true;
             }
         return fx;
-    },
-    // The stun combo: everybody else who is in the air off a floor grapple is stunned.
-    stunOthers() {
-        this.stunCd = STUN_CD;
-        this.stunFx = STUN_FX;
-        for (const q of players) {
-            if (q === this || !q.alive || q.ground || q.stunT > 0 || q.stunImm > 0 || (!FLOOR_FX_TEAMMATES && q.team === this.team))
-                continue;
-            const onFloorRope = (q.rope && q.ropeGround && !q.onBall) || (q.pending && q.pending.ground);
-            if (onFloorRope || q.gjT < STUN_GJ_T)
-                q.stun();
-        }
-    },
-    stun() { // the grapple stops working: the rope goes limp and is dropped, no pull, no kick, no float, and no new hook until they land
-        this.stunT = STUN_T;
-        this.rope = null;
-        this.pending = null;
-        this.onBall = false;
-        this.tball = null;
-        this.driveT = 0;
-        this.kickReq = false;
-        this.taut = false;
-        this.floatW = 0;
     },
     // Overcharge: the meter is emptied, the grapple is locked out for GRAPPLE_COOLDOWN and the grip is torn away (purple ripple). Happens when the meter runs out, or when a
     // player with their grapple active (rope out, or hook in flight) touches an enemy (see update() in rules.js).
@@ -180,7 +137,7 @@ mixin(Player, {
             if (this.gCool === 0)
                 this.gCharge = 0; // lockout over: the meter does NOT jump to full, it restarts from 0 (grapple again right away and it just overcharges again)
         }
-        const z = k.z && this.gCool <= 0 && this.stunT <= 0; // (stunned: no hook)
+        const z = k.z && this.gCool <= 0;
         if (!z && !primed)
             this.kickReq = false; // a primed kick survives the grapple being up
         if (z && !this.rope && !this.pending)

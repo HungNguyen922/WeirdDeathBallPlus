@@ -677,17 +677,8 @@ function drawGrappleRing(p) {
         cx.shadowBlur = 0; cx.globalAlpha = 1;
     }
 }
-// ---- Hyper / Xeric / Stun visuals (display only: reads the player's timers, never writes them) ----
+// ---- Hyper / Xeric visuals (display only: reads the player's timers, never writes them) ----
 // Paste above drawPlayers() in js/render/entities.js and call drawFloorFx(p) right after drawGrappleRing(p).
-function drawStar4(x, y, r) { // a small four-pointed star
-    cx.beginPath();
-    for (let i = 0; i < 8; i++) {
-        const a = i * Math.PI / 4, d = i % 2 ? r * 0.35 : r;
-        const px = x + Math.cos(a) * d, py = y + Math.sin(a) * d;
-        if (i) cx.lineTo(px, py); else cx.moveTo(px, py);
-    }
-    cx.closePath(); cx.fill();
-}
 function drawFloorFx(p) {
     const tm = performance.now(), R = p.r;
     cx.save();
@@ -714,16 +705,6 @@ function drawFloorFx(p) {
         }
         cx.globalAlpha = 0.3 * f; cx.lineWidth = 2;
         cx.beginPath(); cx.ellipse(p.x, p.y + R, R + 10, 4, 0, 0, 7); cx.stroke();
-    }
-    if (p.stunFx > 0) { // STUN combo: shockwave rings racing out along the floor from the owner's feet
-        const u = 1 - p.stunFx / STUN_FX;
-        cx.shadowColor = '#ffd23a'; cx.shadowBlur = 12; cx.lineCap = 'round';
-        for (let i = 0; i < 2; i++) {
-            const v = Math.min(1, Math.max(0, (u - i * 0.15) / 0.85));
-            if (v <= 0) continue;
-            cx.globalAlpha = (1 - v) * 0.9; cx.strokeStyle = i ? '#ff8a1a' : '#fff1a8'; cx.lineWidth = 1.5 + 4 * (1 - v);
-            cx.beginPath(); cx.ellipse(p.x, p.y + R, 20 + v * 240, 3 + v * 9, 0, Math.PI, 2 * Math.PI); cx.stroke(); // (the upper half only: the floor hides the rest)
-        }
     }
     const fx = p.floorFx(); // what OTHER players' auras are doing to me
     if (fx.hyper || p.boostFx > 0) { // BOOSTED by a hyper: an orange rim; mid grapple jump, speed streaks trail behind me; a burst when a jump / kick is actually boosted
@@ -781,16 +762,6 @@ function drawFloorFx(p) {
             }
         }
         cx.restore();
-    }
-    if (p.stunT > 0) { // STUN: stars circling above the head, and the body flickers pale
-        const f = Math.min(1, p.stunT / 0.25);
-        cx.globalAlpha = 0.45 * f * (0.5 + 0.5 * Math.sin(tm / 45)); cx.fillStyle = '#fff';
-        cx.beginPath(); cx.arc(p.x, p.y, R, 0, 7); cx.fill();
-        cx.globalAlpha = f; cx.fillStyle = '#ffe45a'; cx.shadowColor = '#ffb21f'; cx.shadowBlur = 8;
-        for (let i = 0; i < 3; i++) {
-            const a = tm / 260 + i * 2 * Math.PI / 3;
-            drawStar4(p.x + Math.cos(a) * (R + 2), p.y - R - 8 + Math.sin(a) * 4, 5 + 1.5 * Math.sin(tm / 90 + i));
-        }
     }
     cx.restore();
 }

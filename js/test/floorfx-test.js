@@ -1,4 +1,4 @@
-// Headless tests for Hyper / Xeric / Stun (see the FLOOR WEIGHT block in physics/constants.js). Run:  node js/test/floorfx-test.js
+// Headless tests for Hyper / Xeric (see the FLOOR WEIGHT block in physics/constants.js). Run:  node js/test/floorfx-test.js
 const { loadSim } = require('../server/sim-node.js');
 let fails = 0;
 const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FAIL ') + msg); if (!ok) fails++; };
@@ -55,47 +55,6 @@ const xeric = sim => sim.run('players[0].keys.x = true; players[0].keys.z = fals
     for (let t = 0; t < 120; t++) { sim.tick(); top = Math.min(top, P(sim, 'y', 0)); }
     check(Math.abs(top - a) < 40, `my own jump is a normal jump (${top.toFixed(0)} vs ${a.toFixed(0)}, mirror-side spawn)`);
 }
-// 4) STUN combo: hyper then a quick xeric stuns a player in the air off a floor grapple
-function stunScenario(order) {
-    const sim = fresh();
-    sim.run('players[1].keys.z = true');
-    ticks(sim, 0.12); // player 1 is up in the air on a floor rope
-    const airborne = !P(sim, 'ground', 1) && P(sim, 'rope', 1) !== null;
-    sim.run('players[0].keys.x = true');
-    if (order === 'xeric-first') { ticks(sim, 0.1); sim.run('players[0].keys.z = true'); ticks(sim, 0.01); }
-    else { sim.run('players[0].keys.z = true'); ticks(sim, 0.02); sim.run('players[0].keys.z = false'); ticks(sim, 0.01); }
-    return { sim, airborne };
-}
-for (const order of ['hyper-first', 'xeric-first']) {
-    const { sim, airborne } = stunScenario(order);
-    check(airborne, `${order}: the target is in the air on a floor rope before the stun combo`);
-    check(P(sim, 'stunT', 1) > 0 && P(sim, 'rope', 1) === null, `${order}: the combo stuns them (stunT ${P(sim, 'stunT', 1).toFixed(2)}, rope dropped)`);
-    check(P(sim, 'stunFx', 0) > 0 && P(sim, 'stunT', 0) === 0, `${order}: the owner is not stunned and shows the shockwave`);
-    sim.run('players[1].keys.up = true'); ticks(sim, 0.1);
-    check(P(sim, 'rope', 1) === null, `${order}: stunned player cannot latch a new hook while holding grapple`);
-}
-// 5) stun ends on landing, then immunity stops a second stun straight away
-{
-    const { sim } = stunScenario('hyper-first');
-    sim.run('players[0].keys.x = false; players[0].keys.z = false; players[1].keys.z = false');
-    let landed = -1;
-    for (let t = 0; t < 600 && landed < 0; t++) { sim.tick(); if (P(sim, 'ground', 1)) landed = t; }
-    ticks(sim, 0.02);
-    check(landed >= 0 && P(sim, 'stunT', 1) === 0 && P(sim, 'stunImm', 1) > 0, `stun ends on landing (after ${(landed / 120).toFixed(2)} s) and immunity starts (${P(sim, 'stunImm', 1).toFixed(2)} s)`);
-    sim.run('players[1].stun()'); // (a direct call still works; immunity is checked by stunOthers())
-    sim.run('players[1].stunT = 0'); sim.run('players[0].stunCd = 0; players[1].y = 300; players[1].ground = false; players[1].gjT = 0; players[0].stunOthers()');
-    check(P(sim, 'stunT', 1) === 0, 'an immune player is not stunned again');
-}
-// 6) no stun without a combo: weight alone, hyper alone, and a long-held weight followed by grapple
-{
-    for (const [name, steps] of [['weight alone', s => s.run('players[0].keys.x = true')], ['hyper alone', s => s.run('players[0].keys.x = true; players[0].keys.z = true')]]) {
-        const sim = fresh(); sim.run('players[1].keys.z = true'); ticks(sim, 0.12); steps(sim); ticks(sim, 0.04);
-        check(P(sim, 'stunT', 1) === 0, `${name}: no stun`);
-    }
-    const sim = fresh(); sim.run('players[1].keys.z = true'); ticks(sim, 0.12);
-    sim.run('players[0].keys.x = true'); ticks(sim, 0.8); sim.run('players[0].keys.z = true'); ticks(sim, 0.02);
-    check(P(sim, 'stunT', 1) === 0, 'weight held a long time, then grapple: not a "quick" follow-up, no stun');
-}
 // 7) XERIC vs the seesaw: the same pop gives a xeric player a much smaller kick
 {
     const kick = xer => {
@@ -110,12 +69,24 @@ for (const order of ['hyper-first', 'xeric-first']) {
     const plain = kick(false), xe = kick(true);
     check(plain > 20 && xe < plain * 0.5, `xeric soaks up the seesaw pop: peak upward speed ${xe.toFixed(0)} vs ${plain.toFixed(0)} u/s`);
 }
-// 8) save / load keeps everything
+// 7b) the quake graphic (quakeFx): set by a real seesaw slam only, decays, survives save / load, and is cleared by a reset
 {
-    const { sim } = stunScenario('hyper-first');
-    const snap = JSON.parse(JSON.stringify(sim.save())), s = P(sim, 'stunT', 1);
-    sim.run('players[1].stunT = 0; players[0].stunFx = 0'); sim.load(snap);
-    check(Math.abs(P(sim, 'stunT', 1) - s) < 1e-9 && P(sim, 'stunFx', 0) > 0, 'save/load keeps the stun and the shockwave effect');
+    const sim = fresh();
+    sim.run('sawHit(300, 100)'); // too weak to move the floor
+    check(sim.run('quakeFx.t') === 0, 'a slam too weak to tip the floor starts no quake graphic');
+    sim.run('sawHit(470, 5000)'); // right by the net: the pop weight there is ~0
+    check(sim.run('quakeFx.t') === 0, 'a slam right at the net (no pop) starts no quake graphic');
+    sim.run('sawHit(100, 2000)');
+    check(sim.run('quakeFx.t') > 0.6 && sim.run('quakeFx.x') === 100 && sim.run('quakeFx.s') > 0.9, 'a real slam starts it at the impact point with its strength');
+    const snap = JSON.parse(JSON.stringify(sim.save()));
+    ticks(sim, 0.3); const mid = sim.run('quakeFx.t');
+    check(mid > 0.3 && mid < 0.45, `it counts down with the simulation (${mid.toFixed(2)} s left after 0.3 s)`);
+    ticks(sim, 0.6); check(sim.run('quakeFx.t') === 0, 'and ends');
+    sim.load(snap); check(sim.run('quakeFx.t') > 0.6 && sim.run('quakeFx.x') === 100, 'save / load keeps it');
+    sim.run('sawReset()'); check(sim.run('quakeFx.t') === 0, 'a floor reset clears it');
+    // the AI's planning snapshot restores it too
+    sim.run('sawHit(100, 2000)'); const sn = sim.run('snapshotFx()'); sim.run('quakeFx.t = 0; quakeFx.s = 0'); sim.run('restoreFx(' + JSON.stringify(sn) + ')');
+    check(sim.run('quakeFx.t') > 0.6, 'the AI snapshot / restore keeps it');
 }
 console.log(fails ? `\n${fails} FAILED` : '\nall passed');
 process.exit(fails ? 1 : 0);

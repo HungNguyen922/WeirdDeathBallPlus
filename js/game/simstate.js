@@ -54,6 +54,7 @@ function saveState() {
     return {
         score: [...score], pause, over, msg, teamSize,
         saw: { t: saw.t, v: saw.v },
+        quakeFx: { t: quakeFx.t, x: quakeFx.x, s: quakeFx.s },
         padFlash: [...padFlash],
         pick: cloneData(pick), pickFixed,
         sidesSwapped, swapAt, swapOn, twoSpecials, swapBanner,
@@ -77,6 +78,9 @@ function loadState(s) {
     teamSize = s.teamSize;
     saw.t = s.saw.t;
     saw.v = s.saw.v;
+    quakeFx.t = s.quakeFx ? s.quakeFx.t : 0;
+    quakeFx.x = s.quakeFx ? s.quakeFx.x : 0;
+    quakeFx.s = s.quakeFx ? s.quakeFx.s : 0;
     padFlash[0] = s.padFlash[0];
     padFlash[1] = s.padFlash[1];
     pickFixed = !!s.pickFixed;

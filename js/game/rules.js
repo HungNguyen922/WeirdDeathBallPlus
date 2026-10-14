@@ -225,6 +225,14 @@ function barbedRopeKills() {
             }
     }
 }
+// True when the net stands between two players: they are on opposite sides of it, and the line joining their centres crosses it below the
+// gap at the top (NET_GAP). Above the gap there is nothing in the way, so touching there still counts.
+function netBetween(a, b) {
+    if ((a.x < NETX) === (b.x < NETX))
+        return false;
+    const t = (NETX - a.x) / (b.x - a.x);
+    return a.y + t * (b.y - a.y) > NET_GAP;
+}
 function update() {
     sawStep();
     for (const q of pegs) {
@@ -267,7 +275,7 @@ function update() {
         if (ai[p.id].on && p.alive)
             aiDrive(p.id);
     for (const p of players)
-        p.auraStep(); // hyper / xeric / stun bookkeeping for everyone first, so no player's step depends on who happens to be stepped first
+        p.auraStep(); // hyper / xeric bookkeeping for everyone first, so no player's step depends on who happens to be stepped first
     for (const p of players)
         if (p.alive) {
             p.step(ball);
@@ -278,7 +286,7 @@ function update() {
         for (let j = i + 1; j < players.length; j++)
             if (players[i].alive && players[j].alive) {
                 const a = players[i], b = players[j];
-                if (a.team !== b.team && Math.hypot(a.x - b.x, a.y - b.y) <= a.r + b.r + 0.5) { // touching an enemy with the grapple out (rope, or hook in flight) overcharges you: no body-blocking on a rope
+                if (a.team !== b.team && !netBetween(a, b) && Math.hypot(a.x - b.x, a.y - b.y) <= a.r + b.r + 0.5) { // touching an enemy with the grapple out (rope, or hook in flight) overcharges you: no body-blocking on a rope
                     if (a.rope || a.pending)
                         a.overcharge();
                     if (b.rope || b.pending)

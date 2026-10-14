@@ -18,8 +18,9 @@ const OUT_D = 5 * PL, OUT_DROP = 56; // threshold distance; how far the tunnel f
 const PAD_ANG = Math.PI / 4, PAD_LIFT = 6, PAD_D0 = 14; // hatchet: tilt from horizontal (45 degrees), drawn thickness, distance of its inner end from the goal
 const PAD_D1 = OUT_D; // the hatchet runs all the way down to the threshold line: there is no separate guide ramp after it, so anything that lands in the tunnel is bounced out
 const PAD_LEN = (PAD_D1 - PAD_D0) / Math.cos(PAD_ANG); // plate length (follows from the two distances above)
-const PAD_E = 3, PAD_KICK = 500, PAD_MAX = 1500, PAD_BOOST_T = 5; // bounce gain, minimum / maximum launch speed; the ball may exceed its normal speed cap right after a hatchet hit, easing back over PAD_BOOST_T seconds // bounce gain (>1 = adds energy), minimum launch speed, cap, and the softest hit that still triggers it (u/s)
-const PAD_TETHER_K = 0.1, PAD_TETHER_SLACK = 12; // share of the ball's hatchet velocity change that tugs a tethered player, and how slack (u) the rope may have and still count as taut
+const PAD_E = 2, PAD_KICK = 500, PAD_MAX = 1200, PAD_BOOST_T = 2; // bounce gain, minimum / maximum launch speed; the ball may exceed its normal speed cap right after a hatchet hit, easing back over PAD_BOOST_T seconds // bounce gain (>1 = adds energy), minimum launch speed, cap, and the softest hit that still triggers it (u/s)
+const HATCHET_E = 3, HATCHET_KICK = 300; // the hatchet's own bounce gain and minimum launch speed (the plinko pegs keep PAD_E / PAD_KICK)
+const PAD_TETHER_K = 0.03, PAD_TETHER_MAX = 30, PAD_TETHER_SLACK = 12;
 const PIT = 140; // depth of the pit under the arena (the ball is removed if it falls well below it). The 45-degree hatchet drops ~146 u over the tunnel, so the pit has to be deep enough to show it down to the threshold line; canvas height = HUD + H + PIT
 const FK = OUT_DROP / OUT_D; // gentle base slope of the tunnel floor
 // Tunnel floor d units outside the goal: a short gentle lip, then the hatchet's 45-degree section all the way to the threshold. It only ever descends outward,
@@ -44,6 +45,8 @@ const SAW_GAIN = 1.2, SAW_VMAX = 240; // tilt speed (u/s) = (momentum - SAW_MIN)
 const SAW_K = 100, SAW_C = 20; // floor spring (critically damped): it pops up fast and settles back down without bouncing
 const padFlash = [0, 0]; // per-side hatchet "just hit" glow: set to 1 by padBounce, decayed by the renderer (kept here so the AI can snapshot/restore it)
 const saw = { t: 0, v: 0 }; // seesaw tilt: t > 0 = the right far half is raised by t (u), t < 0 = the left one is; v = its speed
+const QUAKE_FX_T = 0.7, QUAKE_FX_MIN = 0.08; // s the quake graphic lasts; a slam must move the floor at least this share of the top tilt speed to get one
+const quakeFx = { t: 0, x: 0, s: 0 }; // display only: time left on the quake graphic, where the slam landed, how hard it was (0..1). Saved with the state, so it shows the same online
 const sawQ = side => Math.max(0, side === 1 ? saw.t : -saw.t); // pop height of a side's far half
 const sawQV = side => (sawQ(side) > 0 ? (side === 1 ? saw.v : -saw.v) : 0); // its speed (nothing moves on the end that rests on the ground)
 // How much of a side's pop applies at x: 0 on the half by the net, rising smoothly to full over the quarter by the goal.
@@ -56,15 +59,26 @@ const sawV = x => -(sawQV(0) * sawW(x, 0) + sawQV(1) * sawW(x, 1)); // floor spe
 function sawStep() {
     saw.v += (-SAW_K * saw.t - SAW_C * saw.v) * DT;
     saw.t += saw.v * DT;
+    quakeFx.t = Math.max(0, quakeFx.t - DT);
 }
 // Something struck the floor at x with this much momentum: a hard enough hit tips the seesaw (left hit raises the right end, and vice versa).
 // A hit on the end that is already popping pushes it back down, so equal slams from both sides cancel.
 function sawHit(x, momentum) {
     const side = x < NETX ? 0 : 1, kick = Math.min(SAW_VMAX, (momentum - SAW_MIN) * SAW_GAIN) * sawW(x, side);
-    if (kick > 0)
+    if (kick > 0) {
         saw.v = Math.max(-SAW_VMAX, Math.min(SAW_VMAX, saw.v + (side === 0 ? kick : -kick)));
+        if (kick > QUAKE_FX_MIN * SAW_VMAX) { // a real quake: start the graphic at the point of impact
+            quakeFx.t = QUAKE_FX_T;
+            quakeFx.x = x;
+            quakeFx.s = Math.min(1, kick / SAW_VMAX);
+        }
+    }
 }
 function sawReset() {
     saw.t = 0;
     saw.v = 0;
+    quakeFx.t = 0;
 }
+
+
+

@@ -725,6 +725,63 @@ function drawFloorFx(p) {
             cx.beginPath(); cx.ellipse(p.x, p.y + R, 20 + v * 240, 3 + v * 9, 0, Math.PI, 2 * Math.PI); cx.stroke(); // (the upper half only: the floor hides the rest)
         }
     }
+    const fx = p.floorFx(); // what OTHER players' auras are doing to me
+    if (fx.hyper || p.boostFx > 0) { // BOOSTED by a hyper: an orange rim; mid grapple jump, speed streaks trail behind me; a burst when a jump / kick is actually boosted
+        cx.save();
+        const live = p.driveT > 0 || p.gjT < 0.5 || p.dribT > 0 ? 1 : 0.55;
+        cx.globalCompositeOperation = 'lighter'; cx.shadowColor = '#ff8a1a'; cx.shadowBlur = 10; cx.lineCap = 'round';
+        if (fx.hyper) {
+            cx.strokeStyle = '#ff9b2e'; cx.lineWidth = 2.5; cx.globalAlpha = 0.35 + 0.45 * live;
+            cx.beginPath(); cx.arc(p.x, p.y, R + 3, 0, 7); cx.stroke();
+            if (live === 1) {
+                const sp = Math.hypot(p.vx, p.vy) || 1, ux = p.vx / sp, uy = p.vy / sp, nx = -uy, ny = ux, len = Math.min(95, 16 + sp * 0.12);
+                cx.strokeStyle = '#ffd23a';
+                for (let i = -1; i <= 1; i++) {
+                    const o = i * R * 0.55, sx = p.x + nx * o - ux * R * 0.4, sy = p.y + ny * o - uy * R * 0.4;
+                    cx.globalAlpha = 0.8 - 0.2 * Math.abs(i); cx.lineWidth = 3.5 - 0.8 * Math.abs(i);
+                    cx.beginPath(); cx.moveTo(sx, sy); cx.lineTo(sx - ux * len, sy - uy * len); cx.stroke();
+                }
+            }
+        }
+        if (p.boostFx > 0) { // burst: a ring blowing outward and sparks flying off
+            const u = 1 - p.boostFx / BOOST_FX;
+            cx.globalAlpha = (1 - u) * 0.9; cx.strokeStyle = '#ffb21f'; cx.lineWidth = 1 + 4 * (1 - u);
+            cx.beginPath(); cx.arc(p.x, p.y, R + 2 + u * 34, 0, 7); cx.stroke();
+            cx.strokeStyle = '#ffe45a'; cx.lineWidth = 2;
+            for (let i = 0; i < 6; i++) {
+                const a = i * Math.PI / 3 + 0.4, d0 = R + 6 + u * 30;
+                cx.beginPath(); cx.moveTo(p.x + Math.cos(a) * d0, p.y + Math.sin(a) * d0); cx.lineTo(p.x + Math.cos(a) * (d0 + 8 * (1 - u)), p.y + Math.sin(a) * (d0 + 8 * (1 - u))); cx.stroke();
+            }
+        }
+        cx.restore();
+    }
+    if (fx.xeric || p.fizzleFx > 0) { // WEAKENED by a xeric: a cold tint and slow chevrons pressing down on me; a ring collapsing inward when a weighted jump / kick is actually cut
+        cx.save();
+        const live = p.keys.x || p.dribT > 0 || p.kickReq ? 1 : 0.55;
+        cx.lineCap = 'round'; cx.lineJoin = 'round';
+        if (fx.xeric) {
+            cx.globalAlpha = 0.32 * live; cx.fillStyle = '#7ee8f4';
+            cx.beginPath(); cx.arc(p.x, p.y, R, 0, 7); cx.fill();
+            cx.strokeStyle = '#a8f0fa'; cx.lineWidth = 3; cx.shadowColor = '#4fd8e8'; cx.shadowBlur = 8;
+            for (let i = 0; i < 2; i++) {
+                const u = (tm / 700 + i / 2) % 1, cy = p.y - R - 24 + u * 16;
+                cx.globalAlpha = (0.35 + 0.6 * live) * Math.sin(u * Math.PI);
+                cx.beginPath(); cx.moveTo(p.x - 9, cy - 5); cx.lineTo(p.x, cy + 4); cx.lineTo(p.x + 9, cy - 5); cx.stroke();
+            }
+        }
+        if (p.fizzleFx > 0) { // burst: the force is swallowed (a ring shrinking onto me) and puffs sink away
+            const u = 1 - p.fizzleFx / FIZZLE_FX;
+            cx.shadowColor = '#4fd8e8'; cx.shadowBlur = 10;
+            cx.globalAlpha = Math.sin(u * Math.PI) * 0.9; cx.strokeStyle = '#b8f6ff'; cx.lineWidth = 1.5 + 3 * u;
+            cx.beginPath(); cx.arc(p.x, p.y, R + 2 + (1 - u) * 30, 0, 7); cx.stroke();
+            cx.fillStyle = '#9fdfe8';
+            for (let i = 0; i < 4; i++) {
+                cx.globalAlpha = (1 - u) * 0.6;
+                cx.beginPath(); cx.arc(p.x + (i - 1.5) * 7, p.y + R * 0.5 + u * 20 + (i % 2) * 4, 2.5 * (1 - u) + 0.8, 0, 7); cx.fill();
+            }
+        }
+        cx.restore();
+    }
     if (p.stunT > 0) { // STUN: stars circling above the head, and the body flickers pale
         const f = Math.min(1, p.stunT / 0.25);
         cx.globalAlpha = 0.45 * f * (0.5 + 0.5 * Math.sin(tm / 45)); cx.fillStyle = '#fff';

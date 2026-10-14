@@ -174,6 +174,8 @@ const STUN_HOLD_MAX = 0.5;           // ...and no longer than this, so walking a
 const STUN_CD = 0.3;                 // s between stuns caused by the same player (a fast dribble should not machine-gun stuns)
 const STUN_GJ_T = 0.6;               // s after a floor grapple jump during which a player still counts as "grappling the floor" even if the rope is gone
 const FLOOR_FX_TEAMMATES = true;         // false = stuns (and the hyper / xeric auras) spare the owner's teammates ("all other players" = true)
+const BOOST_FX = 0.4;                 // s the burst lasts on a player whose jump / kick was just boosted by another player's hyper (display only)
+const FIZZLE_FX = 0.45;               // s the burst lasts on a player whose weighted jump / kick was just cut by another player's xeric (display only)
 const STUN_FX = 0.5;                 // s the stun shockwave lasts on screen (display only)
 const STUN_T = 0.9;                   // s a stun lasts at most (it also ends the moment the player lands)
 const STUN_IMMUNE = 0.8;              // s after a stun ends during which the player cannot be stunned again (no stun-lock)

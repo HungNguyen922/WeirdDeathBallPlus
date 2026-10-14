@@ -37,6 +37,16 @@ const xeric = sim => sim.run('players[0].keys.x = true; players[0].keys.z = fals
     check(xe > base + 10, `xeric: weighted grapple jump peak y ${xe.toFixed(0)} vs ${base.toFixed(0)} without (lower = smaller jump)`);
     check(Math.abs(plainX - plain) < 1, `xeric: an unweighted grapple jump is untouched (${plainX.toFixed(1)} vs ${plain.toFixed(1)})`);
 }
+// 2b) display timers: boostFx / fizzleFx fire on the affected player only, when their jump is actually boosted / cut
+{
+    const run = (setup, weighted) => { const sim = fresh(); sim.run(`players[1].keys.z = true; players[1].keys.x = ${weighted}`); for (let t = 0; t < 30; t++) { setup(sim); sim.tick(); } return sim; };
+    let sim = run(hyper, false);
+    check(P(sim, 'boostFx', 1) > 0 || sim.run('players[1].gjT') < 0.3, 'hyper: the boosted player gets the boost burst timer');
+    sim = run(hyper, false); check(P(sim, 'fizzleFx', 1) === 0, 'hyper: no fizzle on them');
+    sim = run(xeric, true);  check(P(sim, 'fizzleFx', 1) > 0 && P(sim, 'boostFx', 1) === 0, 'xeric: the weakened player gets the fizzle burst timer');
+    check(P(sim, 'fizzleFx', 0) === 0 && P(sim, 'boostFx', 0) === 0, 'the aura owner gets no burst of their own');
+    sim = run(xeric, false); check(P(sim, 'fizzleFx', 1) === 0, 'xeric: an unweighted jump is not cut, so no fizzle');
+}
 // 3) the owner is never affected by their own auras
 {
     const a = peak(idle, false);

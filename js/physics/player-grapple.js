@@ -14,6 +14,8 @@ mixin(Player, {
         this.xericLen = xericOn ? (this.xericWas ? this.xericLen + DT : DT) : this.xericLen; // how long the latest xeric run has lasted (kept after it ends)
         this.stunCd = Math.max(0, this.stunCd - DT);
         this.stunFx = Math.max(0, this.stunFx - DT);
+        this.boostFx = Math.max(0, this.boostFx - DT);
+        this.fizzleFx = Math.max(0, this.fizzleFx - DT);
         // Stun combo: one aura starts while the other was on a moment ago (hyper then xeric, or xeric then hyper)
         const hyperStart = hyperOn && !this.hyperWas && this.xericGap <= STUN_WINDOW && this.xericLen >= STUN_HOLD_MIN && this.xericLen <= STUN_HOLD_MAX; // xeric, then a quick grapple
         const xericStart = xericOn && !this.xericWas && this.hyperGap <= STUN_WINDOW;                                                                   // hyper, then a quick xeric (the dribble)
@@ -150,6 +152,8 @@ mixin(Player, {
             // Latching high above the pivot (already airborne) is weaker than a jump off the platform: full strength within GJ_NEAR u of the pivot, fading to GJ_AIR_SCALE by GJ_FAR u.
             const air = 1 - (1 - GJ_AIR_SCALE) * Math.max(0, Math.min(1, (d - GJ_NEAR) / (GJ_FAR - GJ_NEAR)));
             const fxL = this.floorFx();
+            if (fxL.hyper) this.boostFx = BOOST_FX;                      // (display: this jump is being boosted)
+            if (fxL.xeric && this.keys.x) this.fizzleFx = FIZZLE_FX;     // (display: this weighted jump is being cut)
             this.len = Math.min(RANGE, Math.max(d, MIN_LEN) + GJ_REACH_GROUND * air * (this.keys.x ? GJ_REACH_WEIGHTED : 1) * (fxL.hyper ? HYPER_REACH : 1));
             this.driveT = GJ_DRIVE_T;
             this.driveVmax = lift * GJ_DRIVE_BOOST * air * (this.keys.x && fxL.xeric ? XERIC_JUMP : 1); // top speed away from the pivot this jump can reach (a xeric under a weighted jump makes it a misfire)
@@ -244,6 +248,8 @@ mixin(Player, {
                 // so only your momentum and gravity carry you. The taut check keeps the weighted grapple-jump kick working.
                 const below = this.ropeGround && this.taut && d < this.len - DRIB_BELOW_TOL;
                 if (!below) {
+                    if (fx.hyper) this.boostFx = BOOST_FX;   // (display only)
+                    if (fx.xeric) this.fizzleFx = FIZZLE_FX;
                     const past = Math.max(0, d - this.len);
                     const room = Math.max(0, 1 - past / WEIGHT_KICK_REACH);
                     const want = WEIGHT_KICK * room * (this.ropeGround ? 1 : WALL_KICK_SCALE) * (fx.hyper ? HYPER_KICK : 1) * (fx.xeric ? XERIC_KICK : 1);

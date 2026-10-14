@@ -91,6 +91,7 @@ class Player {
         this.hyperT = 0; this.xericT = 0;           // seconds left on this player's hyper / xeric aura (they act on every OTHER player)
         this.hyperGap = 99; this.xericGap = 99;     // seconds since the hyper / xeric condition was last true (stun = one close behind the other)
         this.hyperWas = false; this.xericWas = false; this.xericLen = 0; // last tick's condition, to spot the moment one starts; how long the latest xeric run lasted
+        this.boostFx = 0; this.fizzleFx = 0;        // display timers: a jump / kick was just boosted by another's hyper, or cut by another's xeric
         this.stunCd = 0; this.stunFx = 0;         // stun-combo cooldown, and the display timer of its shockwave
         this.stunT = 0; this.stunImm = 0;           // stunned seconds left, and the immunity that follows a stun
     }

@@ -15,24 +15,30 @@ const LEDGE_T = 3, LEDGES = [[0, GOAL_Y0, PL, GOAL_Y0], [PL, 0, PL, GOAL_Y0], [W
 // and slopes DOWN toward the threshold line, so any ball that falls out there is guided to it. The ball scores only when it crosses the threshold, OUT_D (5 player
 // lengths) outside the goal. The HATCHET is a bounce pad on that slope, just outside the goal, facing up and out toward the threshold. ----
 const OUT_D = 5 * PL, OUT_DROP = 56; // threshold distance; how far the tunnel floor drops over that distance (steeper = the ball gets there faster); the hatchet's steep section adds a bit more
-const PAD_ANG = Math.PI / 4, PAD_LIFT = 6, PAD_D0 = 14; // hatchet: tilt from horizontal (45 degrees), drawn thickness, distance of its inner end from the goal
+const PAD_ANG = Math.PI / 5, PAD_LIFT = 6, PAD_D0 = 0, PAD_DROP = 1.25 * PL;   // PAD_DROP = px to lower the hatchet
 const PAD_D1 = OUT_D; // the hatchet runs all the way down to the threshold line: there is no separate guide ramp after it, so anything that lands in the tunnel is bounced out
 const PAD_LEN = (PAD_D1 - PAD_D0) / Math.cos(PAD_ANG); // plate length (follows from the two distances above)
-const PAD_E = 2, PAD_KICK = 500, PAD_MAX = 1200, PAD_BOOST_T = 2; // bounce gain, minimum / maximum launch speed; the ball may exceed its normal speed cap right after a hatchet hit, easing back over PAD_BOOST_T seconds // bounce gain (>1 = adds energy), minimum launch speed, cap, and the softest hit that still triggers it (u/s)
-const HATCHET_E = 3, HATCHET_KICK = 300; // the hatchet's own bounce gain and minimum launch speed (the plinko pegs keep PAD_E / PAD_KICK)
-const PAD_TETHER_K = 0.03, PAD_TETHER_MAX = 30, PAD_TETHER_SLACK = 12;
-const PIT = 140; // depth of the pit under the arena (the ball is removed if it falls well below it). The 45-degree hatchet drops ~146 u over the tunnel, so the pit has to be deep enough to show it down to the threshold line; canvas height = HUD + H + PIT
+const PAD_E = 2, PAD_KICK = 500, PAD_MAX = 1200, PAD_BOOST_T = 5; // bounce gain, minimum / maximum launch speed; the ball may exceed its normal speed cap right after a hatchet hit, easing back over PAD_BOOST_T seconds // bounce gain (>1 = adds energy), minimum launch speed, cap, and the softest hit that still triggers it (u/s)
+// Hatchet: the ball is mirrored off the plate (so it keeps its arc), then the whole velocity is multiplied. Pegs keep PAD_E / PAD_KICK.
+const HATCHET_BOOST = 1.8;     // speed multiplier at a full-strength hit (1 = a plain mirror bounce, no extra power)
+const HATCHET_BOOST_V = 600;   // impact speed into the plate (u/s) that gets the full boost; softer hits get less
+const HATCHET_NORMAL_E = 0.75;    // restitution of the mirror part (1 = same angle out as in; raise it to push the exit toward the plate's normal, 3 = the old behaviour)
+const HATCHET_EXIT_N = 220;    // slowest the ball may leave the plate along its normal (u/s), so grazing hits still pop off
+const HATCHET_FLY_KX = 0.50, HATCHET_FLY_KY = 0.12, HATCHET_FLY_MAX = 450;
+const HATCHET_FLY_VX = 500, HATCHET_FLY_VY = 100;
+const PAD_TETHER_K = 0, PAD_TETHER_MAX = 160, PAD_TETHER_SLACK = 10;
+const PIT = 130; // depth of the pit under the arena (the ball is removed if it falls well below it). The 45-degree hatchet drops ~146 u over the tunnel, so the pit has to be deep enough to show it down to the threshold line; canvas height = HUD + H + PIT
 const FK = OUT_DROP / OUT_D; // gentle base slope of the tunnel floor
 // Tunnel floor d units outside the goal: a short gentle lip, then the hatchet's 45-degree section all the way to the threshold. It only ever descends outward,
 // so nothing can get stuck in a pocket.
-const slopeY = d => GOAL_Y1 + FK * Math.min(d, PAD_D0) + Math.tan(PAD_ANG) * Math.max(0, Math.min(d, PAD_D1) - PAD_D0);
+const slopeY = d => GOAL_Y1 + PAD_DROP + FK * Math.min(d, PAD_D0) + Math.tan(PAD_ANG) * Math.max(0, Math.min(d, PAD_D1) - PAD_D0);
 const outX = (side, d) => (side === 0 ? -d : W + d);
 const OUTSEGS = [], PADS = [], OUTCEIL = [];
 const padA = side => ({ x: outX(side, PAD_D0), y: slopeY(PAD_D0) }); // top (inner) end of the hatchet
 const padB = side => ({ x: outX(side, PAD_D1), y: slopeY(PAD_D1) }); // bottom (outer) end
 for (const side of [0, 1]) {
     const A = padA(side), B = padB(side);
-    OUTSEGS.push([outX(side, 0), slopeY(0), A.x, A.y]); // just the lip; the rest of the floor is the hatchet itself
+    if (PAD_D0 > 0 || PAD_DROP > 0) OUTSEGS.push([outX(side, 0), GOAL_Y1, A.x, A.y]);
     PADS.push([A.x, A.y, B.x, B.y]);
     OUTCEIL.push([outX(side, 0), GOAL_Y0, outX(side, OUT_D), GOAL_Y0]);
 }

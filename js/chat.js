@@ -6,8 +6,8 @@
 const chat = (() => {
     const MAX_LEN = 120; // must match CHAT_MAX in server/server.js
     const KEEP = 60; // lines remembered
-    const SHOW = 8; // lines drawn at once
-    const FADE_AFTER_MS = 12000; // online, a line fades out after this long (everything comes back while you type). Offline notes never fade. Set to 0 to never fade.
+    const SHOW = 6; // lines drawn at once
+    const FADE_AFTER_MS = 5000; // online, a line fades out after this long (everything comes back while you type). Offline notes never fade. Set to 0 to never fade.
     const STORE = 'wdb-chat';
     const root = document.getElementById('chat'), logEl = document.getElementById('chatlog'), input = document.getElementById('chatinput'), canvas = document.getElementById('c');
     if (!root || !logEl || !input)
@@ -21,9 +21,11 @@ const chat = (() => {
     function place() {
         if (!canvas)
             return;
-        const r = canvas.getBoundingClientRect(), s = Math.max(0.6, Math.min(1.4, r.width / 1302));
+        const r = canvas.getBoundingClientRect();
+        const s = Math.max(0.6, Math.min(1.4, r.width / 1302));
         root.style.left = r.left + 10 * s + 'px';
-        root.style.top = r.top + 10 * s + 'px';
+        root.style.bottom = (window.innerHeight - r.bottom + 10 * s) + 'px';
+        root.style.top = 'auto';
         root.style.width = Math.min(460 * s, r.width * 0.42) + 'px';
         root.style.fontSize = 13 * s + 'px';
     }
@@ -36,7 +38,7 @@ const chat = (() => {
     const online = () => typeof net !== 'undefined' && net.on;
     function render() {
         logEl.textContent = '';
-        const now = performance.now(), fade = online() ? FADE_AFTER_MS : 0;
+        const now = performance.now(), fade = FADE_AFTER_MS;
         let anyVisible = false;
         for (const l of lines.slice(-SHOW)) {
             const age = now - l.at, hidden = !typing && fade > 0 && age > fade + 1500;
@@ -60,11 +62,14 @@ const chat = (() => {
         logEl.hidden = !anyVisible;
     }
     let timer = 0;
-    function tick() { // keep fading lines up to date while any are still showing
+    function tick() {
         render();
         clearTimeout(timer);
-        if (enabled && !typing && online() && lines.length && performance.now() - lines[lines.length - 1].at < FADE_AFTER_MS + 1600)
+
+        if (enabled && !typing && lines.length &&
+            performance.now() - lines[lines.length - 1].at < FADE_AFTER_MS + 1600) {
             timer = setTimeout(tick, 250);
+        }
     }
     function add(l) {
         lines.push({ ...l, at: performance.now() });

@@ -35,90 +35,97 @@
 </div>
 
 <section data-panel="game">
-<div class="group">
-<h3>Who plays</h3>
-<div class="row">
-<button id="ai0" class="blue" title="Toggle: play Blue yourself or let the computer play it (key 1)">Blue: Human</button>
-<button id="ai1" class="red" title="Toggle: play Red yourself or let the computer play it (key 2)">Red: Human</button>
-<button id="ai2" class="blue team2" style="display:none" title="Blue's teammate: play it yourself or let the computer (key 3)">Blue 2: Human</button>
-<button id="ai3" class="red team2" style="display:none" title="Red's teammate: play it yourself or let the computer (key 4)">Red 2: Human</button>
-</div>
-<p class="hint">Or press 1 / 2 (3 / 4 in 2v2). Set both to AI to watch them play.</p>
-</div>
-<div class="group">
-<h3>Match</h3>
-<div class="row">
-<button id="mode2v2" class="mode" title="Toggle 2v2: each team gets a second player, spawned 2 player lengths from the ball and from the goal scoop (key T)">2v2: Off</button>
-<button id="swapmode" class="mode on" title="Teams trade sides of the field every 5 points. Online only the host can change this.">Switch sides: On</button>
-<button id="twomode" class="mode" title="Every player gets two specials, each on its own key. Online only the host can change this (it restarts the match).">Specials per player: 1</button>
-</div>
-</div>
-<button id="pickmode" class="mode" title="Free swap: change your special any time. Pick screens: choose it before the first point and after every 5th point scored.">Specials: Free swap</button>
-<div class="group" id="specialgroup">
-<h3>Special ability</h3>
-<div class="row" id="specialpick"></div>
-<p class="hint">Offline: one row per player you control (computer players always use Dash). Online: your own seat.</p>
-</div>
-<div class="group">
-<h3>Sound</h3>
-<div class="row">
-<button id="music" class="mode on" title="Toggle the background music (key M). Music starts on your first key press or click.">&#9834; Music: On</button>
-</div>
-</div>
-<div class="group">
-<h3>Chat</h3>
-<div class="row">
-<button id="chatmode" class="mode on" title="Show or hide the chat in the top left corner. Press Enter in the game to type a message.">Chat: On</button>
-</div>
-<p class="hint">Press Enter to write a message. Online it goes to everyone in the room; offline it is just a notepad.</p>
-</div>
-<div class="group">
-<h3>Online</h3>
-<div class="row">
-<button id="online" class="mode" title="Play online: asks for a room name; a friend joins the same room">Online: Off</button>
-</div>
-<p class="hint">Connection status shows on the floor, under the score.</p>
-</div>
-<p class="hint">Click the game once so it gets keyboard focus.</p>
-</section>
+    <div class="group">
+        <h3>Who plays</h3>
+            <div class="row">
+            <button id="ai0" class="blue" title="Toggle: play Blue yourself or let the computer play it (key 1)">Blue: Human</button>
+            <button id="ai1" class="red" title="Toggle: play Red yourself or let the computer play it (key 2)">Red: Human</button>
+            <button id="ai2" class="blue team2" style="display:none" title="Blue's teammate: play it yourself or let the computer (key 3)">Blue 2: Human</button>
+            <button id="ai3" class="red team2" style="display:none" title="Red's teammate: play it yourself or let the computer (key 4)">Red 2: Human</button>
+        </div>
+        <p class="hint">Or press 1 / 2 (3 / 4 in 2v2). Set both to AI to watch them play.</p>
+    </div>
+    <div class="group">
+        <h3>Match</h3>
+        <div class="row">
+            <button id="mode2v2" class="mode" title="Toggle 2v2: each team gets a second player, spawned 2 player lengths from the ball and from the goal scoop (key T)">2v2: Off</button>
+            <button id="swapmode" class="mode on" title="Teams trade sides of the field every 5 points. Online only the host can change this.">Switch sides: On</button>
+            <button id="twomode" class="mode" title="Every player gets two specials, each on its own key. Online only the host can change this (it restarts the match).">Specials per player: 1</button>
+            <button id="pickmode" class="mode" title="Free swap: change your special any time. Pick screens: choose it before the first point and after every 5th point scored.">Specials: Free swap</button>
+        </div>
+    </div>
+    <div class="group" id="specialgroup">
+        <h3>Special ability</h3>
+        <div class="row" id="specialpick"></div>
+        <p class="hint">Offline: one row per player you control (computer players always use Dash). Online: your own seat.</p>
+    </div>
+    <div class="group">
+        <h3>Visuals</h3>
+        <div class="row">
+            <button id="floorfx" class="mode on" title="Show or hide the hyper, xeric and quake visual effects (the gameplay effects stay)">Floor effects: On</button>
+        </div>
+        <p class="hint">Hides the Hyper, Xeric and Quake graphics (and the quake screen shake). The mechanics are unchanged.</p>
+    </div>
+    <div class="group">
+        <h3>Sound</h3>
+        <div class="row">
+            <button id="music" class="mode on" title="Toggle the background music (key M). Music starts on your first key press or click.">&#9834; Music: On</button>
+        </div>
+    </div>
+    <div class="group">
+        <h3>Chat</h3>
+        <div class="row">
+            <button id="chatmode" class="mode on" title="Show or hide the chat in the top left corner. Press Enter in the game to type a message.">Chat: On</button>
+        </div>
+        <p class="hint">Press Enter to write a message. Online it goes to everyone in the room; offline it is just a notepad.</p>
+    </div>
+    <div class="group">
+        <h3>Online</h3>
+        <div class="row">
+            <button id="online" class="mode" title="Play online: asks for a room name; a friend joins the same room">Online: Off</button>
+        </div>
+        <p class="hint">Connection status shows on the floor, under the score.</p>
+    </div>
+    <p class="hint">Click the game once so it gets keyboard focus.</p>
+    </section>
 
-<section data-panel="controls" hidden>
-<div class="group touchonly">
-<h3>Touch</h3>
-<ul class="keys">
-<li><b>Left half:</b> touch and drag to move. Where you first touch becomes the centre; the direction you drag picks one of 8 arrow-key directions.</li>
-<li><b>Snap the aim:</b> the centre stays put for a moment after you lift, so tap the same direction twice quickly to snap the arrow's aim.</li>
-<li><b>Right half:</b> top third = special, middle = weight, bottom = grapple. Touching the line between two thirds presses both.</li>
-</ul>
-</div>
-<div class="scroll">
-<table class="keymap">
-<thead><tr><th>Player</th><th>Left</th><th>Right</th><th>Jump</th><th>Drop</th><th>Grapple</th><th>Weight</th><th>Special</th><th>Special 2</th></tr></thead>
-<tbody id="keytable"></tbody>
-</table>
-</div>
-<p class="hint" id="keymsg">Click a key, then press the new one (Esc cancels). If that key is already used, the two swap. Saved in this browser.</p>
-<div class="row"><button id="keyreset" class="mode" title="Put every player's keys back to the defaults">Reset keys</button></div>
-<p class="hint team2" style="display:none">Teammates in 2v2 always use Dash as their special.</p>
-<div class="group">
-<h3>Shortcuts</h3>
-<ul class="keys">
-<li><kbd>Esc</kbd> open / close this menu (it also closes the special-ability list first)</li>
-<li><kbd>R</kbd> restart the match</li>
-<li><kbd>T</kbd> switch between 1v1 and 2v2</li>
-<li><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> toggle AI for Blue, Red, Blue 2, Red 2 (3 and 4 only exist in 2v2)</li>
-<li><kbd>M</kbd> music on / off</li>
-<li><kbd>Enter</kbd> write a chat message (Enter sends it, Esc cancels). Online it goes to the whole room; offline it is a notepad</li>
-<li>On a pick screen: arrows move, grapple or special locks in, weight takes it back</li>
-</ul>
-</div>
-<div class="group">
-<h3>Tips</h3>
-<ul class="keys">
-<li>Click the special keycap beside Blue's or Red's goal to pick a different special ability.</li>
-<li>Online, both the Blue and the Red layout above control your seat.</li>
-</ul>
-</div>
+    <section data-panel="controls" hidden>
+    <div class="group touchonly">
+    <h3>Touch</h3>
+    <ul class="keys">
+    <li><b>Left half:</b> touch and drag to move. Where you first touch becomes the centre; the direction you drag picks one of 8 arrow-key directions.</li>
+    <li><b>Snap the aim:</b> the centre stays put for a moment after you lift, so tap the same direction twice quickly to snap the arrow's aim.</li>
+    <li><b>Right half:</b> top third = special, middle = weight, bottom = grapple. Touching the line between two thirds presses both.</li>
+    </ul>
+    </div>
+    <div class="scroll">
+    <table class="keymap">
+    <thead><tr><th>Player</th><th>Left</th><th>Right</th><th>Jump</th><th>Drop</th><th>Grapple</th><th>Weight</th><th>Special</th><th>Special 2</th></tr></thead>
+    <tbody id="keytable"></tbody>
+    </table>
+    </div>
+    <p class="hint" id="keymsg">Click a key, then press the new one (Esc cancels). If that key is already used, the two swap. Saved in this browser.</p>
+    <div class="row"><button id="keyreset" class="mode" title="Put every player's keys back to the defaults">Reset keys</button></div>
+    <p class="hint team2" style="display:none">Teammates in 2v2 always use Dash as their special.</p>
+    <div class="group">
+    <h3>Shortcuts</h3>
+    <ul class="keys">
+    <li><kbd>Esc</kbd> open / close this menu (it also closes the special-ability list first)</li>
+    <li><kbd>R</kbd> restart the match</li>
+    <li><kbd>T</kbd> switch between 1v1 and 2v2</li>
+    <li><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> toggle AI for Blue, Red, Blue 2, Red 2 (3 and 4 only exist in 2v2)</li>
+    <li><kbd>M</kbd> music on / off</li>
+    <li><kbd>Enter</kbd> write a chat message (Enter sends it, Esc cancels). Online it goes to the whole room; offline it is a notepad</li>
+    <li>On a pick screen: arrows move, grapple or special locks in, weight takes it back</li>
+    </ul>
+    </div>
+    <div class="group">
+    <h3>Tips</h3>
+    <ul class="keys">
+    <li>Click the special keycap beside Blue's or Red's goal to pick a different special ability.</li>
+    <li>Online, both the Blue and the Red layout above control your seat.</li>
+    </ul>
+    </div>
 </section>
 
 <section data-panel="players" hidden>

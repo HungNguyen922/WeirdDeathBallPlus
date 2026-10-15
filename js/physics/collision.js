@@ -50,15 +50,34 @@ function padBounce(c) {
         const vn = c.vx * nx + c.vy * ny;
         if (vn >= 0)
             continue;
-        const out = Math.min(PAD_MAX, Math.max(HATCHET_KICK, -vn * HATCHET_E));
-        const dv = out - vn; // how much the bounce changes the ball's velocity along the pad's normal
-        c.vx += dv * nx;
-        c.vy += dv * ny;
+                const tx = c.vx - vn * nx, ty = c.vy - vn * ny; // the part of the velocity along the plate is kept, so the ball leaves on the mirror image of its path
+        const nOut = Math.max(HATCHET_EXIT_N, -vn * HATCHET_NORMAL_E);
+        let vx = tx + nOut * nx, vy = ty + nOut * ny;
+        const gain = 1 + (HATCHET_BOOST - 1) * Math.min(1, -vn / HATCHET_BOOST_V); // power: the WHOLE velocity is scaled, so the direction is unchanged
+        vx *= gain;
+        vy *= gain;
+        const sp = Math.hypot(vx, vy);
+        if (sp > PAD_MAX) {
+            vx *= PAD_MAX / sp;
+            vy *= PAD_MAX / sp;
+        }
+        const dv = (vx - c.vx) * nx + (vy - c.vy) * ny; // change along the normal: what the tether tug below is based on
+        c.vx = vx;
+        c.vy = vy;
         for (const p of players) // the tether passes part of that change of direction on to a player leashed to this ball
             if (p.alive && p.onBall && p.tball === c && p.rope && Math.hypot(p.rope.x - p.x, p.rope.y - p.y) >= p.len - PAD_TETHER_SLACK) {
                 const tug = Math.min(dv * PAD_TETHER_K, PAD_TETHER_MAX); // a hard hit can never jerk the player more than this
                 p.vx += tug * nx;
                 p.vy += tug * ny;
+            }
+        for (const p of players) // a leashed player who holds outward (and up) as the ball hits is carried diagonally out, harder hits carry further
+            if (p.alive && p.onBall && p.tball === c && p.keys) {
+                const sx = nx < 0 ? -1 : 1;                       // hatchet's outward direction: left pad faces -x, right pad +x
+                if (sx > 0 ? p.keys.r : p.keys.l) {
+                    const fx = Math.min(dv * HATCHET_FLY_KX, HATCHET_FLY_MAX);
+                    p.vx = sx * Math.max(sx * p.vx, 0) + sx * fx;
+                    if (p.keys.up) p.vy = Math.min(p.vy, 0) - Math.min(dv * HATCHET_FLY_KY, HATCHET_FLY_MAX);
+                }
             }
         padFlash[i] = 1;
         c.boost = 1;

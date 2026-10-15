@@ -11,7 +11,7 @@ function quakeShake() { // display only: reads quakeFx, never writes anything
     return { x: Math.round(amp * 0.7 * x), y: Math.round(amp * y) }; // a pop is mostly vertical; whole pixels keep the shapes crisp
 }
 
-function draw() {
+function drawScene() {
     cx.save();
     cx.translate(OX, HUD); // arena coordinates stay 0..W, 0..H; the margins are negative x / x > W
     cx.beginPath(); cx.rect(-OX, 0, CW, H + PIT); cx.clip();
@@ -53,3 +53,34 @@ function draw() {
     cx.restore();
 }
  
+// Visual-effects toggle: hides the Hyper / Xeric bursts and the Quake graphic + screen shake. Display only: the physics timers are put back right after drawing.
+const FLOORFX_STORE = 'wdb-floorfx';
+let floorFxOn = true;
+try { floorFxOn = localStorage.getItem(FLOORFX_STORE) !== '0'; } catch (e) {}
+function setFloorFx(v) {
+    floorFxOn = !!v;
+    try { localStorage.setItem(FLOORFX_STORE, floorFxOn ? '1' : '0'); } catch (e) {}
+    const b = document.getElementById('floorfx');
+    if (b) {
+        b.textContent = 'Floor effects: ' + (floorFxOn ? 'On' : 'Off');
+        b.classList.toggle('on', floorFxOn);
+    }
+}
+{
+    const b = document.getElementById('floorfx');
+    if (b)
+        b.addEventListener('click', () => { setFloorFx(!floorFxOn); cv.focus(); });
+    setFloorFx(floorFxOn); // paints the label from the remembered setting
+}
+function draw() {
+    if (floorFxOn)
+        return drawScene();
+    const saved = allPlayers.map(p => [p.hyperT, p.xericT, p.boostFx, p.fizzleFx]), qt = quakeFx.t;
+    for (const p of allPlayers)
+        p.hyperT = p.xericT = p.boostFx = p.fizzleFx = 0;
+    quakeFx.t = 0; // drawQuakeFx and quakeShake both read this
+    try { drawScene(); } finally {
+        allPlayers.forEach((p, i) => { [p.hyperT, p.xericT, p.boostFx, p.fizzleFx] = saved[i]; });
+        quakeFx.t = qt;
+    }
+}

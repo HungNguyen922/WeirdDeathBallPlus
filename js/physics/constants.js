@@ -385,20 +385,20 @@ const BOOMERANG_FAN = 0.75;             // rad, total spread of launch angles ac
 const BOOMERANG_RANGE_SPREAD = 1;    // outer boomerangs go this much farther / inner ones shorter (0.5 = +/-25%)
 const BOOMERANG_COOLDOWN = 4;        // s between throws
 const BOOMERANG_HOLD = true;
-const BOOMERANG_V = 600;
-const BOOMERANG_RANGE = 800;
+const BOOMERANG_V = 1000;
+const BOOMERANG_RANGE = 1000;
 const BOOMERANG_TURN = 2;
-const BOOMERANG_BACK_V = 1000;         // faster return = harder shove
+const BOOMERANG_BACK_V = 600;         // slower return = harder shove
 const BOOMERANG_BACK_ACC = 600;
 const BOOMERANG_BACK_TURN = 5;
 const BOOMERANG_BACK_GROW = 5;
 const BOOMERANG_BACK_COMMIT = 1;     // rad: past this the return loops round instead of U-turning
 const BOOMERANG_CATCH = 2;
 const BOOMERANG_LIFE = 15;
-const BOOMERANG_R = 10;
+const BOOMERANG_R = PL / 3;
 const BOOMERANG_M_OUT = 0;         // outbound: practically no push
 const BOOMERANG_E_OUT = 0;
-const BOOMERANG_M_BACK = 0.25;         // return: each one is a real shove (ball takes ~half the closing speed per hit)
+const BOOMERANG_M_BACK = 0.5;         // return: each one is a real shove (ball takes ~half the closing speed per hit)
 const BOOMERANG_E_BACK = 0.05;
 const BOOMERANG_SOLID_TEAMMATES = true;
 const BOOMERANG_SPIN = 20;

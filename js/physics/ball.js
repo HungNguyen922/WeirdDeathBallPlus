@@ -17,6 +17,9 @@ class Ball {
         this.vy += BALL_G * DT; // low gravity + light drag = long hang time
         this.vx *= 1 - 0.05 * DT;
         this.vy *= 1 - 0.05 * DT;
+        const mx = -BALL_MAGNUS * this.w * this.vy, my = BALL_MAGNUS * this.w * this.vx; // sideways pull, perpendicular to the flight
+        this.vx += mx * DT;
+        this.vy += my * DT;
         const s = Math.hypot(this.vx, this.vy), cap = BALL_VMAX + (PAD_MAX - BALL_VMAX) * this.boost; // a hatchet hit lifts the cap for a moment
         this.boost = Math.max(0, this.boost - DT / PAD_BOOST_T);
         if (s > cap) {
@@ -25,7 +28,7 @@ class Ball {
         }
         this.x += this.vx * DT;
         this.y += this.vy * DT;
-        this.w = Math.max(-BALL_W_MAX, Math.min(BALL_W_MAX, this.w * (1 - 0.3 * DT)));
+        this.w = Math.max(-BALL_W_MAX, Math.min(BALL_W_MAX, this.w * (1 - BALL_SPIN_DRAG * DT)));
         this.th += this.w * DT; // spin carries in the air
         if (this.y - this.r < 0) {
             this.y = this.r;

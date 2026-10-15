@@ -41,6 +41,19 @@ mixin(Player, {
         this.onBall = false;
         this.tball = null;
     },
+    // Letting go of the ball: the whip's sideways speed around you becomes spin (so WHEN you release matters).
+    flickBall() {
+        const tb = this.tball, a = this.rope;
+        if (!this.onBall || !tb || !a)
+            return;
+        const dx = a.x - this.x, dy = a.y - this.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
+        const vt = (tb.vx - this.vx) * -ny + (tb.vy - this.vy) * nx; // ball's speed around you (u/s); + = clockwise on screen, same sign as ball.w
+        const over = Math.abs(vt) - BALL_FLICK_MIN;
+        if (over <= 0)
+            return;
+        const dw = Math.min(BALL_FLICK_MAX, over / tb.r * BALL_FLICK) * Math.sign(vt);
+        tb.w = Math.max(-BALL_W_MAX, Math.min(BALL_W_MAX, tb.w + dw));
+    },
     // Everything grappleable within RANGE: surfaces (ground = floor/slopes) and the ball.
     candidates(ball) {
         const c = [];
@@ -162,6 +175,7 @@ mixin(Player, {
         } else if (this.gCool <= 0)
             this.gCharge = Math.min(GRAPPLE_MAX, this.gCharge + GRAPPLE_REGEN * DT);
         if (!z) {
+            this.flickBall(); // new: before the rope is dropped
             this.driveT = 0;
             this.rope = null;
             this.pending = null;

@@ -23,7 +23,7 @@ const spCx = slot => (twoSpecials ? (slot ? 63 : 21) : 46); // centre of a speci
 const spSz = () => (twoSpecials ? 36 : 40);
 const spKey = (i, slot = 0) => ({ x: hintX(i) + spCx(slot) - spSz() / 2, y: HINT_ACT_Y + HINT_DY - spSz() / 2, w: spSz(), h: spSz() }); // a special's keycap
 const spItem = (i, n, slot = 0) => ({ x: hintX(i) + spCx(slot) - 20, y: HINT_ACT_Y + HINT_DY + 25 + n * 32, w: 40, h: 32 }); // menu rows, directly under it
-const menuKey = () => ({ x: W / 2 - 60, y: H + 111, w: 120, h: 24 }); // the Menu button: a pill on the floor, centred under the online status line
+const menuKey = () => ({ x: W / 2 - 60, y: H + 104, w: 120, h: 24 }); // the Menu button: a pill on the floor, centred under the online status line
 const inRect = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 function uiHit(x, y) {
     if (ui.open >= 0)

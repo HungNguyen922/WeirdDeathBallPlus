@@ -27,7 +27,7 @@ const HATCHET_EXIT_N = 220;    // slowest the ball may leave the plate along its
 const HATCHET_FLY_KX = 0.50, HATCHET_FLY_KY = 0.12, HATCHET_FLY_MAX = 450;
 const HATCHET_FLY_VX = 500, HATCHET_FLY_VY = 100;
 const PAD_TETHER_K = 0, PAD_TETHER_MAX = 160, PAD_TETHER_SLACK = 10;
-const PIT = 130; // depth of the pit under the arena (the ball is removed if it falls well below it). The 45-degree hatchet drops ~146 u over the tunnel, so the pit has to be deep enough to show it down to the threshold line; canvas height = HUD + H + PIT
+const PIT = 140; // depth of the pit under the arena (the ball is removed if it falls well below it). The 45-degree hatchet drops ~146 u over the tunnel, so the pit has to be deep enough to show it down to the threshold line; canvas height = HUD + H + PIT
 const FK = OUT_DROP / OUT_D; // gentle base slope of the tunnel floor
 // Tunnel floor d units outside the goal: a short gentle lip, then the hatchet's 45-degree section all the way to the threshold. It only ever descends outward,
 // so nothing can get stuck in a pocket.

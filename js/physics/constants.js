@@ -195,7 +195,7 @@ const BALL_G = 150;                   // ball gravity (u/s^2). Lower = a floatie
 const BALL_VMAX = 920;                // ball speed cap (u/s) in normal play (hard hits can raise it for a while)
 const BALL_R = PL/2;                    // ball radius (u)
 const BALL_M = 0.25;                  // ball mass against a player's 1: players knock it around easily. Also how the decoys and crash shots weigh it
-const BALL_I = 1 * BALL_M * BALL_R * BALL_R; // spin inertia (was 6x that: lower = spins up easier)
+const BALL_I = 0.25 * BALL_M * BALL_R * BALL_R; // spin inertia (was 6x that: lower = spins up easier)
 const BALL_W_MAX = 200;                // top spin speed (rad/s; it was a hard-coded 45)
 const BALL_ROLL_DRAG = 0.15;          // how fast the ball slows rolling on the floor (per second, share of speed lost). The original was 0.4; lower = rolls further
 

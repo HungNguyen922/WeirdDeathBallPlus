@@ -50,6 +50,12 @@ mixin(Player, {
                 this.smokeY = this.y;
                 return true;
             }
+        } else if (id === 'mines') { // 1 s cast: plant a mine on the nearest surface. Nothing happens if none is in reach or you already have MINE_MAX out
+            if (this.cd.mines <= 0 && !this.sim && mineCount(this) < MINE_MAX) {
+                const s = nearestSurface(this.x, this.y);
+                if (s && s.d <= MINE_REACH)
+                    c = { type: 'mine', t: MINE_CAST, t0: MINE_CAST, x: s.x, y: s.y, lift: s.lift, nx: s.nx, ny: s.ny };
+            }
         } else if (id === 'pong') { // instant, no cast: the floor and walls turn to rubber if ready and not already on
             if (this.cd.pong <= 0 && this.pongT <= 0) {
                 this.pongT = PONG_T;
@@ -124,6 +130,10 @@ mixin(Player, {
                 batStep(this, c, ball);
                 c.t -= DT;
             }
+        } else if (c.type === 'mine') { // timed, but cancelled if you drift away from the spot
+            c.t -= DT;
+            if (Math.hypot(this.x - c.x, this.y - (c.y + mineLift(c))) > MINE_LEASH)
+                this.endCast(c);
         } else
             c.t -= DT;
         if (this.casts.includes(c) && c.t <= 0) {
@@ -177,6 +187,9 @@ mixin(Player, {
                 this.cd.barbwire = Math.min(c.roped, BARBWIRE_MAX_T) * BARBWIRE_CD_RATIO; // proportional to how long the wire was out
             } else if (c.type === 'bat') {
                 this.cd.bat = BAT_COOLDOWN; // the cooldown starts when the swing ends
+            } else if (c.type === 'mine') {
+                if (placeMine(this, c))
+                    this.cd.mines = MINE_COOLDOWN;
             }
         }
     },

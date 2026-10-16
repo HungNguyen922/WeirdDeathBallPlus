@@ -46,6 +46,8 @@ class Player {
         this.smokeT = 0; // Smoke Screen: seconds of cloud left (0 = none); the cloud is centred on the player
         this.smokeX = 0; this.smokeY = 0; // where the cloud was cast
         this.pongT = 0; // Pong: seconds of rubber left (0 = none)
+        this.mineFx = null; // Mines: the last blast { t, pts: [{ x, y, n }] } (display only); t counts down from MINE_FX
+        this.minePrevX = false; // Mines: was weight down last tick (a detonation is a fresh press of weight while the special key is held)
         this.warpFx = null; // Warp: the last teleport { t, ax, ay, bx, by } (a short visual: rings at both ends); t counts down from WARP_FX
         this.arrowAng = -Math.PI / 2; // last arrow aim, kept across rounds (so not in reset())
         this.boomFlip = 1;
@@ -61,6 +63,8 @@ class Player {
         this.awakeT = 0; // Awakened never survives the round
         this.smokeT = 0; // neither does the smog
         this.pongT = 0; // Pong never survives the round either
+        this.mineFx = null;
+        this.minePrevX = false;
         this.gCharge = GRAPPLE_MAX; // grapple meter: seconds of grip left
         this.gCool = 0;             // > 0: the meter was spent; no grappling at all until this runs out (then the meter restarts from 0 and refills passively)
         this.onBall = false;
@@ -141,6 +145,8 @@ class Player {
             this.exploT = Math.max(0, this.exploT - DT);
         if (this.explodeFx && (this.explodeFx = { ...this.explodeFx, t: this.explodeFx.t - DT }).t <= 0)
             this.explodeFx = null;
+        if (this.mineFx && (this.mineFx = { ...this.mineFx, t: this.mineFx.t - DT }).t <= 0)
+            this.mineFx = null;
         this.gBurst = Math.max(0, this.gBurst - DT);
         this.stickGrace = Math.max(0, this.stickGrace - DT);
         this.boostFx = Math.max(0, this.boostFx - DT);

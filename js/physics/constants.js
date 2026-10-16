@@ -381,7 +381,7 @@ const HOPPER_CRAWL_FINE = 400;        // u/s you can crawl along a surface you a
 const HOPPER_HOP_V = 2400;            // hop speed (u/s)
 const HOPPER_HOP_T = 1;               // longest a hop can last (s), a safety timeout
 const HOPPER_GRACE = 1;               // s you stay stuck after a hop lands without holding the key (so you can chain hops)
-const HOPPER_COOLDOWN = 0;            // s, starts when the hop starts
+const HOPPER_COOLDOWN = 2;            // s, starts when the hop starts
 
 // --- Boomerang ---    
 const BOOMERANG_MAX = 10;              // most one player can have out at once (2 volleys)
@@ -437,8 +437,8 @@ const SWAP_FX = 0.35;                 // s the swap flash lasts (display only)
 // Press the special key to wrap yourself in a cloud of smog that follows you for SMOKE_T s; when it clears the cooldown (SMOKE_COOLDOWN s) starts. To the OTHER team's screen the cloud
 // hides everything inside it (players, the ball, decoys, arrows, boomerangs, pegs, ropes, effects) and your key hints on the wall show no key pressed. Your own team sees through it.
 // The smog changes nothing in the physics: it is pure information (only player.smokeT is kept, so it travels in snapshots). Pressing again while it is out does nothing.
-const SMOKE_R = 5 * PL;               // radius of the cloud (u), centred on the player
-const SMOKE_T = 10;                    // s the cloud lasts
+const SMOKE_R = 8 * PL;               // radius of the cloud (u), centred on the player
+const SMOKE_T = 5;                    // s the cloud lasts
 const SMOKE_COOLDOWN = 10;            // s before the next one (starts when the cloud clears)
 const SMOKE_FADE = 0.4;               // s the cloud takes to billow out and to thin away (display only)
 
@@ -452,8 +452,26 @@ const PONG_MU = 2.0;            // grip: the most sideways speed one bounce can 
 const PONG_FLICK_MULT = 2;      // BALL_FLICK is multiplied by this while Pong is on
 const PONG_FLICK_MAX_MULT = 2;  // BALL_FLICK_MAX is multiplied by this while Pong is on
 
+// --- Mines ---------------------------------------------------------------------------------------------------------------------------------------------------------
+// Press the special key to plant a mine on the nearest surface (MINE_CAST s). Hold the special key and press weight to blow up all your mines: everything within MINE_R of a mine
+// is pushed away from it, harder for a stacked mine, and the pushes of nearby mines add. See physics/mines.js.
+const MINE_CAST = 1;            // s to plant one
+const MINE_DRAW_R = PL;       // dome radius (u) of a single mine. Raise it for bigger mines
+const MINE_DRAW_STACK = 1.5;    // extra radius per additional mine in a stack
+const MINE_MAX = 5;            // most mines one player can have out (a stack of 3 counts as 3)
+const MINE_REACH = 2 * PL;      // a surface must be this close to your centre to start planting
+const MINE_LEASH = 3.5 * PL;    // drift further than this from the spot while planting and the plant is cancelled
+const MINE_STACK_R = PL;        // a new mine this close to one of your own joins it
+const MINE_R = 2 * PL;          // blast radius: from the mine to the edge of the body
+const MINE_KICK_MIN = 400;      // u/s per mine at the very edge of the blast
+const MINE_KICK_MAX = 1200;      // u/s per mine dead centre
+const MINE_FALLOFF = 1.2;       // shape between edge and centre (1 = linear, higher = stays weak until really close)
+const MINE_KICK_CAP = 3600;     // most one blast can give one body, however many mines are near it
+const MINE_COOLDOWN = 1;        // s after planting or blasting before the key can plant again
+const MINE_FX = 0.5;            // s the blast ring is drawn (display only)
+
 // --- The ability table: reads every cooldown above, so it has to stay below them ------------------------------------------------------------------------------------
-const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN }, portal: { cd: PORTAL_COOLDOWN }, swap: { cd: SWAP_COOLDOWN }, smoke: { cd: SMOKE_COOLDOWN }, pong: { cd: PONG_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
+const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN }, portal: { cd: PORTAL_COOLDOWN }, swap: { cd: SWAP_COOLDOWN }, smoke: { cd: SMOKE_COOLDOWN }, pong: { cd: PONG_COOLDOWN }, mines: { cd: MINE_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 
 // =====================================================================================================================================================================
 // 11  MATCH

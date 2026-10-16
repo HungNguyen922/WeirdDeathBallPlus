@@ -67,6 +67,8 @@ function saveState() {
         boomerangs: boomerangs.map(owned),
         portals: portals.map(owned),
         portalSeq,
+        mines: mines.map(owned),
+        mineSeq,
     };
 }
 
@@ -138,6 +140,9 @@ function loadState(s) {
     portals.length = 0;
     portals.push(...relink(s.portals || []));
     portalSeq = s.portalSeq || 0;
+    mines.length = 0;
+    mines.push(...relink(s.mines || []));
+    mineSeq = s.mineSeq || 0;
     stuckSegs.length = 0;
     for (const a of arrows)
         if (a.stuck)

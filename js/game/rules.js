@@ -3,6 +3,8 @@
 const WIN = 9; // points to win the match
 const SWAP_EVERY = 5; // points between side swaps (0 = never)
 const SWAP_BANNER_T = 1.2; // seconds the "SIDE CHANGE" banner holds the game after the teams trade ends
+const POINT_PAUSE = 1.6; // s the world holds still after a point (the goal celebration plays across it)
+const WIN_PAUSE = 4;     // s after the point that wins the match (the victory celebration plays across it)
 let swapBanner = 0; // > 0: the banner is showing and the world is frozen (counts down; part of the saved state)
 let swapAt = -1; // the score total the last swap happened at, so one total can only swap once (a double KO must not swap twice)
 let score = [0, 0], pause = 0, over = false, msg = '';
@@ -165,7 +167,7 @@ function point(t, why) {
     events.onPoint(t, why);
     over = score[t] >= WIN;
     msg = `${t === 0 ? 'Blue' : 'Red'} ${why}` + (over ? ' - wins the match!' : '');
-    pause = over ? 4 : 1.6;
+    pause = over ? WIN_PAUSE : POINT_PAUSE;
 }
 function setTeamSize(size) { // 1 = 1v1, 2 = 2v2: restarts the match
     teamSize = size;

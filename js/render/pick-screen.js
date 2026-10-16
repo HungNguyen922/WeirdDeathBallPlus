@@ -86,43 +86,74 @@ function drawSideChangeBanner(tm) { // the freeze when the teams trade ends (see
         drawBanner('SIDE CHANGE', 1 - swapBanner / SWAP_BANNER_T, tm);
 }
 function drawBanner(TXT, progIn, tm) {
-    const TILT = -0.045, BH = 76; // strip tilt (rad), half-height of the paper (u)
+    const TILT = -0.045, BH = 76, BAND = 30; // strip tilt (rad), half-height of the paper (u), how far the coloured band reaches past the paper (u)
     const prog = Math.min(1, Math.max(0, progIn)); // 0 -> 1 across the banner's time
     const slam = Math.min(1, prog / 0.18), e = 1 - Math.pow(1 - slam, 3); // 0 -> 1 over the first 18%, easing out
     const shake = prog > 0.18 && prog < 0.4 ? Math.sin(prog * 260) * 5 * (0.4 - prog) / 0.22 : 0; // a small jolt right after the slam lands
     const half = CW / 2 + 90; // wide enough to cover the whole canvas even after the tilt
     const edge = (i, k) => { const s = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); }; // fixed ragged offsets: no Math.random, so the edge never wobbles
 
+    if (prog < 0.2) { // a quick warm flash as the strip lands
+        cx.save();
+        cx.globalAlpha = 0.28 * (1 - prog / 0.2);
+        cx.fillStyle = '#fff4c8';
+        cx.fillRect(-OX, 0, CW, H + PIT);
+        cx.restore();
+    }
+
     cx.save();
     cx.translate(W / 2 + shake, H / 2);
     cx.rotate(TILT);
 
-    // 1) the strip unrolls: a dark band (so no icon shows through) with the torn paper on top
+    // 1) the ripples: the band's edges pushed outward as horizontal lines, above and below, one after another from the moment the strip lands
+    const RIP_N = 4, RIP_DELAY = 0.07, RIP_DUR = 0.5, RIP_REACH = 230; // how many, gap between them, how long each lasts (all as a share of the banner's time), how far they travel (u)
+    for (let k = 0; k < RIP_N; k++) {
+        const u = (prog - 0.1 - k * RIP_DELAY) / RIP_DUR;
+        if (u <= 0 || u >= 1)
+            continue;
+        const d = BH + BAND + RIP_REACH * (1 - Math.pow(1 - u, 3)); // eases out: fast at first, then slows as it fades
+        cx.globalAlpha = (1 - u) * 0.9;
+        cx.lineWidth = 1.5 + 6 * (1 - u);
+        cx.strokeStyle = k % 2 ? '#fff3a8' : '#ff9a1f';
+        cx.beginPath();
+        cx.moveTo(-half, -d); cx.lineTo(half, -d);
+        cx.moveTo(-half, d); cx.lineTo(half, d);
+        cx.stroke();
+    }
+    cx.globalAlpha = 1;
+
+    // 2) the strip unrolls: a bright band (so no icon shows through) with the torn paper on top
     cx.save();
     cx.scale(1, e);
     cx.globalAlpha = Math.min(1, e * 1.6);
-    cx.fillStyle = 'rgba(8,3,14,.86)';
-    cx.fillRect(-half, -BH - 30, half * 2, (BH + 30) * 2);
-    const STEP = 26, n = Math.ceil(half * 2 / STEP);
-    cx.beginPath();
+    const band = cx.createLinearGradient(0, -BH - BAND, 0, BH + BAND);
+    band.addColorStop(0, '#ff9d1c'); band.addColorStop(0.5, '#ff5a3c'); band.addColorStop(1, '#ff2f7a');
+    cx.fillStyle = band;
+    cx.fillRect(-half, -BH - BAND, half * 2, (BH + BAND) * 2);
+    cx.fillStyle = '#fff2a0'; // bright rules along the band's edges: the ripples start from them
+    cx.fillRect(-half, -BH - BAND, half * 2, 4);
+    cx.fillRect(-half, BH + BAND - 4, half * 2, 4);
+    const STEP = 26, n = Math.ceil(half * 2 / STEP), paper = new Path2D();
     for (let i = 0; i <= n; i++) {
         const x = -half + i * STEP, y = -BH + edge(i, 1) * 16;
-        if (i) cx.lineTo(x, y); else cx.moveTo(x, y);
+        if (i) paper.lineTo(x, y); else paper.moveTo(x, y);
     }
     for (let i = n; i >= 0; i--)
-        cx.lineTo(-half + i * STEP, BH - edge(i, 2) * 16);
-    cx.closePath();
-    cx.shadowColor = 'rgba(0,0,0,.65)'; cx.shadowBlur = 18; cx.shadowOffsetY = 6;
-    cx.fillStyle = '#f1e8c4'; cx.fill();
-    cx.shadowColor = 'transparent';
-    const shade = cx.createLinearGradient(0, -BH, 0, BH); // paper gets a little darker toward its torn edges
-    shade.addColorStop(0, 'rgba(150,115,55,.38)'); shade.addColorStop(0.25, 'rgba(150,115,55,0)');
-    shade.addColorStop(0.75, 'rgba(150,115,55,0)'); shade.addColorStop(1, 'rgba(150,115,55,.38)');
-    cx.fillStyle = shade; cx.fill();
-    cx.strokeStyle = 'rgba(110,80,35,.55)'; cx.lineWidth = 1.5; cx.stroke();
+        paper.lineTo(-half + i * STEP, BH - edge(i, 2) * 16);
+    paper.closePath();
+    cx.save(); // the paper's drop shadow: a darker copy nudged down (shadowBlur on a shape this wide is slow)
+    cx.translate(0, 7);
+    cx.fillStyle = 'rgba(90,20,10,.35)'; cx.fill(paper);
+    cx.restore();
+    cx.fillStyle = '#fff3cf'; cx.fill(paper);
+    const shade = cx.createLinearGradient(0, -BH, 0, BH); // paper gets a little warmer toward its torn edges
+    shade.addColorStop(0, 'rgba(255,150,50,.34)'); shade.addColorStop(0.25, 'rgba(255,150,50,0)');
+    shade.addColorStop(0.75, 'rgba(255,150,50,0)'); shade.addColorStop(1, 'rgba(255,150,50,.34)');
+    cx.fillStyle = shade; cx.fill(paper);
+    cx.strokeStyle = 'rgba(190,100,30,.6)'; cx.lineWidth = 1.5; cx.stroke(paper);
     cx.restore();
 
-    // 2) the lettering: slants, drops in from big to normal size
+    // 3) the lettering: slants, drops in from big to normal size
     cx.save();
     cx.translate(0, 4);
     const ts = 1 + (1 - e) * 1.2;
@@ -135,15 +166,15 @@ function drawBanner(TXT, progIn, tm) {
     cx.scale(fit, fit);
     cx.lineJoin = 'miter'; cx.miterLimit = 8; // sharp points on the outline, like the brush lettering
     cx.lineWidth = 17; cx.strokeStyle = '#2b0803'; cx.strokeText(TXT, 3, 5); // dark outline, nudged down-right as a drop shadow
-    cx.lineWidth = 12; cx.strokeStyle = '#6e1408'; cx.strokeText(TXT, 0, 0); // red-brown rim
+    cx.lineWidth = 12; cx.strokeStyle = '#c2260c'; cx.strokeText(TXT, 0, 0); // red rim
     const flick = 0.04 * Math.sin(tm / 90); // the flame shimmers
     const g = cx.createLinearGradient(0, -64, 0, 64);
-    g.addColorStop(0, '#a80f0a');
-    g.addColorStop(0.3 + flick, '#e8350f');
-    g.addColorStop(0.65 + flick, '#d5ff1a');
-    g.addColorStop(1, '#ffdc50');
+    g.addColorStop(0, '#ff3b1f');
+    g.addColorStop(0.3 + flick, '#ff8a00');
+    g.addColorStop(0.65 + flick, '#ffe600');
+    g.addColorStop(1, '#fff7b0');
     cx.fillStyle = g; cx.fillText(TXT, 0, 0);
-    cx.lineWidth = 1.6; cx.strokeStyle = 'rgba(255,235,160,.6)'; cx.strokeText(TXT, 0, 0); // thin hot highlight on the edge
+    cx.lineWidth = 1.6; cx.strokeStyle = 'rgba(255,255,255,.75)'; cx.strokeText(TXT, 0, 0); // thin hot highlight on the edge
     cx.restore();
 
     cx.restore();

@@ -129,6 +129,12 @@ function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebel
         cx.arc(-4.5, 3, 5, 0, 7); cx.fill();
         cx.beginPath(); cx.arc(4.5, 3.5, 4.5, 0, 7); cx.fill();
         cx.beginPath(); cx.arc(0, -3.5, 6, 0, 7); cx.fill();
+    } else if (kind === 'pong') { // a ball rebounding off a flat surface
+        cx.lineWidth = 2.4;
+        cx.moveTo(-9, 9); cx.lineTo(9, 9);
+        cx.moveTo(-9, -9); cx.lineTo(-3, 6); cx.lineTo(3, -2);
+        cx.stroke();
+        cx.beginPath(); cx.arc(6, -6, 3.6, 0, 7); cx.fill();
     } else if (kind === 'locked') { // padlock
         cx.fillRect(-6, -1, 12, 9);
         cx.beginPath(); cx.arc(0, -2, 4.5, Math.PI, 0); cx.stroke();

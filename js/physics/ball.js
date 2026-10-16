@@ -14,6 +14,7 @@ class Ball {
     reset() { this.x = NETX; this.y = H - RISE - 13; this.vx = 0; this.vy = 0; this.th = 0; this.w = 0; this.boost = 0; } // rests in the notch of the middle peak
     // Returns the team that scored if the ball entered a goal. No bounce; the net does not affect the ball.
     step() {
+        const pong = pongOn();
         this.vy += BALL_G * DT; // low gravity + light drag = long hang time
         this.vx *= 1 - 0.05 * DT;
         this.vy *= 1 - 0.05 * DT;
@@ -30,10 +31,15 @@ class Ball {
         this.y += this.vy * DT;
         this.w = Math.max(-BALL_W_MAX, Math.min(BALL_W_MAX, this.w * (1 - BALL_SPIN_DRAG * DT)));
         this.th += this.w * DT; // spin carries in the air
+        // this is the ceiling check
         if (this.y - this.r < 0) {
             this.y = this.r;
-            if (this.vy < 0)
-                this.vy = 0;
+            if (this.vy < 0) {
+                if (pong && -this.vy > PONG_MIN_V)
+                    pongBounce(this, 0, 1, this.vy);
+                else
+                    this.vy = 0;
+            }
         }
         for (const q of pegs)
             if (pegBounce(this, q)) { // glancing hits also give the ball some spin
@@ -44,16 +50,26 @@ class Ball {
         this.y -= o;
         this.vy -= vo;
         this.hit = 0;
+        // this checks for the flat floor
         if (this.x > 0 && this.x < W && this.y + this.r > H) {
             this.hit = Math.max(0, this.vy + vo);
             this.y = H - this.r;
-            if (this.vy > 0)
-                this.vy = 0;
             this.vx *= 1 - BALL_ROLL_DRAG * DT;
-            roll(this, 0, -1);
+            let gripped = false;
+            if (this.vy > 0) {
+                if (pong && this.vy > PONG_MIN_V) {
+                    pongBounce(this, 0, -1, -this.vy);
+                    gripped = true;
+                } else
+                    this.vy = 0;
+            }
+            if (!gripped)
+                roll(this, 0, -1);
         }
-        collideTerrain(this, 0, vo);
-        collideTerrain(this, 0, vo, OUTSEGS);
+        // the pike and scoop
+        collideTerrain(this, 0, vo, SEGS, 0, pong);
+        // the wall/ jut
+        collideTerrain(this, 0, 0, LEDGES, LEDGE_T, pong);
         padBounce(this);
         this.y += o;
         this.vy += vo;

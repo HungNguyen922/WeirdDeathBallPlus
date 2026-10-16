@@ -17,6 +17,7 @@ const PICK_DESC = { // two short lines under the highlighted special
     swap: ['Hold, turn the cone, release:', 'trade places. Weight = furthest.'],
     smoke: ['A cloud hides you from the', 'enemy, keys too. Lasts 8 s.'],
     portal: ['Hold, turn with the arrows,', 'release. Two linked portals.'],
+    pong: ['Rubber floor and walls: spin', 'grips and the flick is x2.'],
 };
 const pickSp = id => SPECIALS.find(a => a.id === id) || SPECIALS[0];
 const PICK_NAMES = ['BLUE', 'RED', 'BLUE 2', 'RED 2']; // by player id

@@ -50,6 +50,11 @@ mixin(Player, {
                 this.smokeY = this.y;
                 return true;
             }
+        } else if (id === 'pong') { // instant, no cast: the floor and walls turn to rubber if ready and not already on
+            if (this.cd.pong <= 0 && this.pongT <= 0) {
+                this.pongT = PONG_T;
+                return true;
+            }
         } else if (id === 'explode') { // instant, no cast
             if (this.cd.explode <= 0) {
                 this.explode();

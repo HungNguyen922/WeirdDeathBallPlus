@@ -133,9 +133,6 @@ function drawArena() { // background, terrain, goals, net line
     cx.lineCap = 'butt';
 }
 
-
-
-
 // QUAKE graphic (the seesaw floor popping up): dust rings and cracks where the slam landed, debris thrown up, a bright pulse racing along the floor to the end that
 // pops, and dust and grit streaming off that raised end. Display only: it reads quakeFx (set by sawHit) and the live floor shape, and never writes anything.
 function drawQuakeFx() {
@@ -200,4 +197,54 @@ function drawQuakeFx() {
         }
     }
     cx.restore();
+}
+
+// ---- Pong: the glow on every rubber surface, and a countdown ring round each player who has it on -------------------------------------------------------------------
+const PONG_COL = '#ffb020';   // cyan, so it reads differently from the amber hatchet
+const PONG_RING_GAP = 11;     // the timer ring sits this far (u) outside the player
+const pongLeft = () => players.reduce((m, p) => Math.max(m, p.alive && p.pongT > 0 ? p.pongT : 0), 0); // longest rubber still running (s)
+function drawPongSurfaces() { // floor, ramps, middle peak, ceiling and goal walls: the same surfaces Ball.step makes bouncy
+    const left = pongLeft();
+    if (left <= 0)
+        return;
+    const tm = performance.now();
+    const a = Math.min(1, (PONG_T - left) / 0.25) * (left < 1.5 ? 0.55 + 0.45 * Math.sin(tm / 55) : 1); // fades in; blinks fast in the last 1.5 s
+    const pulse = 0.5 + 0.5 * Math.sin(tm / 200);
+    cx.save();
+    cx.lineCap = 'round'; cx.lineJoin = 'round';
+    cx.beginPath();
+    const sl = sawY(0), sr = sawY(W); // the ramps lift as one block with the quake, like in drawArena
+    cx.moveTo(0, GOAL_Y1 + sl); cx.lineTo(RUN, H + sl);
+    cx.moveTo(W, GOAL_Y1 + sr); cx.lineTo(W - RUN, H + sr);
+    for (let x = RUN; x <= W - RUN; x += 16) // the floor between the ramps follows the quake
+        x === RUN ? cx.moveTo(x, H + sawY(x)) : cx.lineTo(x, H + sawY(x));
+    cx.lineTo(W - RUN, H + sawY(W - RUN));
+    PEAK.forEach(([x, y], i) => (i ? cx.lineTo(x, y) : cx.moveTo(x, y)));
+    cx.moveTo(0, 0); cx.lineTo(W, 0); // ceiling
+    for (const [x1, y1, x2, y2] of LEDGES) { // goal walls
+        cx.moveTo(x1, y1); cx.lineTo(x2, y2);
+    }
+    // No shadowBlur: it blurs a picture as big as the whole arena every frame. Stacked strokes, wide and faint to narrow and bright, make the same glow for almost nothing.
+    cx.strokeStyle = PONG_COL;
+    cx.globalAlpha = a * (0.10 + 0.05 * pulse); cx.lineWidth = 22; cx.stroke(); // outer haze
+    cx.globalAlpha = a * (0.18 + 0.08 * pulse); cx.lineWidth = 13; cx.stroke(); // inner haze
+    cx.globalAlpha = a * 0.6; cx.lineWidth = 6; cx.stroke();                    // the coloured edge
+    cx.globalAlpha = a; cx.strokeStyle = '#eaffff'; cx.lineWidth = 2; cx.stroke(); // white-hot core
+    cx.restore();
+}
+function drawPongRings() { // a ring round the player that drains clockwise-to-start as the rubber runs out
+    const tm = performance.now();
+    for (const p of players) {
+        if (!(p.alive && p.pongT > 0))
+            continue;
+        const f = Math.max(0, Math.min(1, p.pongT / PONG_T)), R = p.r + PONG_RING_GAP;
+        cx.save();
+        cx.lineCap = 'round';
+        cx.strokeStyle = 'rgba(53,224,255,.18)'; cx.lineWidth = 3; // the empty track
+        cx.beginPath(); cx.arc(p.x, p.y, R, 0, Math.PI * 2); cx.stroke();
+        cx.globalAlpha = p.pongT < 1.5 ? 0.55 + 0.45 * Math.sin(tm / 55) : 1; // blinks in the last 1.5 s
+        cx.strokeStyle = PONG_COL; cx.lineWidth = 3.5; cx.shadowColor = PONG_COL; cx.shadowBlur = 10;
+        cx.beginPath(); cx.arc(p.x, p.y, R, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f); cx.stroke(); // starts full, shrinks back toward the top
+        cx.restore();
+    }
 }

@@ -42,9 +42,10 @@ class Player {
         this.exploT = 0; // Explode: seconds left in which a death refunds the cooldown (0 = no blast to reward)
         this.exploDead = 0; // Explode: how many players were already dead when the blast went off
         this.exploCarry = false; // Explode: a refund was earned, so the next round starts with it ready (see reset)
+        this.explodeFx = null; // Explode: the last blast { t, x, y, hits: [{ x, y, r }] } (the zone, and a flash on each body it hit); t counts down from EXPLODE_FX
         this.smokeT = 0; // Smoke Screen: seconds of cloud left (0 = none); the cloud is centred on the player
         this.smokeX = 0; this.smokeY = 0; // where the cloud was cast
-        this.explodeFx = null; // Explode: the last blast { t, x, y, hits: [{ x, y, r }] } (the zone, and a flash on each body it hit); t counts down from EXPLODE_FX
+        this.pongT = 0; // Pong: seconds of rubber left (0 = none)
         this.warpFx = null; // Warp: the last teleport { t, ax, ay, bx, by } (a short visual: rings at both ends); t counts down from WARP_FX
         this.arrowAng = -Math.PI / 2; // last arrow aim, kept across rounds (so not in reset())
         this.boomFlip = 1;
@@ -59,6 +60,7 @@ class Player {
         this.pending = null;
         this.awakeT = 0; // Awakened never survives the round
         this.smokeT = 0; // neither does the smog
+        this.pongT = 0; // Pong never survives the round either
         this.gCharge = GRAPPLE_MAX; // grapple meter: seconds of grip left
         this.gCool = 0;             // > 0: the meter was spent; no grappling at all until this runs out (then the meter restarts from 0 and refills passively)
         this.onBall = false;
@@ -123,6 +125,14 @@ class Player {
             else if ((this.smokeT -= DT) <= 0) {
                 this.smokeT = 0;
                 this.cd.smoke = SMOKE_COOLDOWN; // cleared: the cooldown starts now
+            }
+        }
+        if (this.pongT > 0) {
+            if (!this.has('pong'))
+                this.pongT = 0; // swapped to another special: the rubber goes with it, no cooldown
+            else if ((this.pongT -= DT) <= 0) {
+                this.pongT = 0;
+                this.cd.pong = PONG_COOLDOWN; // wore off: the cooldown starts now
             }
         }
         if (this.warpFx && (this.warpFx = { ...this.warpFx, t: this.warpFx.t - DT }).t <= 0)

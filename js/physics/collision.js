@@ -13,9 +13,22 @@ function roll(c, nx, ny) {
     c.vy += jt * ty;
     c.w += 2 * jt / c.r;
 }
+// Pong: the surface is table-tennis rubber. The ball bounces (PONG_E) and the rubber GRIPS it: the sideways speed of the contact point (the ball's own speed along the
+// surface plus its spin) is pushed toward zero. Topspin kicks the ball on the way it was going; backspin slows it or turns it round. Grip is capped by how hard it presses.
+function pongBounce(c, nx, ny, vn) { // vn = speed into the surface along the normal (< 0)
+    c.vx -= (1 + PONG_E) * vn * nx;
+    c.vy -= (1 + PONG_E) * vn * ny;
+    const tx = ny, ty = -nx, slip = c.vx * tx + c.vy * ty + c.w * c.r;
+    const lim = PONG_MU * (1 + PONG_E) * -vn;
+    const jt = Math.max(-lim, Math.min(lim, -slip / 3)); // -slip / 3 = fully gripped (same disc maths as roll())
+    c.vx += jt * tx;
+    c.vy += jt * ty;
+    c.w += 2 * jt / c.r;
+}
+const pongOn = () => players.some(p => p.alive && p.pongT > 0);
 // Push a circle out of the slopes (no bounce unless e > 0). Returns true if resting on an up-facing surface.
 // vo = speed of the floor frame the circle is in (0 for fixed geometry); c.hit records the real-world speed it struck an up-facing surface at.
-function collideTerrain(c, e, vo = 0, list = SEGS, t = 0) {
+function collideTerrain(c, e, vo = 0, list = SEGS, t = 0, pong = false) {
     let onGround = false;
     for (const sg of list) {
         const p = nearestOnSeg(sg, c.x, c.y), dx = c.x - p.x, dy = c.y - p.y, d = Math.hypot(dx, dy), R = c.r + t;
@@ -25,13 +38,19 @@ function collideTerrain(c, e, vo = 0, list = SEGS, t = 0) {
         c.x = p.x + nx * R;
         c.y = p.y + ny * R;
         const vn = c.vx * nx + c.vy * ny;
+        let gripped = false;
         if (vn < 0) {
             if (ny < -0.5)
                 c.hit = Math.max(c.hit || 0, -(vn + vo * ny));
-            c.vx -= (1 + e) * vn * nx;
-            c.vy -= (1 + e) * vn * ny;
+            if (pong && c.w !== undefined && -vn > PONG_MIN_V) {
+                pongBounce(c, nx, ny, vn);
+                gripped = true;
+            } else {
+                c.vx -= (1 + e) * vn * nx;
+                c.vy -= (1 + e) * vn * ny;
+            }
         }
-        if (c.w !== undefined)
+        if (c.w !== undefined && !gripped)
             roll(c, nx, ny);
         if (ny < -0.5)
             onGround = true;

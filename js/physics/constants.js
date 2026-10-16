@@ -268,7 +268,7 @@ const DECOY_TELL = false;             // true = draw a dashed ring in the caster
 // --- Arrow -------------------------------------------------------------------------------------------------------------------------------------------------------
 // Hold the special key to charge (ARROW_CHARGE_T s to full), release to fire along the aim. LEFT / RIGHT turn it at ARROW_TURN rad/s; a double tap within ARROW_DBL_T s snaps it.
 // The death ball / decoys gain ARROW_BALL_K x the arrow's velocity; an enemy is knocked back by ARROW_KNOCK x it (ARROW_KILLS = true kills instead).
-const ARROW_CHARGE_T = 1.2;           // s to charge to full
+const ARROW_CHARGE_T = 1;           // s to charge to full
 const ARROW_V_MIN = 300;              // launch speed (u/s) of an uncharged arrow
 const ARROW_V_MAX = 1200;             // launch speed (u/s) at full charge
 const ARROW_G = G;                    // gravity on a flying arrow (u/s^2). Lower = flatter shots
@@ -375,13 +375,13 @@ const EXPLODE_AMP_SPEED = 900;        // body speed (u/s) at which that blend is
 const EXPLODE_AMP_GAIN = 0.5;         // extra speed added on top, as a share of the body's current speed
 
 // --- Hopper ---
-const HOPPER_MOVE = 0.25;             // share of normal run acceleration and top speed
-const HOPPER_CRAWL = 800;             // u/s you can crawl along a surface you are stuck to
+const HOPPER_MOVE = 1;                // share of normal run acceleration and top speed
+const HOPPER_CRAWL = 1600;            // u/s you can crawl along a surface you are stuck to
 const HOPPER_CRAWL_FINE = 400;        // u/s you can crawl along a surface you are stuck to while holding the weight key (for fine positioning)
-const HOPPER_HOP_V = 1400;            // hop speed (u/s)
-const HOPPER_HOP_T = 0.8;             // longest a hop can last (s), a safety timeout
-const HOPPER_GRACE = 0.25;            // s you stay stuck after a hop lands without holding the key (so you can chain hops)
-const HOPPER_COOLDOWN = 1;            // s, starts when the hop starts
+const HOPPER_HOP_V = 2400;            // hop speed (u/s)
+const HOPPER_HOP_T = 1;               // longest a hop can last (s), a safety timeout
+const HOPPER_GRACE = 1;               // s you stay stuck after a hop lands without holding the key (so you can chain hops)
+const HOPPER_COOLDOWN = 0;            // s, starts when the hop starts
 
 // --- Boomerang ---    
 const BOOMERANG_MAX = 10;              // most one player can have out at once (2 volleys)
@@ -417,7 +417,7 @@ const PORTAL_R = PL;                  // radius (u) of a portal: 1 player length
 const PORTAL_MAX = 2;                 // portals per player: opening another closes the oldest
 const PORTAL_TURN = 3;                // how fast LEFT / RIGHT turn the aim (rad/s)
 const PORTAL_DBL_T = 0.25;            // s: a double tap within this snaps the aim
-const PORTAL_COOLDOWN = 0.5;          // s before you can start the next one (it starts when one opens)
+const PORTAL_COOLDOWN = 1;          // s before you can start the next one (it starts when one opens)
 const PORTAL_MIN_V = 120;             // u/s: slowest a body leaves a portal (something that drifted in is still pushed out along the arrow)
 const PORTAL_EXIT_GAP = 3;            // u: a body comes out this far beyond the exit disc's edge (edge to the body's rim)
 const PORTAL_FX = 0.4;                // s the flash on a portal lasts when something goes through (display only)
@@ -442,8 +442,18 @@ const SMOKE_T = 10;                    // s the cloud lasts
 const SMOKE_COOLDOWN = 10;            // s before the next one (starts when the cloud clears)
 const SMOKE_FADE = 0.4;               // s the cloud takes to billow out and to thin away (display only)
 
+// --- Pong ---------------------------------------------------------------------------------------------------------------------------------------------------------
+// Press the special key: for PONG_T s the floor, slopes, ceiling and goal walls (not the net, the hatchet or the tunnels) are table-tennis rubber for the death ball and decoys.
+const PONG_T = 8;               // s the rubber lasts
+const PONG_COOLDOWN = 10;       // s before the next one (starts when it wears off)
+const PONG_E = 0.85;            // bounce: share of the speed into a surface that comes back out
+const PONG_MIN_V = 25;          // u/s: slower impacts just land and roll (no tiny bounces as the ball settles)
+const PONG_MU = 2.0;            // grip: the most sideways speed one bounce can change is PONG_MU * (1 + PONG_E) * impact speed. Higher = spin steers the ball harder
+const PONG_FLICK_MULT = 2;      // BALL_FLICK is multiplied by this while Pong is on
+const PONG_FLICK_MAX_MULT = 2;  // BALL_FLICK_MAX is multiplied by this while Pong is on
+
 // --- The ability table: reads every cooldown above, so it has to stay below them ------------------------------------------------------------------------------------
-const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN }, portal: { cd: PORTAL_COOLDOWN }, swap: { cd: SWAP_COOLDOWN }, smoke: { cd: SMOKE_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
+const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN }, portal: { cd: PORTAL_COOLDOWN }, swap: { cd: SWAP_COOLDOWN }, smoke: { cd: SMOKE_COOLDOWN }, pong: { cd: PONG_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 
 // =====================================================================================================================================================================
 // 11  MATCH

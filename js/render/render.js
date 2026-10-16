@@ -24,6 +24,7 @@ function drawScene() {
     cx.translate(sh.x, sh.y); // everything in the picture shakes together...
     drawArena();
     drawQuakeFx(); // the seesaw floor's quake graphic: on the floor, behind everything that stands on it
+    drawPongSurfaces(); // new: the rubber glow, over the terrain and behind everything on it
     drawHud(); // the score (and the online status under it) live on the floor, drawn in arena coordinates right after the arena they sit on
     drawMenuTile(); // the Menu tile on Blue's wall, under the weight key
     const hid = smokeBeginHide(); // Smoke Screen: everything from here to drawBoomerangs is cut out of the other team's cloud
@@ -33,6 +34,7 @@ function drawScene() {
     drawPortals();
     drawSwaps();
     drawAwakened();
+    drawPongRings();    // new: next to the Awakened ring, so Smoke hides it from the other team too
     drawExplode();
     drawGrappleRange();
     drawRopes();

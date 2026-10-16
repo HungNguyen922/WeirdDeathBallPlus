@@ -51,7 +51,8 @@ mixin(Player, {
         const over = Math.abs(vt) - BALL_FLICK_MIN;
         if (over <= 0)
             return;
-        const dw = Math.min(BALL_FLICK_MAX, over / tb.r * BALL_FLICK) * Math.sign(vt);
+        const pong = pongOn();
+        const dw = Math.min(BALL_FLICK_MAX * (pong ? PONG_FLICK_MAX_MULT : 1), over / tb.r * BALL_FLICK * (pong ? PONG_FLICK_MULT : 1)) * Math.sign(vt);
         tb.w = Math.max(-BALL_W_MAX, Math.min(BALL_W_MAX, tb.w + dw));
     },
     // Everything grappleable within RANGE: surfaces (ground = floor/slopes) and the ball.

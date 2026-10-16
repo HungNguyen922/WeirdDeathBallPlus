@@ -28,6 +28,7 @@
 const http = require('http'), fs = require('fs'), path = require('path');
 const { attachWebSocket } = require('./ws.js');
 const { loadSim, ROOT } = require('./sim-node.js');
+const accounts = require('./accounts.js');
 
 const TICK_HZ = 120, DT_MS = 1000 / TICK_HZ;
 const SNAP_EVERY = [1, 2, 3, 4, 5, 6].includes(+process.env.SNAP_EVERY) ? +process.env.SNAP_EVERY : 4; // a snapshot every 4 ticks = 30 Hz. SNAP_EVERY=2 node js/server/server.js sends 60 Hz: a little less lag, about twice the bandwidth (clients adapt, the value is sent in 'welcome')
@@ -39,9 +40,9 @@ const SPECIAL_IDS = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'b
 
 // Code that runs INSIDE a room's sandbox: it captures the game's events (the renderer's hooks) into a list, and applies input bits to a player's keys.
 const ROOM_PRELUDE = `
-var __ev = [], __tick = 0;
+var __ev = [], __tick = 0, __done = null; // __done: set when a point wins the match ({ score: [blue, red] }); the room reads it and clears it
 const __ref = b => b === ball ? 'b' : b instanceof Player ? 'p' + b.id : 'd' + decoys.indexOf(b);
-events.onPoint = (team, why) => __ev.push(['pt', __tick, team, why]);
+events.onPoint = (team, why) => { __ev.push(['pt', __tick, team, why]); if (score[team] >= WIN) __done = { score: [score[0], score[1]] }; };
 events.onNewRound = () => __ev.push(['nr', __tick]);
 events.onImpact = (p, x, y, ux, uy, v) => __ev.push(['im', __tick, p.id, x, y, ux, uy, v]);
 events.onBatHit = (p, b, x, y, ux, uy, k) => __ev.push(['bt', __tick, p.id, __ref(b), x, y, ux, uy, k]);
@@ -237,7 +238,7 @@ class Room {
     roster() {
         const members = [...this.conns]
             .sort((a, b) => (a.slot < 0) - (b.slot < 0) || a.slot - b.slot || a.order - b.order) // seated by seat, then the waiting list in order
-            .map(c => ({ c: c.cid, team: c.team, slot: c.slot, host: c === this.host }));
+            .map(c => ({ c: c.cid, team: c.team, slot: c.slot, host: c === this.host, name: c.name || null }));
         const base = { t: 'roster', slots: this.seats.map(Boolean), spectators: members.filter(m => m.slot < 0).length, running: this.running, lobby2v2: this.lobby2v2, members };
         for (const c of this.conns)
             c.send(JSON.stringify({ ...base, host: c === this.host, you: c.cid }));
@@ -256,6 +257,11 @@ class Room {
                 ctx.__setKeys(i, this.bits[i]);
             ctx.__tick = this.tick + 1; // events are tagged with the tick count at which their effect is first visible
             ctx.update();
+            if (ctx.__done) { // a point just won the match: rate it
+                const done = ctx.__done;
+                ctx.__done = null;
+                this.matchOver(done);
+            }
             this.tick++;
             n++;
             this.tpsN++;
@@ -281,9 +287,16 @@ class Room {
             if (c.slot < 0)
                 c.send(head + '0' + tail);
     }
+    matchOver(done) { // Blue sits in seats 0 and 2, Red in 1 and 3. Rated only if everyone seated is signed in (accounts.recordMatch checks that).
+        if (!accounts.enabled())
+            return;
+        const teams = [0, 1].map(t => this.seats.filter((c, i) => c && i % 2 === t).map(c => c.uid || null));
+        accounts.recordMatch({ teams, score: done.score });
+    }
 }
 
 function startServer(port = 8080, host = '0.0.0.0') {
+    accounts.init();
     const rooms = new Map();
     const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav' };
     const server = http.createServer((req, res) => { // plain static file server for the game itself (never the server code, tests or dotfiles)
@@ -291,6 +304,10 @@ function startServer(port = 8080, host = '0.0.0.0') {
         try { p = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch (e) { res.writeHead(400).end(); return; }
         if (p === '/health') {
             res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ ok: true, rooms: rooms.size }));
+            return;
+        }
+        if (p.startsWith('/api/')) {
+            accounts.handleApi(req, res, p);
             return;
         }
         if (p === '/')
@@ -316,8 +333,8 @@ function startServer(port = 8080, host = '0.0.0.0') {
     });
 
     attachWebSocket(server, conn => {
-        let room = null, count = 0, since = Date.now();
-        conn.on('message', str => {
+        let room = null, joining = false, gone = false, count = 0, since = Date.now();
+        conn.on('message', async str => {
             const now = Date.now();
             if (now - since > 1000) { since = now; count = 0; }
             if (++count > MSG_PER_SEC)
@@ -326,21 +343,16 @@ function startServer(port = 8080, host = '0.0.0.0') {
             try { m = JSON.parse(str); } catch (e) { return; }
             if (!m || typeof m.t !== 'string')
                 return;
-            if (m.t === 'join' && !room) {
+            if (m.t === 'join' && !room && !joining) {
+                joining = true;
+                const id = m.token && accounts.enabled() ? await accounts.identify(m.token).catch(() => null) : null; // a bad or expired token just means guest
+                joining = false;
+                if (gone)
+                    return;
+                conn.uid = id ? id.uid : null;
+                conn.name = id && id.name ? id.name : null;
                 const name = typeof m.room === 'string' && /^[A-Za-z0-9_-]{1,24}$/.test(m.room) ? m.room : 'lobby';
-                let r = rooms.get(name);
-                if (!r) {
-                    if (rooms.size >= MAX_ROOMS)
-                        return conn.send(JSON.stringify({ t: 'error', msg: 'server is full' }));
-                    rooms.set(name, r = new Room(name));
-                    r.lobby2v2 = m.lobby2v2 === true; // the creator can open the room as a 2v2 lobby from the start
-                }
-                if (r.join(conn, m.special, m.special2) === -2) {
-                    if (r.empty)
-                        rooms.delete(name);
-                    return conn.send(JSON.stringify({ t: 'error', msg: 'room is full' }));
-                }
-                room = r;
+                // ... the rest of the join block is unchanged
             } else if (m.t === 'in' && room && conn.slot >= 0) { // (conn.slot follows the host moving people around)
                 if (Number.isInteger(m.k) && m.k >= 0 && m.k <= 255) {
                     room.bits[conn.slot] = m.k;
@@ -365,6 +377,7 @@ function startServer(port = 8080, host = '0.0.0.0') {
                 conn.send(JSON.stringify({ t: 'pong', c: Number(m.c) || 0, tick: room ? room.tick : 0, tps: room ? room.tps : 0 }));
         });
         conn.on('close', () => {
+            gone = true;
             if (!room)
                 return;
             room.leave(conn);

@@ -95,3 +95,9 @@ body.touch #touchui{display:block}
 .cline.sys{color:#98a2ad;font-style:italic}
 #chatinput{pointer-events:auto;font:inherit;color:#e8e8e4;background:rgba(11,14,18,.9);border:2px solid #9a63f0;border-radius:6px;padding:4px 8px;outline:none;width:100%;box-sizing:border-box;touch-action:manipulation;user-select:text;-webkit-user-select:text}
 #chatinput::placeholder{color:#7b8691}
+
+/* account information display */
+#acct form { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+#acct input { flex: 1 1 160px; min-width: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid #4a4466; background: #17132a; color: #fff; font: inherit; }
+#acct table { width: 100%; }
+#acct .num { text-align: right; }

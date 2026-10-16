@@ -224,7 +224,7 @@ const gameMenu = (() => {
         row.className = 'mem';
         const name = document.createElement('span');
         name.className = 'name';
-        name.textContent = 'Player ' + m.c;
+        name.textContent = m.name || 'Player ' + m.c;
         row.appendChild(name);
         for (const [flag, text] of [[m.c === net.you, 'YOU'], [m.host, 'HOST']])
             if (flag) {

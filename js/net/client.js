@@ -80,7 +80,11 @@ const net = {
         const ws = this.ws = new WebSocket(url);
         ws.onopen = () => {
             const want2v2 = typeof location !== 'undefined' && new URLSearchParams(location.search).get('2v2') === '1'; // ?room=NAME&2v2=1 opens a new room as a 2v2 lobby
-            ws.send(JSON.stringify({ t: 'join', room, special: (allPlayers[0] || {}).special, special2: (allPlayers[0] || {}).special2, lobby2v2: want2v2 }));
+            const me = allPlayers[0] || {};
+            Promise.resolve(typeof account !== 'undefined' ? account.freshToken() : null).catch(() => null).then(token => { // signed in? the server uses the token to know who you are
+                if (ws.readyState === 1)
+                    ws.send(JSON.stringify({ t: 'join', room, special: me.special, special2: me.special2, lobby2v2: want2v2, token: token || undefined }));
+            });
             this.pingTimer = setInterval(() => this.ws && this.ws.readyState === 1 && this.ws.send(JSON.stringify({ t: 'ping', c: performance.now() })), NET_PING_MS);
         };
         ws.onmessage = e => { try { this.onMessage(JSON.parse(e.data)); } catch (err) { console.error('bad message', err); } };

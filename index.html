@@ -30,6 +30,7 @@
 <button class="tab on" role="tab" data-tab="game" aria-selected="true">Game</button>
 <button class="tab" role="tab" data-tab="controls" aria-selected="false">Controls</button>
 <button class="tab" role="tab" data-tab="players" aria-selected="false">Players</button>
+<button class="tab" role="tab" data-tab="account" aria-selected="false">Account</button>
 </div>
 <button id="menuclose" class="x" aria-label="Close menu" title="Close (Esc)">&#10005;</button>
 </div>
@@ -132,6 +133,10 @@
 <div id="roster"></div>
 </section>
 
+<section data-panel="account" hidden>
+<div id="acct"></div>
+</section>
+
 </div>
 </div>
 
@@ -172,11 +177,13 @@
 <script src="js/audio/music.js"></script>
 <script src="js/keybinds.js"></script>
 <script src="js/input.js"></script>
+<script src="js/net/account.js"></script>
 <script src="js/net/client.js"></script>
 <script src="js/net/predict.js"></script>
 <script src="js/touch.js"></script>
 <script src="js/chat.js"></script>
 <script src="js/menu.js"></script>
+<script src="js/account-ui.js"></script>
 <script src="js/main.js"></script>
 </body></html>
 

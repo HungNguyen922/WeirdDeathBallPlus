@@ -1,7 +1,7 @@
 // ACCOUNT - the browser side of sign-in. Firebase Auth is called straight from here with plain fetch (no Firebase library to load);
 // the profile, settings and rankings go through the game server's /api routes with your sign-in token. Signed out = a guest: nothing is saved and the game works as before.
 // Load before net/client.js.
-const FIREBASE_API_KEY = ''; // PASTE: Firebase console > Project settings > General > Your apps > Web API key (public by design). Empty = accounts hidden.
+const FIREBASE_API_KEY = 'AIzaSyC4c73_n9vbuvTeeGiBGZqXQCwSZ2C6cAc'; // PASTE: Firebase console > Project settings > General > Your apps > Web API key (public by design). Empty = accounts hidden.
 const ACCOUNT_STORE = 'wdb-account'; // { refreshToken, uid, email }: what keeps you signed in on this device
 const SYNC_KEYS = ['wdb-keybinds', 'wdb-music', 'wdb-chat', 'wdb-floorfx']; // settings that follow your account (keep in step with SETTING_KEYS in js/server/accounts.js)
 const FB_ERRORS = {

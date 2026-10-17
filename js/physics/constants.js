@@ -239,7 +239,7 @@ const DASH_CAST = 0.1;                // s from pressing until the dash happens
 const DASH_COOLDOWN = 5;              // s before the next dash (on top of: one dash per trip off the floor)
 
 // --- Plinko ------------------------------------------------------------------------------------------------------------------------------------------------------
-const PEG_R = PL / 3;                 // plinko peg radius (u): half a player's size (r 8 vs 16). Bounce strength = the hatchet's (PAD_*)
+const PEG_R = PL / 2;                 // plinko peg radius (u): half a player's size (r 8 vs 16). Bounce strength = the hatchet's (PAD_*)
 const PEG_MAX = 2;                    // pegs per player: placing a new one removes the oldest
 const PEG_LIFE = 10;                  // seconds a peg lasts before it fizzles out
 const PLINKO_CAST = DASH_CAST;        // s from pressing until the peg is placed (same as dash)
@@ -260,9 +260,9 @@ const MARIONETTE_FX = 0.6;            // length (s) of its streak effect (displa
 // ball is light, BALL_M against a player's 1, so players knock it around). One per player: casting again (once DECOY_COOLDOWN has run out) removes the old one and puts a new
 // one at the new spot. The cooldown starts when the decoy appears.
 const DECOY_CAST = 1;                 // s from pressing until the decoy appears
-const DECOY_COOLDOWN = 20;            // s before the next decoy
-const DECOY_BOUNCE_PLAYER = 0.75;     // bounciness of a decoy against players (0 = dead stop, 1 = perfectly bouncy)
-const DECOY_BOUNCE_BALL = 0.8;        // bounciness of a decoy against the death ball and other decoys
+const DECOY_COOLDOWN = 5;            // s before the next decoy
+const DECOY_BOUNCE_PLAYER = 1;        // bounciness of a decoy against players (0 = dead stop, 1 = perfectly bouncy)
+const DECOY_BOUNCE_BALL = 1;          // bounciness of a decoy against the death ball and other decoys
 const DECOY_TELL = false;             // true = draw a dashed ring in the caster's color around the decoy (false = a perfect lookalike)
 
 // --- Arrow -------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -317,16 +317,18 @@ const BAT_WIND = 0.35;                // extra pull-back at full charge (rad, dr
 const BAT_CHARGE_T = 2;               // s to full charge
 const BAT_CHARGE_BONUS = 1;           // power added at full charge (0.5 = +50%, 1 = double)
 const BAT_V = 700;                    // ball: flat speed added (u/s)
-const BAT_KEEP = 1.15;                // ball: share of its own speed kept (above 1 = the swing speeds a moving ball up)
-const BAT_CARRY = 0.6;                // ball: share of the batter's own velocity added
-const BAT_VMAX = 1500;                // ball: speed cap (u/s)
-const BAT_VMAX_CHARGE = 300;          // ball: extra cap at full charge
+const BAT_KEEP = 1.25;                // ball: share of its own speed kept (above 1 = the swing speeds a moving ball up)
+const BAT_CARRY = 0.75;                // ball: share of the batter's own velocity added
+const BAT_VMAX = 3600;                // ball: speed cap (u/s)
+const BAT_VMAX_CHARGE = 250;          // ball: extra cap at full charge
 const BAT_AIM_W = 1;                  // ball: aim vs away blend (1 = exactly the direction held, 0 = straight away from the batter)
 const BAT_FX = 0.6;                   // streak length (s) drawn after a hit (display only)
-const BAT_PLAYER_V = 500;             // player hit: flat speed added (u/s)
-const BAT_PLAYER_KEEP = 0.5;          // player hit: share of the player's own speed kept
-const BAT_PLAYER_VMAX = 1800;         // player hit: speed cap (u/s)
+const BAT_PLAYER_V = 700;             // player hit: flat speed added (u/s)
+const BAT_PLAYER_KEEP = 1.25;          // player hit: share of the player's own speed kept
+const BAT_PLAYER_VMAX = 3600;         // player hit: speed cap (u/s)
 const BAT_HITS_TEAMMATES = true;      // the bat hits your teammate too
+const BAT_OVERCHARGE = true;          // a fully charged swing that hits a player also overcharges them (false = off)
+const BAT_OVERCHARGE_MIN = 1;         // how charged the swing must be (0..1; 1 = full charge only)
 
 // --- Barbwire ----------------------------------------------------------------------------------------------------------------------------------------------------
 // Hold the special key to make your grapple rope (the hook in flight, then the tether) lethal: any other player whose body touches it dies (teammates too if

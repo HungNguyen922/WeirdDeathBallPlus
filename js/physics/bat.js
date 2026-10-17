@@ -51,6 +51,8 @@ function batStep(p, c, ball) {
         const out = isArrow ? Math.min(BAT_ARROW_VMAX + BAT_VMAX_CHARGE * c.pow, (BAT_ARROW_V + BAT_ARROW_KEEP * sp) * pow)
             : isPlayer ? Math.min(BAT_PLAYER_VMAX * pow, (BAT_PLAYER_V + BAT_PLAYER_KEEP * sp) * pow) : Math.min(BAT_VMAX + BAT_VMAX_CHARGE * c.pow, (BAT_V + BAT_KEEP * sp) * pow);
         const nvx = ux * out + p.vx * BAT_CARRY, nvy = uy * out + p.vy * BAT_CARRY;
+        if (isPlayer && BAT_OVERCHARGE && c.pow >= BAT_OVERCHARGE_MIN)
+            b.overcharge(); // a fully charged swing also overcharges the player it hits
         if (isArrow)
             arrowKnock(b, nvx, nvy, ARROW_DEFLECT_TEAM ? p.team : null, ARROW_DEFLECT_TEAM ? p : null);
         else {

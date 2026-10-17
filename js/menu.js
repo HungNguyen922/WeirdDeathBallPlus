@@ -163,6 +163,21 @@ const gameMenu = (() => {
         teamBtn.disabled = !net.host;
         teamBtn.title = net.host ? 'On: new players fill Blue, Red, Blue 2 and Red 2 automatically, and the match starts once all four seats are taken (restarts the match). Off: new players wait for you to place them.' : 'Only the host (the player who created the room) can change this.';
     }
+    // "Ranked" toggle (online only): the host decides whether the match counts toward ratings. The label follows the roster message, so it catches up a moment after the click.
+    const rankedBtn = document.getElementById('rankedmode');
+    function labelRanked() {
+        if (!rankedBtn)
+            return;
+        rankedBtn.style.display = net.on ? '' : 'none'; // there is no ranked play offline
+        if (!net.on)
+            return;
+        rankedBtn.textContent = 'Ranked: ' + (net.ranked ? 'On' : 'Off');
+        rankedBtn.classList.toggle('on', !!net.ranked);
+        rankedBtn.disabled = !net.host;
+        rankedBtn.title = net.host ? 'On: the match counts toward ratings (everyone seated must be signed in). Turning this on or off restarts the match.' : 'Only the host (the player who created the room) can change this.';
+    }
+    if (rankedBtn)
+        rankedBtn.addEventListener('click', () => { if (net.on && net.host) net.setRanked(!net.ranked); });
         // Special ability picker: big buttons for every special. Online it drives your own seat. Offline it gets one row per human-controlled player in the match (Blue, Red), so
     // free-swap works from the menu without the keycaps on the wall; computer players always use Dash, and 2v2 teammates always use Dash, so they get no row.
     function renderPicker() {
@@ -310,6 +325,7 @@ const gameMenu = (() => {
         labelTwo();
         labelSwap();
         labelTeams();
+        labelRanked();
         renderPicker();
         renderRoster();
     }
@@ -323,6 +339,7 @@ const gameMenu = (() => {
         labelTwo();
         labelSwap();
         labelTeams();
+        labelRanked();
         renderPicker();
         renderRoster();
         menu.hidden = false;

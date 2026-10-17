@@ -50,7 +50,7 @@ function netClearAI() { // online every seat is a person: the offline AI flags m
 }
 
 const net = {
-    on: false, slot: -1, ws: null, room: '', running: false, rtt: 0, status: '', lobby2v2: false,
+    on: false, slot: -1, ws: null, room: '', running: false, rtt: 0, status: '', lobby2v2: false, ranked: false,
     members: [], you: 0,
     keys: noKeys(), seq: 0, ack: 0, pendingSpecial: null, pendingSpecial2: null,
     dtMs: 1000 / 120, snapEvery: 4,
@@ -67,7 +67,7 @@ const net = {
         const who = this.slot >= 0 ? 'you are ' + (this.slot % 2 === 0 ? 'Blue' : 'Red') + (this.slot >= 2 ? ' 2' : '') : 'spectating';
         const seated = this.members.filter(m => m.slot >= 0).length;
         const state = !this.running ? (this.lobby2v2 ? ` - 2v2 lobby: waiting for players (${seated}/4)...` : this.slot >= 0 ? ' - waiting for an opponent...' : ' - waiting for players...') : '';
-        return `Online, room "${this.room}": ${who}${state}${this.rtt ? ` (ping ${Math.round(this.rtt)} ms${this.tps ? `, server ${this.tps} ticks/s` : ''}${this.extra ? ', ' + this.extra() : ''}, buffer ${Math.round(this.delayMs)} ms)` : ''}`;
+        return `Online${this.ranked ? ' (ranked)' : ''}, room "${this.room}": ${who}${state}${this.rtt ? ` (ping ${Math.round(this.rtt)} ms${this.tps ? `, server ${this.tps} ticks/s` : ''}${this.extra ? ', ' + this.extra() : ''}, buffer ${Math.round(this.delayMs)} ms)` : ''}`;
     },
     join(room, server) {
         if (this.ws)
@@ -115,6 +115,7 @@ const net = {
         } else if (m.t === 'roster') {
             this.running = m.running;
             this.lobby2v2 = !!m.lobby2v2;
+            this.ranked = !!m.ranked;
             this.host = !!m.host;
             this.members = m.members || [];
             this.you = m.you;
@@ -191,6 +192,10 @@ const net = {
     setLobby2v2(v) { // host only (the server checks): make the room a 2v2 lobby, or turn that off
         if (this.ws && this.ws.readyState === 1)
             this.ws.send(JSON.stringify({ t: 'lobby2v2', v: !!v }));
+    },
+    setRanked(v) { // host only (the server checks): rate this match (needs everyone signed in) or play it casually. Restarts the match.
+        if (this.ws && this.ws.readyState === 1)
+            this.ws.send(JSON.stringify({ t: 'ranked', v: !!v }));
     },
     sendChat(text) { // returns false when there is no open connection (chat.js then tells the player)
         if (!this.ws || this.ws.readyState !== 1)

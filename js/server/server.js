@@ -67,6 +67,7 @@ class Room {
         this.fixed = false; // specials only on pick screens
         this.twoSpecials = false; // the host's "two specials per player" option
         this.swapSides = true; // the host's "switch sides every 5 points" option
+        this.ranked = false; // the host's "Ranked" option: only a ranked match changes ratings. Needs everyone seated signed in (see rankedOk)
         this.lobby2v2 = false; // 2v2 lobby: newcomers fill all four seats automatically and the match waits until every seat is taken
         this.tick = 0;
         this.running = false;
@@ -119,6 +120,10 @@ class Room {
                 c.moved = false;
                 c.send(JSON.stringify({ t: 'slot', slot: c.slot }));
             }
+        if (this.ranked && !this.rankedOk()) {
+            this.ranked = false;
+            this.say('Ranked is off: everyone seated has to be signed in.');
+        }
         const need = this.lobby2v2 ? TEAM_MAX : 1; // a 2v2 lobby waits for full teams, otherwise one player each is enough
         const ready = this.teamCount(0) >= need && this.teamCount(1) >= need; // an empty (or, in a 2v2 lobby, unfilled) team means the match waits
         if (ready && (changed || !this.running))
@@ -215,6 +220,29 @@ class Room {
         if (this.running)
             this.start();
     }
+    say(text, only) { // a note in everybody's chat (or just `only`'s)
+        const msg = JSON.stringify({ t: 'chat', sys: true, text });
+        for (const c of only ? [only] : this.conns)
+            c.send(msg);
+    }
+    rankedOk() { // can the current match be rated? accounts on, both teams seated, everybody seated signed in with a name, nobody sitting twice
+        if (!accounts.enabled())
+            return false;
+        const seated = this.seats.filter(Boolean), ids = seated.map(c => c.uid);
+        return this.teamCount(0) >= 1 && this.teamCount(1) >= 1 && seated.every(c => c.uid && c.name) && new Set(ids).size === ids.length;
+    }
+    setRanked(conn, v) { // the host's Ranked switch. Either way it restarts the match, so a ranked match always starts at 0-0.
+        v = !!v;
+        if (v === this.ranked)
+            return;
+        if (v && !this.rankedOk())
+            return this.say('Ranked needs everyone seated to be signed in with a name.', conn);
+        this.ranked = v;
+        this.say(v ? 'The host turned Ranked on: this match counts toward ratings. The match restarts.' : 'The host turned Ranked off: casual match. The match restarts.');
+        if (this.running)
+            this.start();
+        this.roster(); // carries the new setting
+    }
     setLobby2v2(v) { // the host's 2v2 switch. On: everyone already waiting takes the open seats and the match waits for all four. Off: back to host-placed teams; nobody is moved off a team.
         this.lobby2v2 = !!v;
         this.fillSeats();
@@ -239,7 +267,7 @@ class Room {
         const members = [...this.conns]
             .sort((a, b) => (a.slot < 0) - (b.slot < 0) || a.slot - b.slot || a.order - b.order) // seated by seat, then the waiting list in order
             .map(c => ({ c: c.cid, team: c.team, slot: c.slot, host: c === this.host, name: c.name || null }));
-        const base = { t: 'roster', slots: this.seats.map(Boolean), spectators: members.filter(m => m.slot < 0).length, running: this.running, lobby2v2: this.lobby2v2, members };
+        const base = { t: 'roster', slots: this.seats.map(Boolean), spectators: members.filter(m => m.slot < 0).length, running: this.running, lobby2v2: this.lobby2v2, ranked: this.ranked, members };
         for (const c of this.conns)
             c.send(JSON.stringify({ ...base, host: c === this.host, you: c.cid }));
     }
@@ -288,7 +316,7 @@ class Room {
                 c.send(head + '0' + tail);
     }
     matchOver(done) { // Blue sits in seats 0 and 2, Red in 1 and 3. Rated only if everyone seated is signed in (accounts.recordMatch checks that).
-        if (!accounts.enabled())
+        if (!this.ranked || !accounts.enabled())
             return;
         const teams = [0, 1].map(t => this.seats.filter((c, i) => c && i % 2 === t).map(c => c.uid || null));
         accounts.recordMatch({ teams, score: done.score });
@@ -352,7 +380,19 @@ function startServer(port = 8080, host = '0.0.0.0') {
                 conn.uid = id ? id.uid : null;
                 conn.name = id && id.name ? id.name : null;
                 const name = typeof m.room === 'string' && /^[A-Za-z0-9_-]{1,24}$/.test(m.room) ? m.room : 'lobby';
-                // ... the rest of the join block is unchanged
+                let r = rooms.get(name);
+                if (!r) {
+                    if (rooms.size >= MAX_ROOMS)
+                        return conn.send(JSON.stringify({ t: 'error', msg: 'server is full' }));
+                    rooms.set(name, r = new Room(name));
+                    r.lobby2v2 = m.lobby2v2 === true; // the creator can open the room as a 2v2 lobby from the start
+                }
+                if (r.join(conn, m.special, m.special2) === -2) {
+                    if (r.empty)
+                        rooms.delete(name);
+                    return conn.send(JSON.stringify({ t: 'error', msg: 'room is full' }));
+                }
+                room = r;
             } else if (m.t === 'in' && room && conn.slot >= 0) { // (conn.slot follows the host moving people around)
                 if (Number.isInteger(m.k) && m.k >= 0 && m.k <= 255) {
                     room.bits[conn.slot] = m.k;
@@ -367,6 +407,8 @@ function startServer(port = 8080, host = '0.0.0.0') {
                 room.setFixed(m.v);
             else if (m.t === 'swap' && room && room.host === conn)
                 room.setSwap(m.v);
+            else if (m.t === 'ranked' && room && room.host === conn)
+                room.setRanked(conn, m.v);
             else if (m.t === 'lobby2v2' && room && room.host === conn)
                 room.setLobby2v2(m.v);
             else if (m.t === 'assign' && room && room.host === conn)

@@ -42,6 +42,7 @@ function drawScene() {
     drawDashStreaks();
     drawPlayerTrails();
     drawPlayers();
+    drawNames();
     drawBalls();
     drawImpacts();
     drawArrows();

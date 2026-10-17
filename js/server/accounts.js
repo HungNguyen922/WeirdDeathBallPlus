@@ -23,10 +23,12 @@ function init() { // once; returns true if accounts are on
     if (!raw)
         return false;
     try {
-        const admin = require('firebase-admin');
-        admin.initializeApp({ credential: admin.credential.cert(JSON.parse(raw)) });
-        auth = admin.auth();
-        db = admin.firestore();
+        const { initializeApp, cert } = require('firebase-admin/app');
+        const { getAuth } = require('firebase-admin/auth');
+        const { getFirestore } = require('firebase-admin/firestore');
+        initializeApp({ credential: cert(JSON.parse(raw)) });
+        auth = getAuth();
+        db = getFirestore();
         console.log('  accounts: on (Firebase)');
         return true;
     } catch (e) {

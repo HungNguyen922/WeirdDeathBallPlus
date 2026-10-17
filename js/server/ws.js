@@ -24,6 +24,9 @@ class Conn extends EventEmitter {
         socket.on('close', () => this.end());
         socket.on('error', () => this.end());
     }
+    backlog() { // bytes queued for this client that the network has not taken yet
+        return this.open ? this.socket.writableLength : 0;
+    }
     send(str) {
         if (this.open)
             this.write(0x1, Buffer.from(str, 'utf8'));

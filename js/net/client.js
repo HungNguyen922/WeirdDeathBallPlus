@@ -8,6 +8,7 @@
 const NET_BITS = { l: 1, r: 2, up: 4, dn: 8, z: 16, x: 32, sp: 64, sp2: 128 }; // must match server/server.js
 const NET_DELAY_MS = 100; // how far in the past we draw to start with; it then adapts to the connection (below)
 const NET_DELAY_MIN = 70, NET_DELAY_MAX = 260; // limits for the adaptive delay (ms): about two snapshots at the least, a quarter second at the most
+const NET_CLOCK_WINDOW = 150; // snapshots (about 5 s) the clock estimate looks back over
 const NET_PING_MS = 500; // how often we measure the round trip
 const NET_TELEPORT = 150; // a body that moved further than this between two snapshots was reset / respawned: do not slide it across the arena
 
@@ -27,7 +28,7 @@ function netMix(a, b, u, key) { // blend two pieces of plain data: numbers slide
     return u < 0.5 ? a : b;
 }
 function netMixBody(a, b, u) { // a player, the ball, a decoy, a peg or an arrow
-    if (!a || Math.hypot(b.x - a.x, b.y - a.y) > NET_TELEPORT)
+    if (!a || !b || Math.hypot(b.x - a.x, b.y - a.y) > NET_TELEPORT)
         return u < 0.5 ? a : b;
     return netMix(a, b, u);
 }
@@ -54,7 +55,7 @@ const net = {
     members: [], you: 0,
     keys: noKeys(), seq: 0, ack: 0, pendingSpecial: null, pendingSpecial2: null,
     dtMs: 1000 / 120, snapEvery: 4,
-    buf: [], evq: [], off: 0, lastSnapAt: 0, cur: null, shown: null, shape: null, skipEvent: null, jit: 0, delayMs: NET_DELAY_MS,
+    clk: [], buf: [], evq: [], off: 0, lastSnapAt: 0, cur: null, shown: null, shape: null, skipEvent: null, jit: 0, delayMs: NET_DELAY_MS,
     setStatus(t) {
         this.status = t;
         const el = document.getElementById('netstatus');
@@ -101,6 +102,9 @@ const net = {
             this.slot = m.slot;
             this.dtMs = 1000 / m.hz;
             this.snapEvery = m.snapEvery;
+            if (typeof setTimeout === 'function')
+                for (const d of [0, 120, 240, 360]) // measure the round trip now, not 500 ms from now: until the first pong the predictor runs with rtt = 0
+                    setTimeout(() => this.ws && this.ws.readyState === 1 && this.ws.send(JSON.stringify({ t: 'ping', c: performance.now() })), d);
             this.setStatus(this.describe());
         } else if (m.t === 'slot') { // the host moved me: new seat, so forget the old seat's keys and prediction
             this.slot = m.slot;
@@ -141,8 +145,18 @@ const net = {
             this.reset();
             events.onNewRound();
         }
+        if (this.buf.length && m.tick === this.buf[this.buf.length - 1].tick) { // the same tick again (a paused room re-sends its board): refresh it, but it says nothing about the connection, so keep it out of the clock and jitter estimates
+            this.buf[this.buf.length - 1].s = m.s;
+            for (const e of m.ev)
+                this.evq.push(e);
+            this.ack = m.ack;
+            return;
+        }
         const sample = now - m.tick * this.dtMs; // how long after "server time zero" this packet arrived; the smallest recent value is the best clock estimate
-        this.off = this.buf.length ? Math.min(sample, this.off + (now - this.lastSnapAt) * 0.0005) : sample;
+        this.clk.push(sample); // the best clock estimate is the smallest arrival offset over the last NET_CLOCK_WINDOW snapshots. The old "minimum that creeps up 0.5 ms a second" stayed wrong for minutes after any server hiccup (a stall pushes every later sample up for good): that inflated the buffer to its maximum and made the predictor run too far ahead, so my own player was corrected on every snapshot
+        if (this.clk.length > NET_CLOCK_WINDOW)
+            this.clk.shift();
+        this.off = Math.min(...this.clk);
         const queue = Math.max(0, sample - this.off); // how much later than the best packet this one arrived: the jitter
         this.jit += (queue - this.jit) * (queue > this.jit ? 0.3 : 0.02); // reacts fast to a spike, recovers slowly
         this.delayMs += (Math.min(NET_DELAY_MAX, Math.max(NET_DELAY_MIN, 40 + 2 * this.jit)) - this.delayMs) * 0.05; // the buffer we draw behind: just enough for the jitter we measure
@@ -155,6 +169,7 @@ const net = {
         this.ack = m.ack;
     },
     reset() {
+        this.clk = [];
         this.buf = [];
         this.evq = [];
         this.cur = null;
@@ -169,6 +184,7 @@ const net = {
             this.ws.send(JSON.stringify({ t: 'in', n: ++this.seq, k: bits }));
     },
     setSpecial(id, slot = 0) { // slot 0 = first special, 1 = second
+        this.pendingAt = performance.now();
         if (slot)
             this.pendingSpecial2 = id;
         else
@@ -228,6 +244,8 @@ const net = {
         loadState(st);
         if (this.slot >= 0) { // my own side shows what I am pressing right now, not what the server heard a round trip ago
             Object.assign(allPlayers[this.slot].keys, this.keys);
+            if ((this.pendingSpecial || this.pendingSpecial2) && performance.now() - (this.pendingAt || 0) > 1500)
+                this.pendingSpecial = this.pendingSpecial2 = null; // the server never confirmed it (it refuses changes on pick screens): stop forcing the display
             if (this.pendingSpecial) {
                 if (allPlayers[this.slot].special === this.pendingSpecial)
                     this.pendingSpecial = null;

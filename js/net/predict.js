@@ -129,6 +129,8 @@ function predReconcile(T, s, ack) {
         pred.err.x = pred.err.y = pred.errBall.x = pred.errBall.y = 0;
         return 0;
     }
+    if (oldTick !== pred.tick)
+        return 0; // the predictor was behind the snapshot: the two states are different moments, comparing them would invent a correction
     const me = pred.state.players[slot], dx = old.x - me.x, dy = old.y - me.y, e = Math.hypot(dx, dy);
     if (e > PRED_SNAP_DIST)
         pred.err.x = pred.err.y = 0;
@@ -185,7 +187,7 @@ function predShape(mixed) {
         const idxOf = owner => list.findIndex(d => d.owner === owner) + 1; // 0 = no such decoy in this picture
         out.decoys = list;
         out.players = mixed.players.map((q, i) => {
-            if (i === slot)
+            if (!q || i === slot)
                 return q; // replaced below
             if (q.onBall && q.tball === 0 && q.rope) { // tethered to the ball: their hook is on the ball's edge, so move it with the ball
                 const ang = out.ball.th + q.hookAng;

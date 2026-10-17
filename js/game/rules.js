@@ -318,7 +318,7 @@ function update() {
         if (d.dead)
             removeDecoy(d);
         else if (sc !== null)
-           return point(sideSwap(scorer), 'scores!');
+            return point(sideSwap(sc), 'scores!'); // (this used the ball's result, which is null here: a decoy goal awarded a nonsense point)
     }
     for (let i = 0; i < decoys.length; i++) { // decoys are solid: they bump into players, the death ball and each other (the death ball itself still just kills)
         const d = decoys[i];

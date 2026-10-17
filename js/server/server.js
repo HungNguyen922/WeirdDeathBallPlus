@@ -32,6 +32,7 @@ const accounts = require('./accounts.js');
 
 const TICK_HZ = 120, DT_MS = 1000 / TICK_HZ;
 const SNAP_EVERY = [1, 2, 3, 4, 5, 6].includes(+process.env.SNAP_EVERY) ? +process.env.SNAP_EVERY : 4; // a snapshot every 4 ticks = 30 Hz. SNAP_EVERY=2 node js/server/server.js sends 60 Hz: a little less lag, about twice the bandwidth (clients adapt, the value is sent in 'welcome')
+const SNAP_BACKLOG = 48 * 1024; // a client with more than this still unsent skips snapshots (each one is the full world, so a skipped one costs nothing; a queue of stale ones makes it lag for seconds)
 const MAX_CATCHUP = 8; // never run more than this many ticks in one go (after a stall, drop the debt instead of spiralling)
 const MAX_ROOMS = 50, MAX_SPECTATORS = 8, MSG_PER_SEC = 400;
 const CHAT_MAX = 120, CHAT_BURST = 5, CHAT_WINDOW_MS = 5000; // chat: longest message, and at most CHAT_BURST messages per CHAT_WINDOW_MS per player
@@ -177,6 +178,7 @@ class Room {
             if (!c)
                 return;
             ids.push(i);
+            sim.run('allPlayers[' + i + '].special2 = ' + JSON.stringify(c.special2)); // was never applied, so a second special chosen on joining was ignored
             sim.run(`allPlayers[${i}].special = '${c.special}'`); // before the restart, so a pick screen opens with the right choice highlighted
         });
         sim.run(`pickFixed = ${this.fixed}`);
@@ -307,13 +309,25 @@ class Room {
     }
     snapshot() {
         const ctx = this.sim.ctx;
-        const s = JSON.stringify(ctx.saveState()), ev = JSON.stringify(ctx.__ev);
+        const s = JSON.stringify(ctx.saveState()), evNew = ctx.__ev.slice();
         ctx.__ev.length = 0;
-        const head = `{"t":"snap","tick":${this.tick},"ack":`, tail = `,"s":${s},"ev":${ev}}`;
-        this.seats.forEach((c, i) => c && c.send(head + this.seq[i] + tail));
+        const evJson = JSON.stringify(evNew);
+        const out = (c, ack) => {
+            if (c.backlog() > SNAP_BACKLOG) { // not keeping up: skip this one, but keep its effects for the next one it gets
+                c.heldEv = (c.heldEv || []).concat(evNew).slice(-80);
+                return;
+            }
+            let ev = evJson;
+            if (c.heldEv) {
+                ev = JSON.stringify(c.heldEv.concat(evNew));
+                c.heldEv = null;
+            }
+            c.send('{"t":"snap","tick":' + this.tick + ',"ack":' + ack + ',"s":' + s + ',"ev":' + ev + '}');
+        };
+        this.seats.forEach((c, i) => c && out(c, this.seq[i]));
         for (const c of this.conns)
             if (c.slot < 0)
-                c.send(head + '0' + tail);
+                out(c, 0);
     }
     matchOver(done) { // Blue sits in seats 0 and 2, Red in 1 and 3. Rated only if everyone seated is signed in (accounts.recordMatch checks that).
         if (!this.ranked || !accounts.enabled())

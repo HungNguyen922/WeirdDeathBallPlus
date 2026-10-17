@@ -183,14 +183,15 @@ console.log('\nmy own hit effects fire at predicted time and their server copies
 {
     const S = loadSim(), C = makeClient(), LAG = 12, r = rng(77);
     for (const sim of [S, C]) { sim.run('setTeamSize(1)'); sim.run("players[0].special = 'bat'; players[1].special = 'dash'"); }
-    S.run('players[0].x = players[0].sx = NETX - 60'); // standing beside the ball, so swings connect
+    S.run('players[0].x = players[0].sx = NETX - 50'); // standing beside the ball, so swings connect (the loop below steers to stay on the ridge: it slopes away and is slippery)
     C.run('var __pf = []; events.onBatHit = (p, b, x, y, ux, uy, k) => __pf.push(pred.tick); events.onImpact = () => {};');
     S.run('var __sv = []; var __tk = 0; events.onBatHit = (p, b) => __sv.push(__tk); events.onImpact = () => {};');
     const inflightIn = [], inflightSnap = [];
     let bits = 0, seq = 0, applied = 0, serverSeq = 0;
-    for (let n = 1; n <= 3000; n++) {
+    for (let n = 1; n <= 4000; n++) {
         let nb = bits;
-        if (r() < 0.03) nb ^= NET_BITS.sp; // only swing: stand still beside the ball
+        if (r() < 0.03) nb ^= NET_BITS.sp; // swing
+        { const px = S.run('players[0].x'); nb = (nb & ~(NET_BITS.l | NET_BITS.r)) | (px > 436 ? NET_BITS.l : 0) | (px < 428 ? NET_BITS.r : 0); } // hold position 52-60 u from the ball (inside the bat's reach, outside touching distance)
         if (nb !== bits) {
             bits = nb; ++seq;
             C.ctx.__b = bits; C.ctx.__q = seq; C.ctx.__base = n - 1 + LAG;
@@ -225,7 +226,7 @@ console.log('\nmy own hit effects fire at predicted time and their server copies
 console.log('\nwhat is DRAWN for my rope and decoy (the drawn world is older than the predicted one)');
 function drawnInvariants({ LAG, DELAY, seed, special, script, ticks, opp }) {
     const S = loadSim(), C = makeClient(), r = rng(seed), hist = [];
-    for (const sim of [S, C]) { sim.run('setTeamSize(1)'); sim.run(`players[0].special = '${special}'; players[1].special = 'decoy'`); }
+    for (const sim of [S, C]) { sim.run('setTeamSize(1)'); sim.run(`players[0].special = '${special}'; players[1].special = 'decoy'`); sim.run('for (const p of players) for (const k in p.cd) p.cd[k] = 0'); } // (specials start on full cooldown now, START_CD = 1: clear it so the scripted cast at tick 10 happens)
     const inflightIn = [], inflightSnap = [];
     let bits = 0, seq = 0, applied = 0, serverSeq = 0, bits1 = 0;
     const res = { frames: 0, tetheredDecoy: 0, decoyDrawnEarly: 0, ropeOff: 0, ropeOffOpp: 0, worst: 0, worstOpp: 0, rawOpp: 0, myDecoyMissing: 0, sawMyDecoy: 0, wrongTarget: 0 };

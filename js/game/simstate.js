@@ -59,7 +59,7 @@ function saveState() {
         pick: cloneData(pick), pickFixed,
         sidesSwapped, swapAt, swapOn, twoSpecials, swapBanner,
         inMatch: players.map(p => p.id), // who is in the current match, in order
-        players: allPlayers.map(player),
+        players: allPlayers.map(p => (players.includes(p) ? player(p) : null)), // players that are not in the match are not sent: they are idle, and they were half of every 1v1 snapshot
         ball: body(ball),
         decoys: decoys.map(body),
         pegs: pegs.map(owned),
@@ -100,6 +100,8 @@ function loadState(s) {
     // Players: wipe every field the snapshot does not mention (a field that was added later in the sim would otherwise leak through), then copy.
     allPlayers.forEach((p, i) => {
         const o = s.players[i];
+        if (!o)
+            return; // not in the match: left as it is
         for (const k of Object.keys(p))
             if (!(k in o))
                 delete p[k];
@@ -149,7 +151,7 @@ function loadState(s) {
             stuckSegs.push([a.x - Math.cos(a.ang) * ARROW_LEN, a.y - Math.sin(a.ang) * ARROW_LEN, a.x, a.y]);
     // Tethers last, once the decoys exist.
     allPlayers.forEach((p, i) => {
-        const r = s.players[i].tball;
+        const r = s.players[i] ? s.players[i].tball : null;
         p.tball = r === null ? null : r === 0 ? ball : decoys[r - 1] || null;
     });
 }

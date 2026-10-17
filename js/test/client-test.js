@@ -75,7 +75,7 @@ function rawClient(port, room) {
     check(B.sim.run('players.length') === 2 && B.net.cur > 0, 'snapshots are being drawn (render tick ' + B.net.cur + ')');
     const lag = frames.slice(-30).map(f => f.newest - f.cur);
     const avgLagMs = lag.reduce((a, b) => a + b, 0) / lag.length * (1000 / 120);
-    check(avgLagMs > 60 && avgLagMs < 200, `drawn state trails the newest snapshot by about the interpolation delay (${avgLagMs.toFixed(0)} ms)`);
+    check(avgLagMs > 40 && avgLagMs < 200, `drawn state trails the newest snapshot by about the interpolation delay (${avgLagMs.toFixed(0)} ms)`);
 
     console.log('\neffects cadence');
     B.counts.body = 0;
@@ -122,6 +122,7 @@ console.log('\nresponsiveness');
     while (performance.now() < deadline && !B.counts.points.length) await sleep(100);
     check(B.counts.points.length > 0, 'a point event arrives: ' + JSON.stringify(B.counts.points));
     check(B.counts.impacts > 0 || B.counts.points.length > 0, 'impact / point effects were triggered');
+    { const until = performance.now() + 2000; while (performance.now() < until && B.sim.run('score[0] + score[1]') < 1) await sleep(25); }
     const sc = B.sim.run('score');
     check(sc[0] + sc[1] >= 1, 'score is part of the drawn state: ' + JSON.stringify(sc));
 

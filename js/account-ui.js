@@ -107,7 +107,7 @@
     }
     function loadBoard() {
         boardMsg = 'Loading...';
-        fetch(account.base + '/api/leaderboard').then(r => r.json()).then(j => { board = j.rows || []; boardMsg = j.error || ''; }).catch(() => { boardMsg = 'Could not load the leaderboard.'; }).finally(render);
+        fetch(account.base + '/api/leaderboard').then(r => r.json()).then(j => { if (j.error) { board = null; boardMsg = j.error; } else { board = j.rows || []; boardMsg = ''; } });
     }
     account.listeners.push(render);
     document.querySelector('[data-tab="account"]').addEventListener('click', () => { if (!board) loadBoard(); });

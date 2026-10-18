@@ -22,8 +22,8 @@ const check = (ok, msg) => { if (!ok) fails++; console.log((ok ? 'ok   ' : 'FAIL
 const run = c => vm.runInContext(c, ctx);
 const reset = () => run(`
 players[0].x = 100; players[0].y = 300; players[0].vx = 11; players[0].vy = 12; players[0].alive = true; players[0].cd.swap = 0; players[0].scast = null; players[0].swapHeld = false; players[0].swapAng = 0; players[0].keys.sp = 0; players[0].keys.x = 0; players[0].pcast = null; players[0].casts = [];
-players[1].x = 800; players[1].y = 100; players[1].alive = true;
-ball.x = 900; ball.y = 50; decoys.length = 0; arrows.length = 0; boomerangs.length = 0;`);
+players[1].x = 700; players[1].y = 600; players[1].alive = true;
+ball.x = 700; ball.y = 20; decoys.length = 0; arrows.length = 0; boomerangs.length = 0;`);
 
 // 1. what is in the cone (aim = 0, i.e. pointing right; the cone reaches 15 PL = 480 u)
 reset();
@@ -35,7 +35,7 @@ check(run('swapPick(players[0], 0, false) === decoys[0] && swapPick(players[0], 
 run('decoys[0].dead = true');
 check(run('swapPick(players[0], 0, false) === arrows[0]'), 'a dead decoy is not a target, and an arrow stuck in the terrain is');
 run('arrows.length = 0');
-run('boomerangs[0].x = 100 + 480 + 40');
+run('boomerangs[0].x = 100 + SWAP_RANGE + 40');
 check(run('swapPick(players[0], 0, true) === null'), 'beyond the cone\'s range nothing is picked (and the player never picks themselves)');
 run('boomerangs[0].x = 300; boomerangs[0].y = 300 + 300 * Math.tan(SWAP_HALF + 0.2)');
 check(run('swapPick(players[0], 0, false) === null'), 'outside the cone\'s angle nothing is picked');

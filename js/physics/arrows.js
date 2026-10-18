@@ -186,6 +186,7 @@ function stepArrows() {
             a.y += a.vy * DT / n;
             portalPass(a, true); // PORTAL: carried through a portal if its centre is inside one
             arrowPegBounce(a);
+            arrowBumpPlayers(a);   // teammates, the shooter (after the grace time) and spent arrows are solid
             if (!a.spent && arrowStrike(a)) { // it has done its one hit: it bounces off limp and keeps falling, still a solid thing that can stick in the terrain
                 arrowBumpPlayers(a);
                 a.spent = true;

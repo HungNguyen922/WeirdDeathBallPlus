@@ -258,13 +258,16 @@ function drawnInvariants({ LAG, DELAY, seed, special, script, ticks, opp }) {
         const out = C.run('predShape(__m)');
         res.frames++;
         const me = out.players[0];
-        if (C.run('pred.state.players[0].tball') > 0) {
+        const frozen = C.run('pred.state.pause') > 0 || hist[drawnTick].pause > 0; // predShape deliberately falls back to the drawn world during a goal pause
+        if (!frozen && C.run('pred.state.players[0].tball') > 0) {
             res.tetheredDecoy++;
             const d = out.decoys[me.tball - 1];
             if (!d) { res.wrongTarget++; continue; }
             const off = Math.abs(Math.hypot(me.rope.x - d.x, me.rope.y - d.y) - d.r);
+            const ps = C.run('pred.state'), pme = ps.players[0], pd = ps.decoys[pme.tball - 1];
+            const inherent = pd ? Math.abs(Math.hypot(pme.rope.x - pd.x, pme.rope.y - pd.y) - pd.r) : 0; // the sim's own one-tick order error, which grows with the decoy's speed
             res.worst = Math.max(res.worst, off);
-            if (off > 1) res.ropeOff++;
+            if (off > inherent + 0.5) res.ropeOff++;   // the drawn rope may differ from the sim only by that; a wrong decoy would be far more
         }
         const mineDrawn = out.decoys.find(d => d.owner === 0), mineReal = hist[n].decoys.find(d => d.owner === 0), mineOld = hist[drawnTick].decoys.find(d => d.owner === 0);
         if (mineReal) res.sawMyDecoy++;

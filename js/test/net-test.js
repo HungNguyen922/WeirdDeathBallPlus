@@ -65,7 +65,8 @@ const get = (port, p) => new Promise(res => http.get({ port, host: '127.0.0.1', 
     const t0 = performance.now();
     await sleep(1000);
     const dur = (performance.now() - t0) / 1000;
-    const rate = a.snaps.length / dur;
+    const span = (a.last().at - a.snaps[0].at) / 1000;
+    const rate = (a.snaps.length - 1) / span;
     check(rate > 26 && rate < 34, `snapshot rate ~30 Hz (measured ${rate.toFixed(1)})`);
     check(a.snaps.every((s, i) => i === 0 || s.tick - a.snaps[i - 1].tick === 4), 'snapshot ticks advance by 4 (every 4th sim tick), none missing');
     const ticksPerSec = (a.last().tick - a.snaps[0].tick) / ((a.last().at - a.snaps[0].at) / 1000);
@@ -90,9 +91,9 @@ const get = (port, p) => new Promise(res => http.get({ port, host: '127.0.0.1', 
     await sleep(100);
     check(a.last().s.players[0].keys.r === false, 'releasing the keys is applied');
     // a spectator's input is ignored
-    const wx = w.last().s.players[0].x;
+    const wt = w.last().tick;
     w.send({ t: 'in', n: 1, k: BIT.r });
-    await sleep(300);
+    for (let i = 0; i < 40 && w.last().tick < wt + 12; i++) await sleep(25);
     check(w.last().s.players[0].keys.r === false, 'a spectator cannot steer');
 
     console.log('\nspecial + ping + garbage');

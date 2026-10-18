@@ -10,7 +10,7 @@ const T = 'SMOKE_T', CD = 'SMOKE_COOLDOWN';
 
 {
     const sim = fresh();
-    check(sim.run('SMOKE_R') === 160, `the cloud is 5 player lengths in radius (${sim.run('SMOKE_R')} u)`);
+    check(sim.run('SMOKE_R') === 8 * 32, `the cloud is 8 player lengths in radius (${sim.run('SMOKE_R')} u)`);
     press(sim);
     check(Math.abs(P(sim, 'smokeT') - sim.run(T)) < 0.05, `pressing starts the cloud (${P(sim, 'smokeT').toFixed(2)} s)`);
     check(P(sim, 'cd.smoke') === 0, 'no cooldown while it is out');

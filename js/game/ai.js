@@ -90,7 +90,7 @@ function aiRestFromOwn(b, team) {
 // Letting go of this ball now would end in our goal or leave it rolling close to it.
 const aiRisky = (b, me) => aiFlight(b, 1 - me.team) || aiRestFromOwn(b, me.team) < NETX * 0.45;
 // The free ball is on course for our goal (or to die right in front of it) if nobody touches it: the cue to grab it even at a graze.
-const aiUrgent = me => AI_RESCUE && (aiForecast().end === (aiLeft(me.team) ? -1 : 1) || aiFlight(ball, 1 - me.team) || aiRestFromOwn(ball, me.team) < NETX * 0.3);
+const aiUrgent = me => AI_RESCUE && (aiForecast().end === (aiLeft(me.team) ? -1 : 1) || aiFlight(AIB, 1 - me.team) || aiRestFromOwn(AIB, me.team) < NETX * 0.3);
 function aiFlight(b, team) {
     const m = aiLeft(team) ? 1 : -1, dt = 1 / 60, r = BALL_R, roof = GOAL_Y0 + LEDGE_T + r;
     let x = aiLeft(team) ? b.x : W - b.x, y = b.y, vx = b.vx * m, vy = b.vy, w = (b.w || 0) * m; // (mirrored frame: spin flips)
@@ -205,36 +205,124 @@ function aiPathMin(me, b, dir, up, lo, hi) {
     return min;
 }
 // When will the free ball reach us (come within 50 u of our x, on its way to our goal)? { t, y } or null. Cheap and rough, like aiThreat.
+// ---- which body are we thinking about? ----
+// There can be several balls on the field: the death ball and any decoys. A decoy scores like the death ball but never kills. Every prediction and look-ahead below works on ONE body, AIB:
+// the one we are tethered to, else the one that will reach our goal soonest, else (if the death ball is not on our half) the nearest decoy on our half, else the death ball. The death ball is the only
+// thing that can kill us, so the dodge always watches it, whatever AIB is.
+const AI_DECOYS = true;                    // false = decoys are ignored, like before
+const AI_RACE = true;                      // the Shot Race: while holding a ball, weigh our shot against another ball about to score on us (false = ignore the other ball, like before)
+const AI_RACE_MARGIN = 4;                  // ticks: our shot has to land at least this long before their ball does to count as winning the race
+const AI_DEFEND_LEAD = 40;                 // ticks (~0.33 s) it takes us, once free, to react and jump to a ball coming at our goal
+let AIB = ball;
+function aiPickFocus(me, A) {
+    if (me.onBall && me.tball)
+        return me.tball;
+    if ((A.job || A.E || A.X) && A.fb && (A.fb === ball || decoys.includes(A.fb)))
+        return A.fb;                       // a look-ahead / jump in progress was planned for this body: keep it
+    let best = ball;
+    if (AI_DECOYS && decoys.length) {
+        const goal = aiLeft(me.team) ? -1 : 1, s = aiSide(me);
+        let bt = Infinity, threat = null;
+        for (const b of [ball, ...decoys]) {
+            const f = aiForecast(b);
+            if (f.end === goal && f.path.length < bt) {
+                bt = f.path.length;
+                threat = b;
+            }
+        }
+        if (threat)
+            best = threat;                 // whatever will score on us first is the business at hand
+        else if ((ball.x - NETX) * s >= 40) { // the death ball is not on our half: a decoy that is, is a chance
+            let bd = Infinity;
+            for (const d of decoys)
+                if ((d.x - NETX) * s < 40 && Math.hypot(d.x - me.x, d.y - me.y) < bd) {
+                    bd = Math.hypot(d.x - me.x, d.y - me.y);
+                    best = d;
+                }
+        }
+    }
+    return best;
+}
+
+// ---- the Shot Race ----
+// The earliest OTHER body (not the one we hold) that will score on us if nobody touches it: { T: ticks from now, at(t): where it is t ticks from now }, or null.
+function aiOtherThreat(me) {
+    const goal = aiLeft(me.team) ? -1 : 1, sd = aiSide(me);
+    let best = null;
+    for (const b of [ball, ...decoys]) {
+        if (b === me.tball)
+            continue;
+        const f = aiForecast(b), off = aiTickN - f.stamp, T = f.path.length - off;
+        if (f.end !== goal || T <= 0 || (best && T >= best.T))
+            continue;
+        let D = 0;                             // ticks until it gets past us (within 50 u of our x): after that it is out of our reach, so that is our real deadline, not the goal
+        while (D < f.path.length && (f.path[D].x - me.x) * sd >= 50)
+            D++;
+        D = Math.max(0, D - off);
+        if (D === 0)
+            D = T;                             // already past us (between us and our goal): we can only chase it, and the deadline is when it scores
+        best = { T, D, at: t => f.path[Math.max(0, Math.min(f.path.length - 1, t + off - 1))] };
+    }
+    return best;
+}
+// Free from tick `relT` on, standing at x, can we still get to the threat before it scores? (we need AI_DEFEND_LEAD ticks to react and jump, and can run ~250 u/s on the way)
+function aiCanReceive(R, x, relT) {
+    const spare = R.D - AI_DEFEND_LEAD - relT;
+    if (spare <= 0)
+        return false;
+    const p = R.at(R.D - AI_DEFEND_LEAD);
+    return Math.abs(p.x - x) < 250 * spare * DT + RANGE * 0.8;
+}
+// Uncached: if this body is left alone, does it score, and in how many ticks? { end: -1 / 0 / +1, steps }
+function aiRollEnd(body) {
+    const b = Object.assign(new Ball(), body);
+    for (let i = 0; i < AI_FC_STEPS; i++) {
+        const sc = b.step();
+        if (sc !== null || aiInGoal(b))
+            return { end: b.x < W / 2 ? -1 : 1, steps: i + 1 };
+    }
+    return { end: 0, steps: Infinity };
+}
+
 // ---- the free ball's future, by the REAL ball physics ----
 // The hand-written predictors above (aiArrival, aiFlight ...) are quick but they leave things out: how a spinning ball grips the floor, the jut, the slopes, pegs. For the question "is this shot
 // coming at my goal, and when does it get here" the AI therefore steps a copy of the real ball forward (nobody touching it) and reads the answer off that. Shared by all AIs, and redone only
 // every few ticks (or when the ball is hit / bounces off its predicted path).
-const AI_FC_STEPS = 240, AI_FC_EVERY = 6;
-let aiFc = null, aiTickN = 0, aiLastI = 99;
-function aiForecast() {
-    if (aiFc && aiFc.stamp === aiTickN)
-        return aiFc;
-    if (aiFc && aiTickN - aiFc.stamp < AI_FC_EVERY) {
-        const q = aiFc.path[Math.min(aiTickN - aiFc.stamp - 1, aiFc.path.length - 1)];
-        if (q && Math.hypot(q.vx - ball.vx, q.vy - ball.vy) < 25 && Math.hypot(q.x - ball.x, q.y - ball.y) < 12)
-            return aiFc;                       // still on the predicted path
+// Inside a goal mouth (past the line, between the posts): it will score, so the forecast calls it a goal as soon as that happens (the real score only comes when it has rolled to the back of the alcove).
+const aiInGoal = b => (b.x < -8 || b.x > W + 8) && b.y > GOAL_Y0 && b.y < GOAL_Y1;
+const AI_FC_STEPS = 300, AI_FC_EVERY = 6;
+let aiTickN = 0, aiLastI = 99;
+const aiFcMap = new Map();                 // body -> its forecast (the death ball and every decoy get one)
+function aiForecast(body = AIB) {
+    let f = aiFcMap.get(body);
+    if (f && f.stamp === aiTickN)
+        return f;
+    if (f && aiTickN - f.stamp < AI_FC_EVERY) {
+        const q = f.path[Math.min(aiTickN - f.stamp - 1, f.path.length - 1)];
+        if (q && Math.hypot(q.vx - body.vx, q.vy - body.vy) < 25 && Math.hypot(q.x - body.x, q.y - body.y) < 12)
+            return f;                          // still on the predicted path
     }
-    const b = Object.assign(new Ball(), ball), path = [];
+    const b = Object.assign(new Ball(), body), path = [];
     let end = 0;                               // -1 = into the left goal, +1 = into the right goal, 0 = neither within the look-ahead
     for (let i = 0; i < AI_FC_STEPS; i++) {
         const sc = b.step();
         path.push({ x: b.x, y: b.y, vx: b.vx, vy: b.vy });
-        if (sc !== null || b.x < -OUT_D || b.x > W + OUT_D) {
+        if (sc !== null || aiInGoal(b)) {
             end = b.x < W / 2 ? -1 : 1;
             break;
         }
     }
-    aiFc = { stamp: aiTickN, path, end };
-    return aiFc;
+    f = { stamp: aiTickN, path, end };
+    if (aiFcMap.size > 8)
+        for (const k of aiFcMap.keys())
+            if (k !== ball && !decoys.includes(k))
+                aiFcMap.delete(k);             // forget bodies that are gone
+    aiFcMap.set(body, f);
+    return f;
 }
 function aiArrival(me) {
     const s = aiSide(me);
-    if (ball.vx * s > -90 || (ball.x - me.x) * s < 0)
+    if (AIB.vx * s > -90 || (AIB.x - me.x) * s < 0)
         return null;                           // not coming at us (or already past)
     const path = aiForecast().path;
     for (let n = 0; n < path.length; n++)
@@ -291,7 +379,7 @@ const aiMid = me => NETX - aiSide(me) * AI_WAIT_FRAC * NETX;
 const AI_TAP_T = 0.17, AI_TAP_ON = 0.13; // one tap every 0.17 s, the grapple down for 0.13 s (the hook needs 0.1 s to land)
 const aiSide = me => (aiLeft(me.team) ? 1 : -1); // +1: we defend the left goal and attack to the right
 const aiNoKeys = () => ({ l: false, r: false, up: false, dn: false, z: false, x: false, sp: false, sp2: false });
-const aiNearest = (me, b) => me.candidates(b).reduce((m, o) => (!m || o.d < m.d ? o : m), null);
+const aiNearest = (me, b) => me.candidates(me.sim ? b : ball).reduce((m, o) => (!m || o.d < m.d ? o : m), null); // (a planning copy only knows the body it plans with; the real game also offers the death ball and every decoy)
 const aiCanDash = (me, hs) => me.special === 'dash' && me.dashReady && me.cd.dash <= 0 && !(hs && hs.noDash); // hs.noDash: this latch shoots with the rope only
 const aiCanGrip = me => me.gCool <= 0 && me.gCharge > AI_GRIP_MIN; // the grapple meter: enough left to latch on and do something with it
 
@@ -347,7 +435,7 @@ function aiEngageKeys(me, b, E, k) {
         k[dx > 0 ? 'l' : 'r'] = true;      // too close to latch from here: open the gap while we rise
     if (!me.ground && Math.hypot(dx, b.y - me.y) < RANGE + 30) { // (candidates() is the expensive part, so only ask when the ball could be in reach)
         const near = aiNearest(me, b);
-        if (near && near.b && !near.decoy)     // the ball is the nearest thing in reach: latch on.
+        if (near && near.b && near.ball === b) // the body we are after is the nearest thing in reach: latch on.
             k.z = !((me.rope || me.pending) && !me.onBall); // (A held grapple never re-targets: if the tap jump left us hooked to the floor, let go for a tick so the next press takes the ball. Before this, a ball that arrived while we hung on a floor rope flew past un-grabbed.)
     }
 }
@@ -396,11 +484,11 @@ function* aiCrossJob(me0, frozen, out) {
 
 // ---- look-ahead jobs ----
 function aiSimNew(me0) {
-    const b = Object.assign(new Ball(), ball), me = aiClone(me0), foes = [];
+    const b = Object.assign(new Ball(), AIB), me = aiClone(me0), foes = [];
     if (me.tball)
-        me.tball = me.tball === ball ? b : Object.assign(new Ball(), me.tball);
+        me.tball = me.tball === AIB ? b : Object.assign(new Ball(), me.tball);
     for (const q of players)                   // an enemy tethered to the ball too (tug of war): their rope matters, keys frozen
-        if (q !== me0 && q.team !== me0.team && q.alive && q.onBall && q.tball === ball) {
+        if (q !== me0 && q.team !== me0.team && q.alive && q.onBall && q.tball === AIB) {
             const f = aiClone(q);
             f.tball = b;
             foes.push(f);
@@ -545,6 +633,7 @@ function* aiJumpJob(me0, frozen, delays, modes, out, styles = [0], robust = fals
 function* aiHeldJob(me0, hs0, out) { // the best held plan from here (after the ticks this job takes)
     const S = aiSimNew(me0), hs = { ...hs0 }, plans = aiCanDash(me0, hs0) ? ['shootU', 'shootF', 'sling', 'loopO', 'loopU', 'pull', 'push', 'hold', 'drop'] : ['sling', 'loopO', 'loopU', 'pull', 'push', 'hold', 'drop'], s = aiSide(me0), x0 = S.b.x;
     let n = 0;
+    const R = out.race || null, atk = aiLeft(me0.team) ? 1 : -1; // R: another body about to score on us (see aiOtherThreat); atk: the goal we attack
     for (let i = 0; i < AI_PRE_H; i++) {       // we carry on with the current plan meanwhile
         const k = aiNoKeys();
         aiHeldKeys(S.me, S.b, hs, k);
@@ -561,11 +650,13 @@ function* aiHeldJob(me0, hs0, out) { // the best held plan from here (after the 
     let bestV = -Infinity;
     for (const plan of plans) {
         const V = aiSimFork(S), h = { ...hs, plan };
-        let minD = 1e9, v = null;
+        let minD = 1e9, v = null, relT = Infinity, scoreT = Infinity, relX = 0, dead = false;
         const steps = plan === 'loopO' || plan === 'loopU' ? AI_LOOP_STEPS : AI_HELD_STEPS; // a loop needs time to come round
         for (let i = 0; i < steps && v === null; i++) {
             const k = aiNoKeys();
             if (!V.me.onBall) {                // let go: where does it go, and does it then hit us?
+                relT = AI_PRE_H + i;
+                relX = V.me.x;
                 const rest = aiRestFromOwn(V.b, V.me.team);   // a toss that ends up upfield is a fine thing to do with a ball we cannot score with; dropping it near our own goal is not
                 const restV = rest > NETX + 40 ? 30 : rest > NETX * 0.6 ? 0 : -60 * (1 - rest / (NETX * 0.6));
                 v = Math.max(aiFlight(V.b, V.me.team) ? 200 - i * 0.05 : -40 + restV, aiBallHit(V.b, V.me) - 40) - (aiFlight(V.b, 1 - V.me.team) ? 300 : 0);
@@ -585,12 +676,21 @@ function* aiHeldJob(me0, hs0, out) { // the best held plan from here (after the 
                     minD = Math.min(minD, aiGap(V));
                     if (aiDead(V)) {
                         v -= 1000;
+                        dead = true;
                         break;
                     }
-                    if (sc !== null)
+                    if (sc !== null) {
+                        if (sc === V.me.team)
+                            scoreT = relT + j + 1;
                         break;
+                    }
                     if (++n % AI_SLICE_H === 0)
                         yield;
+                }
+                if (R && !dead && scoreT === Infinity) { // did not score inside the look-ahead: does it still, later? (only worth knowing in a race)
+                    const e = aiRollEnd(V.b);
+                    if (e.end === atk)
+                        scoreT = relT + AI_AFTER_STEPS + e.steps;
                 }
                 break;
             }
@@ -602,6 +702,8 @@ function* aiHeldJob(me0, hs0, out) { // the best held plan from here (after the 
             }
             if (sc !== null) {
                 v = sc === V.me.team ? 250 : -500;
+                if (sc === V.me.team)
+                    scoreT = AI_PRE_H + i + 1;
                 break;
             }
             minD = Math.min(minD, aiGap(V));
@@ -619,6 +721,17 @@ function* aiHeldJob(me0, hs0, out) { // the best held plan from here (after the 
                 v -= 30;                       // never got to shoot (shootF / shootU / loops)
             if (V.b.vx * s < -60 && (V.b.x - (s > 0 ? 0 : W)) * s < 260)
                 v -= 120;                      // heading for our own goal
+        }
+        if (R) {                               // THE SHOT RACE: another body is about to score on us
+            if (relT < Infinity) {             // this plan lets go at relT
+                const rec = aiCanReceive(R, relX, relT);
+                if (scoreT + AI_RACE_MARGIN < R.T)
+                    v += 100 + (rec ? 60 : 0); // our shot lands first: go for it (best of all if we can still pick up the receive)
+                else
+                    v = rec ? Math.min(v, -10) - relT * 0.05 : v - 400; // our shot is too slow: it is worth nothing now; what counts is being free in time to deal with theirs
+            } else if (AI_PRE_H + steps >= R.D - AI_DEFEND_LEAD)
+                v -= 400;                      // still holding on when their ball arrives: it scores while we are tied up
+            out.race = true;
         }
         if (minD < 44)
             v -= (44 - minD) * 8;
@@ -640,7 +753,7 @@ function aiAdvance(A) { // run one slice of the current job
 }
 
 function aiFree(i, me, A, k) { // keys for an AI that is not tethered
-    const s = aiSide(me), b = ball, dx = b.x - me.x, away = (me.x - NETX) * s > 0; // away: we are over the net, on their half (a dash shot carries us there)
+    const s = aiSide(me), b = AIB, dx = b.x - me.x, away = (me.x - NETX) * s > 0; // away: we are over the net, on their half (a dash shot carries us there)
     const left = aiLeft(me.team), lo = left || away ? me.r : NETX + me.r, hi = left && !away ? NETX - me.r : W - me.r; // the room to dodge in: our half, or the whole arena when we are on theirs (the dodge model clamps to it, so a clamp to the wrong half 'teleports' us to the net and hides the ball)
     const mine = (b.x - NETX) * s < 40;        // the ball is on our half (or right at the net)
     if (A.E) {                                 // in an engage jump: carry it out
@@ -707,7 +820,7 @@ function aiFree(i, me, A, k) { // keys for an AI that is not tethered
         return;
     }
     // a shot coming at us: schedule a jump so that we are up over its path when it arrives
-    const grip = aiCanGrip(me), arr = grip && me.ground && A.cool <= 0 && (A.jcool || 0) <= 0 ? aiArrival(me) : null; // (no grip, no grab: with the grapple spent or locked out we only keep clear)
+    const grip = aiCanGrip(me), arr = grip && me.ground && (A.cool <= 0 || b !== A.heldBody) && (A.jcool || 0) <= 0 ? aiArrival(me) : null; // (the sulking cooldown after a throw only applies to the body we just threw) // (no grip, no grab: with the grapple spent or locked out we only keep clear)
     const urgent = arr ? aiUrgent(me) : false; // a shot at our goal is worth a try even when it is nearly on us (a rescue grab only needs ~0.1 s of warning); otherwise a jump needs 0.3 s
     if (arr && arr.t > (urgent ? 0.1 : 0.3) && arr.t < 1.9) {
         // launch as early as the reaction time allows, then later: the look-ahead takes the first (earliest) one that latches the ball and holds it. 2 or 4 grapple-jump taps are the usual winners;
@@ -755,14 +868,14 @@ function aiFree(i, me, A, k) { // keys for an AI that is not tethered
         A.job = { kind: 'jump', gen: aiJumpJob(me, { ...k }, [AI_PRE], ['toward', 'none', 'away'], A.out, [2, 4, 0], true), out: A.out, frozen: { ...k }, age: 0, done: false };
         return;
     }
-    const dodge = aiDodge(me, b, lo, hi);       // the ball is going to reach us: pick the steering that keeps us furthest from it
+    const dodge = aiDodge(me, ball, lo, hi);    // the DEATH ball is going to reach us: pick the steering that keeps us furthest from it (a decoy cannot kill us: never dodge one)
     // In the air with the ball about to be where we come down (a slow ball creeping under us, or one rolling at our landing spot): we cannot steer out of it for ever, and the grapple only
     // grabs the nearest thing, so if the ball is that, grab it NOW and let the held plans (which look ahead for a safe release) decide what to do with it.
-    if (!me.ground && grip && A.cool <= 0 && mine && dodge) {
+    if (!me.ground && grip && (A.cool <= 0 || b !== A.heldBody) && mine && (b === ball ? dodge : aiUrgent(me))) {
         const gd = Math.hypot(dx, b.y - me.y);
         if (gd < RANGE - 15 && gd > me.r + b.r + 6) {
             const near = aiNearest(me, b);
-            if (near && near.b && !near.decoy) {
+            if (near && near.b && near.ball === b) {
                 if (!(A.airT > 0)) {           // (a rollout is not free: redo it every few ticks, not every tick)
                     A.airOk = aiAirGrabSafe(me);
                     A.airT = 4;
@@ -786,6 +899,7 @@ function aiDrive(i) {
         aiTickN++;                             // a new tick (aiDrive runs once per AI per tick, in order)
     aiLastI = i;
     const me = players[i], A = ai[i], k = aiNoKeys();
+    AIB = A.fb = aiPickFocus(me, A);           // the body every prediction below is about (see aiPickFocus)
     A.t -= DT;
     A.cool = Math.max(0, (A.cool || 0) - DT);
     A.noGrab = Math.max(0, A.noGrab - DT);
@@ -802,8 +916,9 @@ function aiDrive(i) {
             A.job = null;
         }
         const hs = A.hs;
-        if (me.tball === ball && !A.job && hs.t >= hs.next && hs.dashT === null) { // (re)plan; not once the dash is spent, that plan is committed
-            A.out = {};
+        A.heldBody = AIB;                      // (remembered for the cooldown after we let go)
+        if (me.tball === AIB && !A.job && hs.t >= hs.next && hs.dashT === null) { // (re)plan; not once the dash is spent, that plan is committed
+            A.out = { race: AI_RACE ? aiOtherThreat(me) : null };
             A.job = { kind: 'held', gen: aiHeldJob(me, hs, A.out), out: A.out, age: 0, done: false };
         }
         if (A.job && A.job.kind === 'held') {
@@ -811,12 +926,15 @@ function aiDrive(i) {
             if (A.job.done && A.job.age >= AI_PRE_H) {
                 if (A.job.out.plan)
                     hs.plan = A.job.out.plan;
+                A.raceMode = !!A.job.out.race;  // (if we let go during a race, it is to go and deal with the other ball: no sulking cooldown)
                 hs.next = hs.t + 0.15;
                 A.job = null;
             }
         }
-        aiHeldKeys(me, ball, hs, k);
-        if (me.tball === ball && players.some(q => q.team !== me.team && q.alive && q.onBall && q.tball === ball)) { // tug of war: an enemy has it too
+        aiHeldKeys(me, AIB, hs, k);
+        if (me.tball !== ball && aiPathMin(me, ball, 0, false, me.r, W - me.r) < me.r + ball.r + 12)
+            k.z = false;                       // holding a decoy while the DEATH ball is about to reach us: let go and dodge
+        if (me.tball === AIB && players.some(q => q.team !== me.team && q.alive && q.onBall && q.tball === AIB)) { // tug of war: an enemy has it too
             hs.tug = (hs.tug || 0) + DT;
             if (hs.patience === undefined)
                 hs.patience = 0.8 + Math.random() * 1.8; // random, so the two do not give up in lockstep
@@ -828,7 +946,8 @@ function aiDrive(i) {
             A.held = false;
             A.hs = null;
             A.job = null;
-            A.cool = 1;
+            A.cool = A.raceMode ? 0.05 : 1;
+            A.raceMode = false;
             A.t = 0;
         }
         aiFree(i, me, A, k);

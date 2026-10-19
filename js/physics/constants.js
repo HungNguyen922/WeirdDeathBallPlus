@@ -342,8 +342,8 @@ const BARBWIRE_HITS_TEAMMATES = true; // the wire kills your teammate too
 // --- Warp --------------------------------------------------------------------------------------------------------------------------------------------------------
 // Press the special key to drop a marker where you stand (placing is free and instant, and a marker stays until it is used or the round ends). A dashed line is drawn from you to
 // it. Press again to teleport to the marker: position only, so velocity (all your momentum) is kept. Your grapple stays attached (the rope's normal leash rules apply from the new spot). The cooldown (WARP_COOLDOWN s) starts at the teleport; a second press while it runs does nothing, and the marker waits. WARP_FX = how long the arrival / departure rings last.
-const WARP_COOLDOWN = 12;             // s before the next teleport
-const WARP_FX = 0.6;                  // how long (s) the arrival / departure rings last (display only)
+const WARP_COOLDOWN = 10;             // s before the next teleport
+const WARP_FX = 0.75;                  // how long (s) the arrival / departure rings last (display only)
 
 // --- Awakened ----------------------------------------------------------------------------------------------------------------------------------------------------
 // Press the special key to power up for AWAKENED_T s; when it wears off the cooldown (AWAKENED_COOLDOWN s) starts. While awake: the grapple meter does not drain, you cannot
@@ -368,7 +368,7 @@ const EXPLODE_R = 3 * PL;             // blast radius (u), measured from your ce
 const EXPLODE_COOLDOWN = 10;          // s before the next blast
 const EXPLODE_WINDOW = 5;             // s after a blast in which a death refunds the cooldown
 const EXPLODE_CARRY = true;           // a refund earned by the death that ends a round carries into the next round
-const EXPLODE_FX = 0.6;               // how long (s) the blast is drawn (display only)
+const EXPLODE_FX = 0.75;               // how long (s) the blast is drawn (display only)
 const EXPLODE_KICK_MIN = 400;         // kick (u/s) at the very edge of the blast
 const EXPLODE_KICK_MAX = 1600;        // kick (u/s) dead centre
 const EXPLODE_FALLOFF = 1.2;          // shape of the kick between edge and centre (1 = linear, higher = stays weak until really close)
@@ -422,7 +422,7 @@ const PORTAL_DBL_T = 0.25;            // s: a double tap within this snaps the a
 const PORTAL_COOLDOWN = 1;          // s before you can start the next one (it starts when one opens)
 const PORTAL_MIN_V = 120;             // u/s: slowest a body leaves a portal (something that drifted in is still pushed out along the arrow)
 const PORTAL_EXIT_GAP = 3;            // u: a body comes out this far beyond the exit disc's edge (edge to the body's rim)
-const PORTAL_FX = 0.4;                // s the flash on a portal lasts when something goes through (display only)
+const PORTAL_FX = 0.5;                // s the flash on a portal lasts when something goes through (display only)
 
 // --- Swap --------------------------------------------------------------------------------------------------------------------------------------------------------
 // Hold the special key to open a cone of vision in front of you, LEFT / RIGHT turn it (a double tap on an arrow key snaps it), release to swap places with the NEAREST thing in the cone,
@@ -433,7 +433,7 @@ const SWAP_TURN = 2;                  // how fast LEFT / RIGHT turn the aim (rad
 const SWAP_DBL_T = 0.25;              // s: a double tap within this snaps the aim
 const SWAP_COOLDOWN = 10;              // s after a swap that happened
 const SWAP_MISS_CD = 0.5;             // s after letting go with nothing in the cone (stops key-mashing, costs almost nothing)
-const SWAP_FX = 0.35;                 // s the swap flash lasts (display only)
+const SWAP_FX = 0.5;                 // s the swap flash lasts (display only)
 
 // --- Smoke Screen ------------------------------------------------------------------------------------------------------------------------------------------------
 // Press the special key to wrap yourself in a cloud of smog that follows you for SMOKE_T s; when it clears the cooldown (SMOKE_COOLDOWN s) starts. To the OTHER team's screen the cloud

@@ -32,7 +32,7 @@ class Player {
         this.taut = false;
         this.floatW = 1; // grapple-float weight 0..1: dribbling fades it out so the rope can pull you in, then it eases back
         this.dribT = 0;  // seconds left of the 'dribbling' window opened by a weighted kick
-        this.reelT = 0;  // > 0: the ball tether was stretched far past its length by a teleport (Warp); the ball is eased back in instead of snapped (see stepGrapple); counts down as a failsafe
+        this.stretchT = 0; // > 0: the ball tether was badly overstretched (a teleport, launch...) and the ball is being tugged back in; arms the arrival brake in stepGrapple
         this.sim = false; // true on the AI planner's throwaway copies: they must not touch the real game (spawn decoys / pegs)
         this.keys = noKeys();
         this.special = 'dash'; // chosen special ability (see SPECIALS)
@@ -69,7 +69,7 @@ class Player {
         this.gCharge = GRAPPLE_MAX; // grapple meter: seconds of grip left
         this.gCool = 0;             // > 0: the meter was spent; no grappling at all until this runs out (then the meter restarts from 0 and refills passively)
         this.onBall = false;
-        this.reelT = 0;
+        this.stretchT = 0;
         this.ground = false;
         this.ropeBase = null;
         this.netSide = undefined; // which side of the net we were last on (0 left, 1 right); set after the first step

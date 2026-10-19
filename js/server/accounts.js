@@ -2,10 +2,11 @@
 // Players never touch Firestore: their browser signs in with Firebase Auth, and every read and write goes through THIS file on the game server, which checks the sign-in token first.
 // With FIREBASE_SERVICE_ACCOUNT unset (tests, local play) all of this switches off and the game plays exactly as before, as a guest.
 //
-// Data:  players/{uid}      { name, nameLower, settings, rating, matches, wins, losses, pointsFor, pointsAgainst, createdAt, updatedAt }
+// Data:  players/{uid}      { name, nameLower, settings, skin, rating, matches, wins, losses, pointsFor, pointsAgainst, createdAt, updatedAt }
 //        names/{nameLower}  { uid }   (claims a name so two players cannot share it)
 'use strict';
 
+const { skinClean } = require('../skin-data.js'); // the one definition of a valid skin, shared with the browser
 const NAME_RE = /^[A-Za-z0-9_]{3,16}$/;
 const START_RATING = 1000, ELO_K = 32, MIN_RATING = 100;
 const LB_TTL_MS = 5 * 60 * 1000, LB_FETCH = 60, LB_SHOW = 50; // the leaderboard is rebuilt at most every 5 minutes (about LB_FETCH reads each time)
@@ -44,15 +45,15 @@ async function verify(token) { // the player's uid, or null if the token is miss
     try { return (await auth.verifyIdToken(token)).uid; } catch (e) { return null; }
 }
 
-const pub = p => ({ name: p.name, rating: p.rating, matches: p.matches, wins: p.wins, losses: p.losses, pointsFor: p.pointsFor, pointsAgainst: p.pointsAgainst, settings: p.settings || {} });
+const pub = p => ({ name: p.name, rating: p.rating, matches: p.matches, wins: p.wins, losses: p.losses, pointsFor: p.pointsFor, pointsAgainst: p.pointsAgainst, settings: p.settings || {}, skin: skinClean(p.skin) });
 async function getProfile(uid) { const s = await players().doc(uid).get(); return s.exists ? s.data() : null; }
 
-async function identify(token) { // for the websocket join: { uid, name } (name is null until they have chosen one), or null for a guest
+async function identify(token) { // for the websocket join: { uid, name, skin } (name is null until they have chosen one; skin is [] for none), or null for a guest
     const uid = await verify(token);
     if (!uid)
         return null;
     const p = await getProfile(uid).catch(() => null);
-    return { uid, name: p ? p.name : null };
+    return { uid, name: p ? p.name : null, skin: p ? skinClean(p.skin) : [] };
 }
 
 async function setName(uid, raw) { // first call creates the profile; later calls rename. Names are unique (case-insensitive).
@@ -71,7 +72,7 @@ async function setName(uid, raw) { // first call creates the profile; later call
         if (old)
             tx.update(pref, { name, nameLower: key, updatedAt: now });
         else
-            tx.set(pref, { name, nameLower: key, settings: {}, rating: START_RATING, matches: 0, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, createdAt: now, updatedAt: now });
+            tx.set(pref, { name, nameLower: key, settings: {}, skin: [], rating: START_RATING, matches: 0, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, createdAt: now, updatedAt: now });
     });
 }
 
@@ -86,6 +87,16 @@ async function saveSettings(uid, raw) {
     if (!(await ref.get()).exists)
         throw userError('Pick a name first.');
     await ref.update({ settings, updatedAt: Date.now() });
+}
+
+async function saveSkin(uid, raw) { // anything that is not a list is refused; a list is cleaned (bad layers dropped, numbers clamped) and what was actually stored is returned
+    if (!Array.isArray(raw))
+        throw userError('Bad skin.');
+    const skin = skinClean(raw), ref = players().doc(uid);
+    if (!(await ref.get()).exists)
+        throw userError('Pick a name first.');
+    await ref.update({ skin, updatedAt: Date.now() });
+    return skin;
 }
 
 async function leaderboard() {
@@ -147,7 +158,7 @@ function readJson(req, max = 16384) {
     });
 }
 
-// The HTTP routes the browser uses:  GET /api/leaderboard (public)  GET /api/me  POST /api/name {name}  POST /api/settings {settings}   (the last three need "Authorization: Bearer <token>")
+// The HTTP routes the browser uses:  GET /api/leaderboard (public)  GET /api/me  POST /api/name {name}  POST /api/settings {settings}  POST /api/skin {skin}   (the last four need "Authorization: Bearer <token>")
 async function handleApi(req, res, pathname) {
     const send = (code, obj) => { if (!res.headersSent) res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(obj)); };
     if (!db)
@@ -173,6 +184,8 @@ async function handleApi(req, res, pathname) {
             await saveSettings(uid, body.settings);
             return send(200, { ok: true });
         }
+        if (pathname === '/api/skin')
+            return send(200, { skin: await saveSkin(uid, body.skin) });
         send(404, { error: 'not found' });
     } catch (e) {
         send(e.user ? 400 : 500, { error: e.user ? e.message : 'Something went wrong on the server.' });

@@ -1,4 +1,4 @@
-// PHYSICS - swap: the SWAP special. Never draws (see drawSwaps in render/entities.js).
+// PHYSICS - swap: the SWAP special. Never draws (see drawSwaps in render/portals-swaps.js).
 // Load order: after portals.js (it reuses portalAimStep) and before game/rules.js (which calls stepSwaps()).
 // Tuning numbers live in constants.js (SWAP_*).
 //

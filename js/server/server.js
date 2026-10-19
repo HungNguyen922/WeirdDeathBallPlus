@@ -19,9 +19,10 @@
 //                      {t:'assign', c, to}                 host only: move member c to team 0 (Blue), 1 (Red) or -1 (waiting); restarts the match if seats change
 //                      {t:'chat', text}                    say something to everybody in the room (trimmed, at most CHAT_MAX characters, rate limited)
 //                      {t:'ping', c}                       latency probe
+//                      {t:'refresh', token}                I changed my name or skin on my account: look me up again (the token must belong to the same account) and send everyone a fresh roster
 //   server -> client   {t:'welcome', room, slot, cid, tick, hz, snapEvery}   slot: 0..3 = a seat, -1 = waiting / spectating; cid = your member id
 //                      {t:'slot', slot}                    your seat changed (the host moved you)
-//                      {t:'roster', slots:[bool x4], spectators, running, lobby2v2, host, you, members:[{c, team, slot, host}]}
+//                      {t:'roster', slots:[bool x4], spectators, running, lobby2v2, host, you, members:[{c, team, slot, host, name, skin}]}   skin = the account's skin (a list of layers, see js/skin-data.js) or null
 //                      {t:'snap', tick, ack, s, ev}         s = saveState(), ack = my last input counter the server has applied, ev = [[name, tick, ...args], ...]
 //                      {t:'chat', c, team, text}           somebody in the room said something (c = their member id, team = 0 Blue / 1 Red / -1 waiting); also sent back to the sender.  {t:'chat', sys:true, text} is a note from the server to one player
 //                      {t:'pong', c, tick, tps}    {t:'error', msg}
@@ -268,7 +269,7 @@ class Room {
     roster() {
         const members = [...this.conns]
             .sort((a, b) => (a.slot < 0) - (b.slot < 0) || a.slot - b.slot || a.order - b.order) // seated by seat, then the waiting list in order
-            .map(c => ({ c: c.cid, team: c.team, slot: c.slot, host: c === this.host, name: c.name || null }));
+            .map(c => ({ c: c.cid, team: c.team, slot: c.slot, host: c === this.host, name: c.name || null, skin: c.skin && c.skin.length ? c.skin : null }));
         const base = { t: 'roster', slots: this.seats.map(Boolean), spectators: members.filter(m => m.slot < 0).length, running: this.running, lobby2v2: this.lobby2v2, ranked: this.ranked, members };
         for (const c of this.conns)
             c.send(JSON.stringify({ ...base, host: c === this.host, you: c.cid }));
@@ -393,6 +394,7 @@ function startServer(port = 8080, host = '0.0.0.0') {
                     return;
                 conn.uid = id ? id.uid : null;
                 conn.name = id && id.name ? id.name : null;
+                conn.skin = id ? id.skin : []; // (already cleaned by accounts.js)
                 const name = typeof m.room === 'string' && /^[A-Za-z0-9_-]{1,24}$/.test(m.room) ? m.room : 'lobby';
                 let r = rooms.get(name);
                 if (!r) {
@@ -429,7 +431,15 @@ function startServer(port = 8080, host = '0.0.0.0') {
                 room.assign(Number(m.c), Number(m.to));
             else if (m.t === 'chat' && room)
                 room.chat(conn, m.text);
-            else if (m.t === 'ping')
+            else if (m.t === 'refresh' && room && conn.uid && typeof m.token === 'string') {
+                accounts.identify(m.token).then(id => { // only the same account may refresh its own seat; a different or bad token changes nothing
+                    if (!id || id.uid !== conn.uid || gone)
+                        return;
+                    conn.name = id.name || conn.name;
+                    conn.skin = id.skin;
+                    room.roster();
+                }).catch(() => {});
+            } else if (m.t === 'ping')
                 conn.send(JSON.stringify({ t: 'pong', c: Number(m.c) || 0, tick: room ? room.tick : 0, tps: room ? room.tps : 0 }));
         });
         conn.on('close', () => {

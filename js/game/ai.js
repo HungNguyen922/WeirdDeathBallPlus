@@ -32,7 +32,7 @@ const AI_DASH_USE = 0.2;                 // chance that a latch is allowed to us
 const AI_THREAT = 50; // dodge when the ball would get this close (u; touching is 30)
 const ai = [0, 1, 2, 3].map(() => ({ on: false, plan: null, t: 0, age: 0, noGrab: 0, held: false, rescueHold: null }));
 function aiReset(i) { // forget everything it was in the middle of (new round, or switched on / off)
-    Object.assign(ai[i], { plan: null, t: 0, age: 0, noGrab: 0, held: false, hs: null, E: null, job: null, cool: 0, jcool: 0, fails: 0, idle: 0, stand: undefined, threat: false, X: null, crossFail: 0, rescueHold: null, airT: 0, airOk: false });
+    Object.assign(ai[i], { plan: null, t: 0, age: 0, noGrab: 0, held: false, hs: null, E: null, job: null, cool: 0, jcool: 0, fails: 0, idle: 0, stand: undefined, threat: false, X: null, crossFail: 0, rescueHold: null, airT: 0, airOk: false, V: null, invCool: 0, invIdle: 0 });
 }
 // The rollouts step real physics objects, which nudges a few shared effect values (seesaw, hatchet glow, peg flash). Snapshot and restore them.
 function snapshotFx() { return { sv: saw.v, st: saw.t, qf: { ...quakeFx }, hp: [...padFlash], pf: pegs.map(q => q.flash) }; }
@@ -210,10 +210,22 @@ function aiPathMin(me, b, dir, up, lo, hi) {
 // the one we are tethered to, else the one that will reach our goal soonest, else (if the death ball is not on our half) the nearest decoy on our half, else the death ball. The death ball is the only
 // thing that can kill us, so the dodge always watches it, whatever AIB is.
 const AI_DECOYS = true;                    // false = decoys are ignored, like before
+const AI_TEAMWORK = true;                  // 2v2: only the teammate best placed for a ball goes for it; the other stays clear (false = both pile in, like before)
+const AI_SUPPORT_GAP = 140;                // u: the player giving way to a teammate holds position this far behind them (towards our goal) instead of freezing
+const AI_YIELD_MARGIN = 20;                // u: a teammate has to be this much closer to the ball before we give way (ties go to the lower player id)
+const AI_CEIL_MARGIN = 70, AI_CEIL_PEN = 5; // held plans: penalty per u that we get closer than this to the ceiling (a fast ball on the rope can drag us up there and kill us)
+const AI_INVADE = true;                    // 2v2: the player giving way to a teammate may jump over the net and crash into an enemy to throw off their shot / positioning (false = never)
+const AI_INVADE_TAPS = [2, 3, 4];          // grapple-jump tap counts the invade search tries
+const AI_INVADE_RUNS = [0.4, 0.3, 0.5, 0.2, 0.6, 0.8, 0, 1.0, 1.2]; // seconds of running at the target before the jump (the search tries each)
+const AI_INVADE_MIN_V = 180;               // u/s: the closing speed a crash needs to be worth the trip
+const AI_INVADE_CD = 5;                    // s between invades
+const AI_INVADE_WAIT = 0.8;                // s of backing up a teammate before the first invade
+const AI_INVADE_REACH = 560;               // u: only enemies this close (horizontally) are worth a try
 const AI_RACE = true;                      // the Shot Race: while holding a ball, weigh our shot against another ball about to score on us (false = ignore the other ball, like before)
 const AI_RACE_MARGIN = 4;                  // ticks: our shot has to land at least this long before their ball does to count as winning the race
 const AI_DEFEND_LEAD = 40;                 // ticks (~0.33 s) it takes us, once free, to react and jump to a ball coming at our goal
 let AIB = ball;
+const aiStats = { invades: 0 };            // (for testing)
 function aiPickFocus(me, A) {
     if (me.onBall && me.tball)
         return me.tball;
@@ -242,6 +254,136 @@ function aiPickFocus(me, A) {
         }
     }
     return best;
+}
+
+// ---- Invade: the back rank jumps over the net and crashes into an enemy ----
+// Knocking an enemy around throws off their shot if they have the ball, and drags their positioning about if they do not (while our teammate goes for the ball). The invader needs no ball: a two-tap
+// grapple jump off the floor already carries it over the net near the ceiling, and steering in the air does the rest. The search (see aiInvadeJob) rolls candidate jumps forward against a simple
+// prediction of where the enemy will be, and only goes if one of them lands a crash that is hard enough.
+function aiInvadeKeys(me, en, V, k) {
+    V.t += DT;
+    const taps = V.taps, jt = V.t - (V.run || 0);  // jt: time since the jump started (negative while still running up)
+    const dx = en.x - me.x;
+    if (jt < 0) {                              // the run-up
+        if (Math.abs(dx) > 10)
+            k[dx > 0 ? 'r' : 'l'] = true;
+        return;
+    }
+    k.up = jt < Math.max(AI_JUMP_HOLD, taps * AI_TAP_T + 0.35);
+    if (taps) {
+        const i = Math.floor(jt / AI_TAP_T);
+        k.z = i < taps && jt - i * AI_TAP_T < AI_TAP_ON;
+        k.x = jt < taps * AI_TAP_T;
+    }
+    const dy = en.y - me.y;
+    if (me.ground || jt < taps * AI_TAP_T + 0.15 || dy < 20) {
+        if (Math.abs(dx) > 10)                 // taking off (or already level with them): head for them
+            k[dx > 0 ? 'r' : 'l'] = true;
+        return;
+    }
+    // Up in the air above them: dive when a dive from here would land on them (the dive falls at DOWN_G x G), and steer so that it does.
+    const g = G * DOWN_G, tf = (-me.vy + Math.sqrt(me.vy * me.vy + 2 * g * dy)) / g, miss = dx - me.vx * tf; // (time to fall dy from where we are, with the speed we have)
+    if (Math.abs(miss) < 30) {
+        k.up = false;
+        k.dn = true;
+        if (Math.abs(miss) > 8)
+            k[miss > 0 ? 'r' : 'l'] = true;
+    } else {
+        k.up = true;                           // float and line it up
+        k[miss > 0 ? 'r' : 'l'] = true;
+    }
+}
+// A plain-object stand-in for an enemy player: moves under gravity, stops on the floor, and keeps its current velocity otherwise.
+const aiEnemySnap = e => ({ x: e.x, y: e.y, vx: e.vx, vy: e.vy, r: e.r, up: !!(e.keys && e.keys.up) });
+function aiEnemyStep(en) {
+    const fl = aiFloorY(en.x) - en.r;
+    if (en.y < fl - 1)
+        en.vy += (en.up ? G_FLOAT : G) * DT;
+    en.x = Math.max(en.r, Math.min(W - en.r, en.x + en.vx * DT));
+    en.y += en.vy * DT;
+    const f2 = aiFloorY(en.x) - en.r;
+    if (en.y >= f2) {
+        en.y = f2;
+        en.vy = 0;
+        en.vx *= 1 - GROUND_BRAKE * DT;
+    }
+}
+function* aiInvadeJob(me0, frozen, tgt, out) {
+    const S = aiSimNew(me0), en0 = aiEnemySnap(tgt);
+    let n = 0;
+    for (let i = 0; i < AI_PRE; i++) {         // the real AI carries on with `frozen` while this runs
+        aiSimStep(S, frozen);
+        aiEnemyStep(en0);
+        if (aiDead(S))
+            return;
+    }
+    let bestV = 0;
+    for (const run of AI_INVADE_RUNS) for (const taps of AI_INVADE_TAPS) {
+        const V = aiSimFork(S), en = Object.assign({}, en0), I = { t: 0, taps, run };
+        for (let i = 0; i < 420; i++) {
+            const k = aiNoKeys();
+            aiInvadeKeys(V.me, en, I, k);
+            const sc = aiSimStep(V, k);
+            aiEnemyStep(en);
+            if (aiDead(V) || (sc !== null && sc !== V.me.team))
+                break;                         // the death ball got us, or it scored on us meanwhile
+            if (Math.hypot(V.me.x - en.x, V.me.y - en.y) < V.me.r + en.r + 2) {
+                const rv = Math.hypot(V.me.vx - en.vx, V.me.vy - en.vy);
+                if (rv >= AI_INVADE_MIN_V) {       // good enough: take it (the AI stands still while this runs, so a quick answer matters more than the best one)
+                    out.ok = true;
+                    out.taps = taps;
+                    out.run = run;
+                    out.v = rv;
+                    return;
+                }
+                break;
+            }
+            if (V.me.ground && I.t > run + 0.3)
+                break;                         // landed without a crash
+            if (++n % AI_SLICE === 0)
+                yield;
+        }
+    }
+}
+// Who is worth crashing into: a holder first (spoil the shot), else whoever is nearest the ball.
+function aiInvadeTarget(me, b) {
+    let best = null, bs = -Infinity;
+    for (const e of players) {
+        if (e.team === me.team || !e.alive || Math.abs(e.x - me.x) > AI_INVADE_REACH)
+            continue;
+        const sc = (e.onBall ? 1000 : 0) - Math.hypot(e.x - b.x, e.y - b.y) * 0.5 - Math.abs(e.x - me.x) * 0.2;
+        if (sc > bs) {
+            bs = sc;
+            best = e;
+        }
+    }
+    return best;
+}
+// Safe to leave our half: nothing is going to score on us, and the death ball is not on top of us.
+function aiInvadeSafe(me) {
+    const goal = aiLeft(me.team) ? -1 : 1;
+    for (const b of [ball, ...decoys])
+        if (aiForecast(b).end === goal)
+            return false;
+    return Math.hypot(ball.x - me.x, ball.y - me.y) > 320 || Math.hypot(ball.vx, ball.vy) < 120; // (a ball lying around near us is no danger; one moving about near us is)
+}
+
+// ---- teamwork (2v2) ----
+// Should we leave this ball to a teammate? Yes if they are holding it, or are clearly better placed for it (and able to grapple). Two defenders going for the same ball get in each other's way.
+function aiYield(me, b) {
+    const dm = Math.hypot(b.x - me.x, b.y - me.y);
+    for (const t of players) {
+        if (t === me || t.team !== me.team || !t.alive)
+            continue;
+        if (t.onBall && t.tball === b)
+            return t;                          // they have it
+        if (!aiCanGrip(t))
+            continue;                          // they cannot grapple right now: no use leaving it to them
+        const dt = Math.hypot(b.x - t.x, b.y - t.y);
+        if (dt + AI_YIELD_MARGIN < dm || (dt <= dm + AI_YIELD_MARGIN && t.id < me.id))
+            return t;
+    }
+    return null;
 }
 
 // ---- the Shot Race ----
@@ -290,18 +432,25 @@ function aiRollEnd(body) {
 // every few ticks (or when the ball is hit / bounces off its predicted path).
 // Inside a goal mouth (past the line, between the posts): it will score, so the forecast calls it a goal as soon as that happens (the real score only comes when it has rolled to the back of the alcove).
 const aiInGoal = b => (b.x < -8 || b.x > W + 8) && b.y > GOAL_Y0 && b.y < GOAL_Y1;
-const AI_FC_STEPS = 300, AI_FC_EVERY = 6;
+const AI_FC_STEPS = 300, AI_FC_EVERY = 20; // (re-forecast a body every 20 ticks at most, and at most one body per tick; a body that leaves its predicted path is re-done at once)
+let aiFcDoneTick = -1;
 let aiTickN = 0, aiLastI = 99;
 const aiFcMap = new Map();                 // body -> its forecast (the death ball and every decoy get one)
+const AI_NO_FC = { stamp: 0, path: [], end: 0 };
 function aiForecast(body = AIB) {
+    for (const p of players)
+        if (p.onBall && p.tball === body && p.alive)
+            return AI_NO_FC;                   // somebody has it on a rope: its path is not free, so there is nothing to forecast (it would also be redone every tick)
     let f = aiFcMap.get(body);
     if (f && f.stamp === aiTickN)
         return f;
-    if (f && aiTickN - f.stamp < AI_FC_EVERY) {
+    if (f) {
         const q = f.path[Math.min(aiTickN - f.stamp - 1, f.path.length - 1)];
-        if (q && Math.hypot(q.vx - body.vx, q.vy - body.vy) < 25 && Math.hypot(q.x - body.x, q.y - body.y) < 12)
-            return f;                          // still on the predicted path
+        if (q && Math.hypot(q.vx - body.vx, q.vy - body.vy) < 25 && Math.hypot(q.x - body.x, q.y - body.y) < 12
+            && (aiTickN - f.stamp < AI_FC_EVERY || aiFcDoneTick === aiTickN))
+            return f;                          // still on the predicted path (and not yet due for a refresh, or another body already used this tick's refresh)
     }
+    aiFcDoneTick = aiTickN;
     const b = Object.assign(new Ball(), body), path = [];
     let end = 0;                               // -1 = into the left goal, +1 = into the right goal, 0 = neither within the look-ahead
     for (let i = 0; i < AI_FC_STEPS; i++) {
@@ -650,7 +799,7 @@ function* aiHeldJob(me0, hs0, out) { // the best held plan from here (after the 
     let bestV = -Infinity;
     for (const plan of plans) {
         const V = aiSimFork(S), h = { ...hs, plan };
-        let minD = 1e9, v = null, relT = Infinity, scoreT = Infinity, relX = 0, dead = false;
+        let minD = 1e9, minY = 1e9, v = null, relT = Infinity, scoreT = Infinity, relX = 0, dead = false;
         const steps = plan === 'loopO' || plan === 'loopU' ? AI_LOOP_STEPS : AI_HELD_STEPS; // a loop needs time to come round
         for (let i = 0; i < steps && v === null; i++) {
             const k = aiNoKeys();
@@ -674,6 +823,7 @@ function* aiHeldJob(me0, hs0, out) { // the best held plan from here (after the 
                     }
                     const sc = aiSimStep(V, kk);
                     minD = Math.min(minD, aiGap(V));
+                    minY = Math.min(minY, V.me.y);
                     if (aiDead(V)) {
                         v -= 1000;
                         dead = true;
@@ -707,6 +857,7 @@ function* aiHeldJob(me0, hs0, out) { // the best held plan from here (after the 
                 break;
             }
             minD = Math.min(minD, aiGap(V));
+            minY = Math.min(minY, V.me.y);
             if (++n % AI_SLICE_H === 0)
                 yield;
         }
@@ -735,6 +886,8 @@ function* aiHeldJob(me0, hs0, out) { // the best held plan from here (after the 
         }
         if (minD < 44)
             v -= (44 - minD) * 8;
+        if (minY < AI_CEIL_MARGIN)
+            v -= (AI_CEIL_MARGIN - minY) * AI_CEIL_PEN; // a plan that flings us up into the ceiling (fast ball + rope) ends with us and the ball in the same corner
         v += plan === hs0.plan ? 6 : 0;        // keep the current plan unless another is clearly better
         if (v > bestV) {
             bestV = v;
@@ -770,6 +923,38 @@ function aiFree(i, me, A, k) { // keys for an AI that is not tethered
         if (me.ground && A.X.t > 0.3) {
             A.X = null;
             A.cool = 0.3;
+        }
+        return;
+    }
+    if (A.V) {                                 // in an invade jump: carry it out
+        if (!A.V.tgt.alive || (!me.ground && aiDodge(me, ball, lo, hi))) {
+            A.V = null;                        // the target is gone, or the death ball is coming for us: stop, and let the normal logic dodge
+            A.invCool = 2;
+        } else {
+            aiInvadeKeys(me, A.V.tgt, A.V, k);
+            if (me.ground && A.V.t > (A.V.run || 0) + 0.3) {
+                A.V = null;
+                A.invCool = AI_INVADE_CD;
+                A.cool = 0.3;
+            }
+            return;
+        }
+    }
+    if (A.job && A.job.kind === 'invade') {    // an invade look-ahead is running
+        const J = A.job;
+        Object.assign(k, J.age < AI_PRE ? J.frozen : {});
+        if (!J.done)
+            aiAdvance(A);
+        else
+            J.age++;
+        if (J.done && J.age >= AI_PRE) {
+            A.job = null;
+            if (J.out.ok && J.tgt.alive) {
+                A.V = { t: 0, taps: J.out.taps, run: J.out.run, tgt: J.tgt };
+                aiStats.invades++;
+                aiInvadeKeys(me, A.V.tgt, A.V, k);
+            } else
+                A.invCool = 1;                 // nothing lands: look again in a second
         }
         return;
     }
@@ -815,6 +1000,34 @@ function aiFree(i, me, A, k) { // keys for an AI that is not tethered
                     A.E = { t: 0, mode: J.out.mode, taps: J.out.taps || 0 };
                     aiEngageKeys(me, b, A.E, k);
                 }
+            }
+        }
+        return;
+    }
+    const grip0 = aiCanGrip(me), mate = AI_TEAMWORK ? aiYield(me, b) : null;
+    if (mate) {                                // a teammate has this ball (or is better placed): back them up (cover behind them) and stay clear of the death ball
+        const anchor = s > 0 ? Math.min(b.x, mate.x) : Math.max(b.x, mate.x);
+        const tx = Math.max(lo + 24, Math.min(hi, anchor - s * AI_SUPPORT_GAP));
+        const gap = tx - me.x, toward = me.vx * Math.sign(gap);
+        if (Math.abs(gap) > 16) {
+            const brake = toward > 0 && Math.abs(gap) < toward * 0.5;
+            k.r = gap > 0 !== brake;
+            k.l = gap < 0 !== brake;
+        }
+        const dd = aiDodge(me, ball, lo, hi);
+        if (dd) {
+            k.l = dd.dir < 0;
+            k.r = dd.dir > 0;
+            k.up = dd.up;
+        }
+        A.invIdle = (A.invIdle || 0) + DT;
+        if (AI_INVADE && !dd && grip0 && me.ground && !A.job && A.invCool <= 0 && A.invIdle > AI_INVADE_WAIT && aiInvadeSafe(me)) {
+            const tgt = aiInvadeTarget(me, b);
+            if (tgt) {                         // look for a jump that crashes into them (the keys we are pressing now are what the look-ahead assumes we keep pressing)
+                A.out = {};
+                A.job = { kind: 'invade', gen: aiInvadeJob(me, aiNoKeys(), tgt, A.out), out: A.out, tgt, frozen: aiNoKeys(), age: 0, done: false };
+                Object.assign(k, aiNoKeys());  // stand still while it runs: the look-ahead plans from exactly here, so the real jump must start from exactly here
+                A.invIdle = 0;
             }
         }
         return;
@@ -902,6 +1115,7 @@ function aiDrive(i) {
     AIB = A.fb = aiPickFocus(me, A);           // the body every prediction below is about (see aiPickFocus)
     A.t -= DT;
     A.cool = Math.max(0, (A.cool || 0) - DT);
+    A.invCool = Math.max(0, (A.invCool || 0) - DT);
     A.noGrab = Math.max(0, A.noGrab - DT);
     if (me.onBall) {
         if (!A.held) {                         // just latched on

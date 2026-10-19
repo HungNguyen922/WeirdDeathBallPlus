@@ -1,5 +1,13 @@
 // PHYSICS - Player grapple: the overcharge lockout, what the hook can reach, attaching / landing, and the per-tick rope, tether and weight-kick physics (stepGrapple).
 // Adds methods to Player (see mixin() in player.js); load after player.js.
+// Ball reel-in: after a teleport (Warp) stretches the ball tether far past its length, the ball is snapped back on an elastic pull: it shoots in on a curved path, passes
+// close by the player (it is aimed a little OFF-centre so it never hits) and carries on out the far side, where the normal leash catches it. Tune the feel here.
+const BALL_REEL_K = 60;       // 1/s^2: pull strength = this x how far past the tether length the ball is (stiffer = snappier)
+const BALL_REEL_ACCEL = 9000; // u/s^2: the hardest the pull ever accelerates the ball
+const BALL_REEL_MAX = 1100;   // u/s: the ball is never pulled in faster than this (it also sets how fast it flies past you)
+const BALL_REEL_MISS = 2.2;   // x (player radius + ball radius): how far off-centre the ball is aimed, i.e. the closest it passes you (must stay above 1 or it hits you)
+const BALL_REEL_T = 3;        // s: failsafe, the reel always ends by itself after this long
+
 mixin(Player, {
     // ---- Hyper / Xeric (constants.js has the numbers and the rules in one place) ----
     // Called for every player once per tick BEFORE anyone steps, so the order players are stepped in never matters.
@@ -40,6 +48,12 @@ mixin(Player, {
         this.pending = null;
         this.onBall = false;
         this.tball = null;
+        this.reelT = 0;
+    },
+    // Called after something teleports the player (Warp): if we are tethered to a ball, reel it in gently from wherever it now is.
+    startBallReel() {
+        if (this.onBall && this.rope && this.tball)
+            this.reelT = BALL_REEL_T;
     },
     // Letting go of the ball: the whip's sideways speed around you becomes spin (so WHEN you release matters).
     flickBall() {
@@ -182,6 +196,7 @@ mixin(Player, {
             this.pending = null;
             this.onBall = false;
             this.tball = null;
+            this.reelT = 0;
         }
         // Tether = a leash: a maximum length, nothing more. Stretched past it = spring + damping (hard limit on surfaces); closer than it the rope is slack. The pivot
         // has no effect on you at all: no push, no steering, nothing solid, so you can swing right through it. The ball pivot sits on its edge and spins with it.
@@ -252,7 +267,28 @@ mixin(Player, {
                 }
                 this.kickReq = false;          // the press is used up either way
             }
-            if (d > this.len) {
+            if (this.reelT > 0 && (!this.onBall || d <= this.len)) // not on a ball any more, or the ball is back inside the tether: the reel is over (the normal leash takes over)
+                this.reelT = 0;
+            if (this.reelT > 0) {
+                // REEL: the tether was stretched way past its length by a teleport. No spring, no rigid constraint (they slam the ball and player together).
+                // Only the ball moves: a strong elastic pull toward you (capped speed), plus a sideways nudge so it is always aimed BALL_REEL_MISS radii off-centre:
+                // it swings in on a curve, flies past you and out the far side. Which way round it goes follows its existing sideways motion.
+                this.reelT -= DT;
+                const rvx = tb.vx - this.vx, rvy = tb.vy - this.vy;               // ball velocity relative to you
+                const rad = rvx * nx + rvy * ny;                                   // along the rope (+ = away from you)
+                const tx = -ny, ty = nx;                                           // clockwise-on-screen tangent, same sign convention as flickBall
+                const tan = rvx * tx + rvy * ty;
+                const x = d - this.len;
+                const acc = -rad > BALL_REEL_MAX ? 0 : Math.min(BALL_REEL_ACCEL, BALL_REEL_K * x);
+                const safe = (this.r + tb.r) * BALL_REEL_MISS;
+                const sp = Math.min(Math.hypot(rvx, rvy), BALL_REEL_MAX);
+                const want = sp * safe / Math.max(d, safe);                        // sideways speed that makes the pass miss by `safe`
+                const sgn = tan < 0 ? -1 : 1;
+                const dt2 = Math.abs(tan) < want ? (sgn * want - tan) * Math.min(1, 20 * DT) : 0;
+                tb.vx += -nx * acc * DT + tx * dt2;
+                tb.vy += -ny * acc * DT + ty * dt2;
+            } else if (d > this.len) {
+                this.reelT = 0;                                                    // arrived (or never needed): the normal leash takes over
                 if (this.onBall) {
                     // Rope = distance constraint on the ball: cancel only the speed that would stretch it (mass-weighted, so the
                     // light ball takes the correction). Tangential speed survives, so the ball keeps circling the player.
@@ -317,6 +353,3 @@ mixin(Player, {
         this.prevX = k.x;
     },
 });
-
-
-

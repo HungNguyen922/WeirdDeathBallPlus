@@ -30,6 +30,7 @@
 <button class="tab on" role="tab" data-tab="game" aria-selected="true">Game</button>
 <button class="tab" role="tab" data-tab="controls" aria-selected="false">Controls</button>
 <button class="tab" role="tab" data-tab="players" aria-selected="false">Players</button>
+<button class="tab" role="tab" data-tab="skin" aria-selected="false">Skin</button>
 <button class="tab" role="tab" data-tab="account" aria-selected="false">Account</button>
 </div>
 <button id="menuclose" class="x" aria-label="Close menu" title="Close (Esc)">&#10005;</button>
@@ -134,6 +135,10 @@
 <div id="roster"></div>
 </section>
 
+<section data-panel="skin" hidden>
+<div id="skinedit"></div>
+</section>
+
 <section data-panel="account" hidden>
 <div id="acct"></div>
 </section>
@@ -161,6 +166,7 @@
 <script src="js/game/rules.js"></script>
 <script src="js/game/simstate.js"></script>
 <script src="js/game/ai.js"></script>
+<script src="js/skin-data.js"></script>
 <script src="js/render/canvas.js"></script>
 <script src="js/render/hud.js"></script>
 <script src="js/render/trail.js"></script>
@@ -169,7 +175,15 @@
 <script src="js/render/key-hints.js"></script>
 <script src="js/render/pick-screen.js"></script>
 <script src="js/render/arena.js"></script>
-<script src="js/render/entities.js"></script>
+<script src="js/render/projectiles.js"></script>
+<script src="js/render/casts.js"></script>
+<script src="js/render/special-fx.js"></script>
+<script src="js/render/portals-swaps.js"></script>
+<script src="js/render/ropes.js"></script>
+<script src="js/render/player-fx.js"></script>
+<script src="js/render/skin.js"></script>
+<script src="js/render/players.js"></script>
+<script src="js/render/balls.js"></script>
 <script src="js/render/smoke.js"></script>
 <script src="js/render/mines.js"></script>
 <script src="js/render/point-fx.js"></script>
@@ -186,6 +200,7 @@
 <script src="js/chat.js"></script>
 <script src="js/menu.js"></script>
 <script src="js/account-ui.js"></script>
+<script src="js/skin-editor.js"></script>
 <script src="js/main.js"></script>
 </body></html>
 

@@ -97,5 +97,9 @@ mixin(Player, {
         this.warp = null;
         this.cd.warp = WARP_COOLDOWN;
         this.netSide = this.x < NETX ? 0 : 1;
+        this.startBallReel(); // a ball tether is now (much) longer than its length: ease the ball in instead of letting the spring slam it into us
     },
 });
+
+
+

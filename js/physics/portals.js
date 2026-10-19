@@ -1,4 +1,4 @@
-// PHYSICS - portals: the PORTAL special. Never draws (see drawPortals in render/entities.js).
+// PHYSICS - portals: the PORTAL special. Never draws (see drawPortals in render/portals-swaps.js).
 // Load order: after boomerangs.js (it reads players, ball, decoys, arrows, boomerangs and wrapAng) and before game/rules.js (which calls stepPortals()).
 // Tuning numbers live in constants.js (PORTAL_*).
 //

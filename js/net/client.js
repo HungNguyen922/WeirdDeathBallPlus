@@ -213,6 +213,13 @@ const net = {
         if (this.ws && this.ws.readyState === 1)
             this.ws.send(JSON.stringify({ t: 'ranked', v: !!v }));
     },
+    async refreshIdentity() { // my name or skin changed on my account: the server checks my token again and sends the room a fresh roster
+        if (!this.ws || this.ws.readyState !== 1 || typeof account === 'undefined')
+            return;
+        const token = await account.freshToken().catch(() => null);
+        if (token && this.ws && this.ws.readyState === 1)
+            this.ws.send(JSON.stringify({ t: 'refresh', token }));
+    },
     sendChat(text) { // returns false when there is no open connection (chat.js then tells the player)
         if (!this.ws || this.ws.readyState !== 1)
             return false;

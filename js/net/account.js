@@ -20,7 +20,7 @@ function accountBase() { // where the game server's /api lives: this page's own 
 const account = {
     configured: !!FIREBASE_API_KEY, base: accountBase(),
     user: null,      // { uid, email } while signed in
-    profile: null,   // { name, rating, matches, wins, losses, pointsFor, pointsAgainst, settings } once the server has answered (null = signed in but no name yet)
+    profile: null,   // { name, rating, matches, wins, losses, pointsFor, pointsAgainst, settings, skin } once the server has answered (null = signed in but no name yet)
     loading: false, error: '',
     idToken: null, expiresAt: 0, lastPushed: null, listeners: [],
     changed() { for (const f of this.listeners) f(); },
@@ -111,6 +111,13 @@ const account = {
         if (first)
             this.pushSettings(); // a new account keeps this device's settings
         this.changed();
+        if (typeof net !== 'undefined' && net.refreshIdentity)
+            net.refreshIdentity(); // a room you are already in learns the new name
+    },
+    async saveSkin(skin) { // the server cleans it and answers with what it actually stored
+        this.profile.skin = (await this.api('/api/skin', 'POST', { skin })).skin;
+        this.changed();
+        return this.profile.skin;
     },
 
     // ---- settings that follow the account ----

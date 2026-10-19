@@ -16,7 +16,7 @@ const BALL_STRETCH_ARRIVE = 120;        // u/s: how fast the ball may still be c
 const BALL_STRETCH_BRAKE = 12000;       // u/s^2: how hard the ball is braked on the way in so it arrives at that speed (the speed allowed shrinks with the square root of the distance left)
 const BALL_STRETCH_BRAKE_RATE = 120;    // 1/s: how quickly its speed is pulled down to the allowed speed (lower = softer)
 const BALL_STRETCH_T = 1.5;             // s: how long the brake stays armed after the rope was last badly overstretched (it also ends as soon as the ball is back inside the tether)
-const BALL_STRETCH_AIM = 0.12;          // rad: the tug is aimed this far off the line to you (toward the side the ball is already moving, upward from rest) so a dead-straight tug can't hit you (0 = aimed right at you)
+const BALL_STRETCH_AIM = 0.25;          // rad: the tug is aimed this far off the line to you (toward the side the ball is already moving, upward from rest) so a dead-straight tug can't hit you (0 = aimed right at you)
 
 mixin(Player, {
     // ---- Hyper / Xeric (constants.js has the numbers and the rules in one place) ----

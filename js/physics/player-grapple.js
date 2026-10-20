@@ -1,22 +1,22 @@
 // PHYSICS - Player grapple: the overcharge lockout, what the hook can reach, attaching / landing, and the per-tick rope, tether and weight-kick physics (stepGrapple).
 // Adds methods to Player (see mixin() in player.js); load after player.js.
-// Ball over-stretch: anything that suddenly leaves the ball tether way past its length (Warp, and any future teleport / launch / swap) is handled by the leash itself,
-// so no ability needs to know about the ball. In normal play the rope is only a little stretched and nothing below applies. As the stretch grows toward / past the
-// tether length (s fades 0 -> 1 between FROM and FULL), the leash stops being a runaway spring and turns into a bounded TUG: the ball is accelerated toward you at a
-// capped rate (on top of the velocity it already has, so it keeps its trajectory and whips toward you), you are only tugged a little, and the speed the rope can
-// catch you with is capped. Tune the feel here.
-const BALL_STRETCH_FROM = 0.8;          // x tether length: stretch where the tug starts to take over from the normal spring
-const BALL_STRETCH_FULL = 1.6;          // x tether length: stretch where it has fully taken over
-const BALL_STRETCH_ACCEL = 9000;        // u/s^2: the hardest the ball is accelerated toward you (bigger = snappier whip)
-const BALL_STRETCH_VMAX = 1100;         // u/s: once the ball is closing on you this fast, the tug stops adding speed
-const BALL_STRETCH_PLAYER_ACCEL = 500;  // u/s^2: the hardest YOU are pulled while the rope is this stretched (what used to throw you into the ball)
-const BALL_STRETCH_YANK = 250;          // u/s: the most the rope catching the ball (rigid constraint) can change YOUR speed in one tick while stretched
-const BALL_STRETCH_BRAKE_ON = false;    // true = the arrival brake below is active. It works like an invisible ring at the tether length that kills the ball's inward speed (it keeps the ball from flying through you, but it looks like a barrier), so it is OFF
-const BALL_STRETCH_ARRIVE = 120;        // u/s: how fast the ball may still be coming in when it reaches the tether length (0 = it stops dead there; higher = it overshoots past you more)
-const BALL_STRETCH_BRAKE = 12000;       // u/s^2: how hard the ball is braked on the way in so it arrives at that speed (the speed allowed shrinks with the square root of the distance left)
-const BALL_STRETCH_BRAKE_RATE = 120;    // 1/s: how quickly its speed is pulled down to the allowed speed (lower = softer)
-const BALL_STRETCH_T = 1.5;             // s: how long the brake stays armed after the rope was last badly overstretched (it also ends as soon as the ball is back inside the tether)
-const BALL_STRETCH_AIM = 0.25;          // rad: the tug is aimed this far off the line to you (toward the side the ball is already moving, upward from rest) so a dead-straight tug can't hit you (0 = aimed right at you)
+// Ball over-extension: when something suddenly leaves the ball tether wildly overstretched (Warp, and any future teleport / launch / swap) the leash itself copes, so no
+// ability needs to know about the ball, and normal play is exactly as it was. Past BALL_SNAP_ABS u (and BALL_SNAP_REL x the tether length) of stretch the leash enters a
+// snap (think of flying a kite: the ball's own momentum is the wind and keeps carrying it along its arc, the tether only tugs and bends that path): the stiff spring and the rigid speed-cancelling constraint are swapped for a plain Hooke pull, so the ball's ACCELERATION toward you is BALL_SNAP_K x the distance
+// still to close (it dies away smoothly to nothing as the ball reaches the tether length, so nothing slams, brakes or cuts the ball off). The pull goes to the ball's CENTRE (the
+// hook point whirls round the ball's edge with its spin, which made a stiff pull jitter), is limited smoothly so the ball is never dragged faster than BALL_SNAP_VMAX, and only
+// the ball moving AWAY from you is damped. It is a central pull with no sideways steering, so the ball's own sideways motion (its angular
+// momentum about you) decides its path: it sweeps around you. The snap ends the moment the ball is back inside the tether length, or fades back into the normal leash after
+// BALL_SNAP_T s. The ball and you share the pull the way your BALL_TM / BALL_PULL tuning already says.
+const BALL_SNAP_ABS = 100;       // u: stretched past the tether length by more than this (and more than BALL_SNAP_REL x the tether length) starts a snap
+const BALL_SNAP_REL = 1.0;       // x tether length
+const BALL_SNAP_K = 750;         // 1/s^2: ball acceleration toward you = this x the stretch. THE kite-string knob: low = the ball mostly keeps its own arc and is only bent by the tug; high = the tug takes over.
+                                 //   Note the tug is capped by BALL_SNAP_VMAX, so past about 120-200 a higher K mostly just makes the first moment more of a lurch (one hard tick) instead of snappier
+const BALL_SNAP_VMAX = 800;      // u/s: the tug never drags the ball faster than this toward you on its own (a smooth limit: the pull just tops the ball up to this speed, no on/off flicker). A ball already
+                                 //   moving faster just coasts. Too low = the ball floats out there while overextended; too high = it arrives hard. BALL_VMAX (the ball's own speed cap) still caps everything
+const BALL_SNAP_DAMP = 3;        // 1/s: pulls back a ball moving AWAY from you (the way back in is never slowed). Higher = overshoots die out faster
+const BALL_SNAP_T = 2;           // s: a snap lasts at most this long
+const BALL_SNAP_FADE = 0.5;      // s: over the last part of that the snap fades back into the normal leash instead of switching over with a jolt
 
 mixin(Player, {
     // ---- Hyper / Xeric (constants.js has the numbers and the rules in one place) ----
@@ -272,63 +272,40 @@ mixin(Player, {
                 }
                 this.kickReq = false;          // the press is used up either way
             }
+            // Over-extension, measured to the ball's CENTRE: the hook is on the ball's edge and whirls round it with its spin (up to +-BALL_R u every tick), which would shake a stiff pull.
+            const cdx = tb.x - this.x, cdy = tb.y - this.y, dc = Math.hypot(cdx, cdy) || 1;
+            const xc = this.onBall ? dc - tb.r - this.len : 0; // how far past its length the tether is (the hook sits on the near edge, so the centre is len + radius away at rest)
             if (this.stretchT > 0)
-                this.stretchT = (!this.onBall || d <= this.len) ? 0 : this.stretchT - DT;   // the brake is over once the ball is back inside the tether
+                this.stretchT = (!this.onBall || xc <= 0) ? 0 : this.stretchT - DT;       // a snap is over once the ball is back inside the tether
+            if (this.onBall && this.stretchT <= 0 && xc > Math.max(BALL_SNAP_ABS, this.len * BALL_SNAP_REL))
+                this.stretchT = BALL_SNAP_T;                                               // wildly overstretched (teleport, launch...): start a snap
+            const sf = this.onBall && this.stretchT > 0 ? Math.min(1, this.stretchT / BALL_SNAP_FADE) : 0; // 0 = the normal leash, 1 = the pure Hooke pull
             if (d > this.len) {
-                const over = (d - this.len) / this.len;                              // stretch relative to the tether length
-                const s = this.onBall ? Math.max(0, Math.min(1, (over - BALL_STRETCH_FROM) / (BALL_STRETCH_FULL - BALL_STRETCH_FROM))) : 0; // 0 = normal leash, 1 = bounded tug
-                if (s > 0)
-                    this.stretchT = BALL_STRETCH_T;                                // badly overstretched: arm the arrival brake (see below)
+                const x = d - this.len; // the rope can deform past its length, but pulls back with a force that grows the further it goes
                 if (this.onBall) {
                     // Rope = distance constraint on the ball: cancel only the speed that would stretch it (mass-weighted, so the
                     // light ball takes the correction). Tangential speed survives, so the ball keeps circling the player.
                     const c = rx * ny - ry * nx, im = 1 + 1 / BALL_TM + c * c / BALL_I;
                     if (closing < 0) {
-                        const J = -closing * BALL_RIGID / im;
-                        let pj = J * BALL_PULL;                                    // how much YOUR speed changes
-                        if (s > 0)
-                            pj = pj * (1 - s) + Math.min(pj, BALL_STRETCH_YANK) * s; // (overstretched: the ball takes the catch, you are not yanked)
-                        this.vx += nx * pj;
-                        this.vy += ny * pj;
+                        const J = -closing * BALL_RIGID / im * (1 - sf);                // (switched off during a snap: nothing cancels the ball's swing)
+                        this.vx += nx * J * BALL_PULL;
+                        this.vy += ny * J * BALL_PULL;
                         tb.vx -= nx * J / BALL_TM;
                         tb.vy -= ny * J / BALL_TM;
                         tb.w -= J * c / BALL_I;
                     }
                 }
-                const x = d - this.len; // the rope can deform past its length, but pulls back with a force that grows the further it goes
-                const f = Math.max(0, (this.onBall ? KB : KS) * (this.onBall || this.ropeGround ? 1 : WALL_KS_SCALE) * (heavy ? HEAVY_KS : 1) * x * (1 + x / STRETCH_X0)
+                let f = Math.max(0, (this.onBall ? KB : KS) * (this.onBall || this.ropeGround ? 1 : WALL_KS_SCALE) * (heavy ? HEAVY_KS : 1) * x * (1 + x / STRETCH_X0)
                     - (this.onBall ? DB : DAMP) * Math.min(0, closing)
                     - (this.onBall ? 0 : RETURN_DAMP) * Math.max(0, closing));
+                f *= 1 - sf;                         // (during a snap the normal leash steps aside; it only comes back as the snap fades out)
                 const pf = this.onBall ? BALL_PULL : 1; // platform ropes stay as they were
-                let fb = f, fp = f;                      // the force on the ball / on you (the same, until the rope is badly overstretched)
-                let ux = -nx, uy = -ny;                  // the direction the ball is pulled: toward you
-                if (s > 0) {
-                    fb = f * (1 - s) + Math.min(f, BALL_STRETCH_ACCEL * BALL_TM) * s;                          // capped tug on the ball
-                    fp = f * (1 - s) + Math.min(f, BALL_STRETCH_PLAYER_ACCEL / Math.max(pf, 1e-6)) * s;         // you are only tugged a little
-                    if (closing > BALL_STRETCH_VMAX)
-                        fb *= 1 - s;                                                                              // already coming in at full tilt: no more pull
-                    const tp = (tb.vx - this.vx) * -ny + (tb.vy - this.vy) * nx;                                 // which side of the line the ball is already moving to
-                    const side = Math.abs(tp) > 20 ? Math.sign(tp) : (nx < 0 ? 1 : -1);                          // from rest: upward (y is down)
-                    const ang = -BALL_STRETCH_AIM * s * side, ca = Math.cos(ang), sa = Math.sin(ang);
-                    ux = -nx * ca + ny * sa;                                                                      // pull direction turned a little off the line to you
-                    uy = -nx * sa - ny * ca;
-                }
-                this.vx += nx * fp * DT * pf;
-                this.vy += ny * fp * DT * pf;
+                this.vx += nx * f * DT * pf;
+                this.vy += ny * f * DT * pf;
                 if (this.onBall) {
-                    tb.vx += ux * fb * DT / BALL_TM;
-                    tb.vy += uy * fb * DT / BALL_TM;
-                    tb.w += (rx * (-ny * fb) - ry * (-nx * fb)) * DT / BALL_I; // torque from pulling on the edge
-                    if (BALL_STRETCH_BRAKE_ON && this.stretchT > 0) {
-                        // Arrival brake: while it comes back in from a bad overstretch the ball may only close on you at a speed that shrinks as it nears the tether length, so
-                        // it reaches the tether length at about BALL_STRETCH_ARRIVE and the normal leash takes over there, instead of flying through you. (Sideways speed is untouched.)
-                        const vin = BALL_STRETCH_ARRIVE + Math.sqrt(2 * BALL_STRETCH_BRAKE * Math.max(0, d - this.len - closing * DT)); // (distance left after this tick, so it is already slow when it crosses)
-                        if (closing > vin) {
-                            const ex = (closing - vin) * Math.min(1, BALL_STRETCH_BRAKE_RATE * DT);
-                            tb.vx += nx * ex;
-                            tb.vy += ny * ex;
-                        }
-                    }
+                    tb.vx -= nx * f * DT / BALL_TM;
+                    tb.vy -= ny * f * DT / BALL_TM;
+                    tb.w += (rx * (-ny * f) - ry * (-nx * f)) * DT / BALL_I; // torque from pulling on the edge
                 }
                 const lim = this.len * 3 + 200;
                 if (!this.onBall && d > lim) { // failsafe only; the progressive spring normally stops you long before this
@@ -339,6 +316,19 @@ mixin(Player, {
                         this.vy -= closing * ny;
                     }
                 }
+            }
+            if (sf > 0 && xc > 0) {
+                // The snap: a Hooke pull along the line to the ball's centre (so no torque and no spin-driven jitter). The ball's acceleration is BALL_SNAP_K x the stretch, but the
+                // pull only tops the ball up to BALL_SNAP_VMAX toward you (a smooth speed limit, not an on/off switch) so it can never drag the ball faster than that.
+                const ncx = cdx / dc, ncy = cdy / dc;
+                const closingC = (this.vx - tb.vx) * ncx + (this.vy - tb.vy) * ncy;           // relative closing speed along the centre line (+ = coming together)
+                const ballIn = -(tb.vx * ncx + tb.vy * ncy);                                   // the ball's OWN speed toward you (not the relative one: that includes YOUR speed)
+                const fh = (BALL_SNAP_K * xc + BALL_SNAP_DAMP * Math.max(0, -closingC)) * BALL_TM;
+                const fs = Math.min(fh, Math.max(0, BALL_SNAP_VMAX - ballIn) * BALL_TM / DT) * sf;
+                this.vx += ncx * fs * DT * BALL_PULL;
+                this.vy += ncy * fs * DT * BALL_PULL;
+                tb.vx -= ncx * fs * DT / BALL_TM;
+                tb.vy -= ncy * fs * DT / BALL_TM;
             }
             if (TAUT_K > 0 && !this.onBall && this.ropeGround) { // taut floor tether: hang above the pivot instead of dropping onto it
                 const s = Math.max(0, Math.min(1, (ny - TAUT_MIN_NY) / TAUT_FADE));

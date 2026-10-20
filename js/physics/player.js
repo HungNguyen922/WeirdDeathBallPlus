@@ -32,7 +32,7 @@ class Player {
         this.taut = false;
         this.floatW = 1; // grapple-float weight 0..1: dribbling fades it out so the rope can pull you in, then it eases back
         this.dribT = 0;  // seconds left of the 'dribbling' window opened by a weighted kick
-        this.stretchT = 0; // > 0: the ball tether was badly overstretched (a teleport, launch...) and the ball is being tugged back in; arms the arrival brake in stepGrapple
+        this.stretchT = 0; // > 0: the ball tether was wildly overstretched (a teleport, launch...) and the leash is in a snap (see stepGrapple); seconds left
         this.sim = false; // true on the AI planner's throwaway copies: they must not touch the real game (spawn decoys / pegs)
         this.keys = noKeys();
         this.special = 'dash'; // chosen special ability (see SPECIALS)

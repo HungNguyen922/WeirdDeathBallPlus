@@ -230,7 +230,7 @@ const IMPACT_V1 = 1000;               // the impact speed (u/s) that gives the b
 // --- Shared ------------------------------------------------------------------------------------------------------------------------------------------------------
 // Ability timing: cast = seconds from pressing the key until the effect happens; cd = cooldown (s) that starts when the effect happens, on top of each
 // ability's own reset rule (dash: once per trip off the floor). The ABILITY table itself is at the bottom of this section (it reads every cooldown).
-const START_CD = 0;                   // share of each ability's full cooldown still running at the start of a round (0 = ready at once, 1 = full cooldown)
+const START_CD = 1;                   // share of each ability's full cooldown still running at the start of a round (0 = ready at once, 1 = full cooldown)
 
 // --- Dash --------------------------------------------------------------------------------------------------------------------------------------------------------
 const DASH_V = 420;                   // dash impulse (u/s) in the arrow direction(s) held

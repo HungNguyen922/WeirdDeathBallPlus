@@ -10,11 +10,14 @@ const FB_ERRORS = {
     INVALID_EMAIL: 'That email does not look right.', WEAK_PASSWORD: 'Use a password with at least 6 characters.',
     TOO_MANY_ATTEMPTS_TRY_LATER: 'Too many tries. Wait a bit and try again.', USER_DISABLED: 'This account has been disabled.'
 };
-function accountBase() { // where the game server's /api lives: this page's own server, or the ?server= one
+const GAME_HOST = 'your-app.onrender.com'; // your Render service hostname
+const IS_LOCAL = !location.host || /^(localhost|127\.|192\.168\.)/.test(location.hostname);
+
+function accountBase() {
     const q = new URLSearchParams(location.search).get('server');
-    if (!q)
-        return '';
-    return q.includes('://') ? q.replace(/^ws/, 'http') : (location.protocol === 'https:' ? 'https://' : 'http://') + q;
+    if (q)
+        return q.includes('://') ? q.replace(/^ws/, 'http') : (location.protocol === 'https:' ? 'https://' : 'http://') + q;
+    return IS_LOCAL ? '' : 'https://' + GAME_HOST;
 }
 
 const account = {

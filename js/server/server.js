@@ -338,6 +338,19 @@ class Room {
     }
 }
 
+const SERVE_STATIC = process.env.SERVE_STATIC !== '0'; // set SERVE_STATIC=0 on Render
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean); // e.g. https://wdb.pages.dev
+function cors(req, res) {
+    const o = req.headers.origin;
+    if (o && ALLOWED_ORIGINS.includes(o)) {
+        res.setHeader('Access-Control-Allow-Origin', o);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Max-Age', '86400');
+    }
+}
+
 function startServer(port = 8080, host = '0.0.0.0') {
     accounts.init();
     const rooms = new Map();
@@ -350,9 +363,12 @@ function startServer(port = 8080, host = '0.0.0.0') {
             return;
         }
         if (p.startsWith('/api/')) {
+            cors(req, res);
+            if (req.method === 'OPTIONS') { res.writeHead(204).end(); return; } // preflight (the Authorization header triggers one)
             accounts.handleApi(req, res, p);
             return;
         }
+        if (!SERVE_STATIC) { res.writeHead(404).end('not found'); return; }
         if (p === '/')
             p = '/index.html';
         const parts = p.split('/').filter(Boolean);

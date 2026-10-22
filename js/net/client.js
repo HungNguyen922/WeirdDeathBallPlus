@@ -307,7 +307,9 @@ function netServerUrl() {
     const q = new URLSearchParams(location.search).get('server'), tls = location.protocol === 'https:';
     if (q)
         return q.includes('://') ? q : (tls ? 'wss://' : 'ws://') + q;
-    return (tls ? 'wss://' : 'ws://') + (location.host || 'localhost:8080'); // opened from a file: assume a local server
+    if (!IS_LOCAL)
+        return 'wss://' + GAME_HOST;
+    return (tls ? 'wss://' : 'ws://') + (location.host || 'localhost:8080');
 }
 
 // ---- keyboard while online: both players' layouts drive MY seat (arrows + X / C / Z, or WASD + F / G / H) ----

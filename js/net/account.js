@@ -10,7 +10,7 @@ const FB_ERRORS = {
     INVALID_EMAIL: 'That email does not look right.', WEAK_PASSWORD: 'Use a password with at least 6 characters.',
     TOO_MANY_ATTEMPTS_TRY_LATER: 'Too many tries. Wait a bit and try again.', USER_DISABLED: 'This account has been disabled.'
 };
-const GAME_HOST = 'your-app.onrender.com'; // your Render service hostname
+const GAME_HOST = 'weirddeathballplus.onrender.com'; // your Render service hostname
 const IS_LOCAL = !location.host || /^(localhost|127\.|192\.168\.)/.test(location.hostname);
 
 function accountBase() {

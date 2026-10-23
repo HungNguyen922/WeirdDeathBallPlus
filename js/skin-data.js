@@ -14,8 +14,10 @@
 const SKIN_SHAPES = ['oval', 'rect', 'tri', 'half', 'star', 'heart', 'ring', 'moon', 'cross'];
 const SKIN_MAX_LAYERS = 24;
 const SKIN_POS = 1.6;                // x and y are clamped to +-this (player radii)
-const SKIN_SIZE_MIN = 0.05, SKIN_SIZE_MAX = 1.2; // w and h are clamped to this range
-const SKIN_EXTENT = 3.5;             // nothing a valid skin draws reaches further than this from the centre (SKIN_POS + SKIN_SIZE_MAX x sqrt 2 = 3.3): the sprite canvas is this big
+const SKIN_SIZE_MIN = 0.05, SKIN_SIZE_MAX = 2; // w and h are clamped to this range
+const SKIN_EXTENT = 4.5;             // nothing a valid skin draws reaches further than this from the centre (SKIN_POS + SKIN_SIZE_MAX x sqrt 2 = 3.3): the sprite canvas is this big
+const SKIN_SLOTS = 3;
+const SKIN_MAX_GROUPS = 8;
 
 const skinNum = (v, lo, hi, fallback) => (typeof v === 'number' && isFinite(v)) ? Math.round(Math.min(hi, Math.max(lo, v)) * 100) / 100 : fallback;
 
@@ -30,17 +32,26 @@ function skinClean(raw) {
             break;
         if (!l || typeof l !== 'object' || !SKIN_SHAPES.includes(l.t) || typeof l.c !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(l.c))
             continue;
-        out.push({
+        const layer = {
             t: l.t,
             x: skinNum(l.x, -SKIN_POS, SKIN_POS, 0), y: skinNum(l.y, -SKIN_POS, SKIN_POS, 0),
             w: skinNum(l.w, SKIN_SIZE_MIN, SKIN_SIZE_MAX, 0.4), h: skinNum(l.h, SKIN_SIZE_MIN, SKIN_SIZE_MAX, 0.4),
             r: Math.round(skinNum(l.r, -180, 180, 0)),
             c: l.c.toLowerCase(),
             o: l.o ? 1 : 0
-        });
+        };
+        if (Number.isInteger(l.g) && l.g >= 1 && l.g <= SKIN_MAX_GROUPS)
+            layer.g = l.g; // only stored when set, so ungrouped layers and old skins are unchanged
+        out.push(layer);
     }
     return out;
 }
+const skinSlotOk = n => Number.isInteger(n) && n >= 0 && n < SKIN_SLOTS;
+// A list of exactly SKIN_SLOTS clean skins, whatever came in.
+function skinsClean(raw) {
+    const src = Array.isArray(raw) ? raw : [];
+    return Array.from({ length: SKIN_SLOTS }, (_, i) => skinClean(src[i]));
+}
 
 if (typeof module !== 'undefined' && module.exports)
-    module.exports = { SKIN_SHAPES, SKIN_MAX_LAYERS, SKIN_POS, SKIN_SIZE_MIN, SKIN_SIZE_MAX, SKIN_EXTENT, skinClean };
+    module.exports = { SKIN_SHAPES, SKIN_MAX_LAYERS, SKIN_POS, SKIN_SIZE_MIN, SKIN_SIZE_MAX, SKIN_EXTENT, SKIN_SLOTS, SKIN_MAX_GROUPS, skinClean, skinsClean, skinSlotOk };

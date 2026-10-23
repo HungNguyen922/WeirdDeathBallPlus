@@ -108,13 +108,14 @@ body.touch #touchui{display:block}
 #skinedit .skinright { flex: 1 1 260px; min-width: 0; }
 @media (min-width: 700px) { #skinedit .skinleft { position: sticky; top: 0; } } /* beside the controls: stays in view while you scroll them */
 #skincv { width: 300px; max-width: 100%; max-height: none; aspect-ratio: 1; cursor: grab; touch-action: none; }
-#skinedit .skinlist { display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto; }
+#skinedit .skinlist { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
 #skinedit button.layer { display: flex; align-items: center; gap: 8px; text-align: left; padding: 2px 8px; border-width: 1px; }
 #skinedit button.layer.sel { border-color: #ffd54a; border-width: 2px; }
+#skinedit button.layer.grp { font-weight: 700; }
 #skinedit .chip { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--mut); flex: none; }
 #skinedit .srow { display: flex; align-items: center; gap: 8px; }
 #skinedit .srow > span:first-child { min-width: 62px; color: var(--mut); font-size: 13px; }
-#skinedit .srow input[type=range] { flex: 1 1 100px; min-width: 80px; }
+#skinedit .srow input[type=number] { padding: 2px 4px; border: 1px solid var(--mut); border-radius: 6px; background: transparent; color: var(--fg); font: inherit; font-size: 13px; }
 #skinedit .srow .val { min-width: 42px; font-variant-numeric: tabular-nums; font-size: 13px; }
 #skinedit input[type=color] { width: 44px; height: 28px; padding: 0; border: 1px solid var(--mut); border-radius: 6px; background: transparent; cursor: pointer; }
 #skinedit .skinctl > .row, #skinedit .skinctl > .srow { margin-top: 6px; }

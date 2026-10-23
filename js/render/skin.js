@@ -88,18 +88,40 @@ function skinSprite(skin, color) { // the sprites for this skin in this team col
 }
 
 // ---- which skin does this player wear? ----
-function skinLocal() { // this browser's saved skin (a guest's, or the signed-in player's backup)
-    try { return skinClean(JSON.parse(localStorage.getItem(SKIN_STORE))); } catch (e) { return []; }
+const SKINS_STORE = 'wdb-skins'; // this browser's slots: { slot, skins: [3 skins] }
+let skinLocalData = null;        // loaded once; the arrays inside keep their identity so the sprite cache works
+function skinLocalState() {
+    if (skinLocalData)
+        return skinLocalData;
+    let slot = 0, skins = skinsClean([]);
+    try {
+        const raw = JSON.parse(localStorage.getItem(SKINS_STORE));
+        if (raw && Array.isArray(raw.skins)) {
+            skins = skinsClean(raw.skins);
+            if (skinSlotOk(raw.slot)) slot = raw.slot;
+        } else {
+            const old = JSON.parse(localStorage.getItem(SKIN_STORE)); // the single skin saved before slots existed
+            if (Array.isArray(old)) skins[0] = skinClean(old);
+        }
+    } catch (e) {}
+    return (skinLocalData = { slot, skins });
 }
-let skinMine = null; // this browser's skin, cleaned once (the sprite cache keys on the array, so it must stay the same array until the skin really changes)
-function skinMy() { // MY skin: the account's when signed in and one is saved there, otherwise this browser's
-    if (typeof account !== 'undefined' && account.profile && Array.isArray(account.profile.skin) && account.profile.skin.length)
-        return account.profile.skin;
-    return skinMine || (skinMine = skinLocal());
+function skinState() { // { slot, skins }: the account's when signed in with a name, otherwise this browser's
+    if (typeof account !== 'undefined' && account.profile && Array.isArray(account.profile.skins))
+        return { slot: account.profile.slot | 0, skins: account.profile.skins };
+    return skinLocalState();
 }
-function skinSaveLocal(skin) { // remember it in this browser and use it from the next frame on
-    skinMine = skin;
-    try { localStorage.setItem(SKIN_STORE, JSON.stringify(skin)); } catch (e) {}
+function skinMy() { const s = skinState(); return s.skins[s.slot] || []; } // an empty slot means a plain player
+function skinPersistLocal() { try { localStorage.setItem(SKINS_STORE, JSON.stringify(skinLocalState())); } catch (e) {} }
+function skinSaveLocal(skin, slot) { // remember it in this browser (a guest's only copy; for a signed-in player a backup)
+    const s = skinLocalState();
+    s.skins[slot] = skin;
+    s.slot = slot;
+    skinPersistLocal();
+}
+function skinSetLocalSlot(slot) {
+    skinLocalState().slot = slot;
+    skinPersistLocal();
 }
 function skinOf(p) { // online: my own seat shows my skin at once, everyone else's comes with the roster (only signed-in players have one). Offline: the first player is me.
     if (typeof net !== 'undefined' && net.on) {

@@ -13,6 +13,13 @@ const FB_ERRORS = {
 const GAME_HOST = 'weirddeathballplus.onrender.com'; // your Render service hostname
 const IS_LOCAL = !location.host || /^(localhost|127\.|192\.168\.)/.test(location.hostname);
 
+// Stored as [{ layers }, ...] because Firestore does not allow arrays inside arrays.
+const skinsToStore = skins => skins.map(layers => ({ layers }));
+function skinSlots(p) { // older profiles only have `skin`: it becomes slot 0
+    const skins = Array.isArray(p.skins) ? skinsClean(p.skins.map(s => s && s.layers)) : skinsClean([p.skin]);
+    return { skins, slot: skinSlotOk(p.slot) ? p.slot : 0 };
+}
+
 function accountBase() {
     const q = new URLSearchParams(location.search).get('server');
     if (q)
@@ -117,10 +124,16 @@ const account = {
         if (typeof net !== 'undefined' && net.refreshIdentity)
             net.refreshIdentity(); // a room you are already in learns the new name
     },
-    async saveSkin(skin) { // the server cleans it and answers with what it actually stored
-        this.profile.skin = (await this.api('/api/skin', 'POST', { skin })).skin;
+    async saveSkin(skin, slot) {
+        const r = await this.api('/api/skin', 'POST', { skin, slot });
+        Object.assign(this.profile, { skin: r.skin, skins: r.skins, slot: r.slot });
         this.changed();
-        return this.profile.skin;
+        return r.skin;
+    },
+    async selectSkinSlot(slot) {
+        const r = await this.api('/api/skin-slot', 'POST', { slot });
+        Object.assign(this.profile, { skin: r.skin, skins: r.skins, slot: r.slot });
+        this.changed();
     },
 
     // ---- settings that follow the account ----

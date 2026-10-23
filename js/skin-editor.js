@@ -41,6 +41,10 @@
     const snapshot = () => JSON.stringify(skinClean(layers));
     const dirty = () => snapshot() !== base;
     function load() { layers = mine(); sel = layers.length - 1; base = snapshot(); }
+    let collapsed = new Set(), groupMove = true; // collapsed group numbers; drag moves the whole group
+    const groupIds = () => [...new Set(layers.map(l => l.g || 0).filter(Boolean))].sort((a, b) => a - b);
+    const freeGroup = () => { for (let g = 1; g <= SKIN_MAX_GROUPS; g++) if (!layers.some(l => l.g === g)) return g; return 0; };
+    const setGroup = (l, g) => { if (g) l.g = g; else delete l.g; };
     load();
 
     // ---- the preview ----
@@ -85,7 +89,8 @@
         const q = pointerLocal(e), i = hit(q.x, q.y);
         sel = i;
         if (i >= 0) {
-            drag = { dx: layers[i].x - (q.x - CV / 2) / U, dy: layers[i].y - (q.y - CV / 2) / U };
+            const l = layers[i], members = groupMove && l.g ? layers.filter(m => m.g === l.g) : [l];
+            drag = { qx: q.x, qy: q.y, orig: members.map(m => [m, m.x, m.y]) };
             try { cv.setPointerCapture(e.pointerId); } catch (err) {}
         }
         rebuild();
@@ -93,9 +98,11 @@
     cv.addEventListener('pointermove', e => {
         if (!drag || !layers[sel])
             return;
-        const q = pointerLocal(e);
-        layers[sel].x = clamp(Math.round(((q.x - CV / 2) / U + drag.dx) * 100) / 100, -SKIN_POS, SKIN_POS);
-        layers[sel].y = clamp(Math.round(((q.y - CV / 2) / U + drag.dy) * 100) / 100, -SKIN_POS, SKIN_POS);
+        const q = pointerLocal(e), dx = (q.x - drag.qx) / U, dy = (q.y - drag.qy) / U;
+        for (const [m, ox, oy] of drag.orig) {
+            m.x = clamp(Math.round((ox + dx) * 100) / 100, -SKIN_POS, SKIN_POS);
+            m.y = clamp(Math.round((oy + dy) * 100) / 100, -SKIN_POS, SKIN_POS);
+        }
         draw();
     });
     const endDrag = () => { if (drag) { drag = null; rebuild(); } };
@@ -103,24 +110,45 @@
     cv.addEventListener('pointercancel', endDrag);
 
     // ---- the controls ----
-    const addLayers = ls => {
+    const addLayers = (ls, asGroup) => {
         if (layers.length + ls.length > SKIN_MAX_LAYERS) { msg = `A skin holds at most ${SKIN_MAX_LAYERS} layers.`; rebuild(); return; }
+        if (asGroup) { const g = freeGroup(); if (g) ls = ls.map(l => ({ ...l, g })); }
         layers.push(...ls.map(l => ({ ...l })));
         sel = layers.length - 1; msg = '';
         rebuild();
     };
     function slider(label, key, lo, hi, step, fmt) {
-        const l = layers[sel], out = el('span', { className: 'val', textContent: fmt(l[key]) });
+        const l = layers[sel];
         const inp = el('input', { type: 'range', min: lo, max: hi, step, value: l[key] });
-        inp.oninput = () => { l[key] = Number(inp.value); out.textContent = fmt(l[key]); draw(); updateButtons(); };
+        const num = el('input', { type: 'number', className: 'val', min: lo, max: hi, step, value: l[key] });
+        num.style.width = '64px';
+        const set = v => { l[key] = v; draw(); updateButtons(); };
+        inp.oninput = () => { num.value = inp.value; set(Number(inp.value)); };
         inp.onchange = rebuild;
-        return el('label', { className: 'srow' }, el('span', { textContent: label }), inp, out);
+        num.oninput = () => { // live preview while typing, only for values that are actually numbers
+            const v = parseFloat(num.value);
+            if (isFinite(v)) { inp.value = clamp(v, lo, hi); set(clamp(v, lo, hi)); }
+        };
+        num.onchange = () => { // on blur / Enter: clamp, round, and show what was really applied
+            let v = parseFloat(num.value);
+            if (!isFinite(v)) v = l[key];
+            v = clamp(Math.round(v / step) * step, lo, hi);
+            v = Math.round(v * 100) / 100;
+            num.value = v; inp.value = v; set(v);
+            rebuild();
+        };
+        return el('label', { className: 'srow' }, el('span', { textContent: label }), inp, num);
     }
     function move(from, to) { // change the drawing order of the selected layer
         if (to < 0 || to >= layers.length)
             return;
         layers.splice(to, 0, layers.splice(from, 1)[0]);
         sel = to; rebuild();
+    }
+    function copyGroup(g) {
+        const ng = freeGroup();
+        if (!ng) { msg = `A skin holds at most ${SKIN_MAX_GROUPS} groups.`; rebuild(); return; }
+        addLayers(layers.filter(m => m.g === g).map(m => ({ ...m, g: ng, x: clamp(m.x + 0.1, -SKIN_POS, SKIN_POS), y: clamp(m.y + 0.1, -SKIN_POS, SKIN_POS) })));
     }
     function controls() {
         const box = el('div', { className: 'skinctl' });
@@ -132,16 +160,35 @@
         const shapes = el('div', { className: 'row' });
         for (const t of SKIN_SHAPES)
             shapes.append(el('button', { className: 'mode' + (l.t === t ? ' on' : ''), textContent: SHAPE_NAMES[t], onclick: () => { l.t = t; rebuild(); } }));
+
+        // ---- group row: must come AFTER `const l` (it uses l) ----
+        const nf = freeGroup(), groupRow = el('div', { className: 'row' }, el('span', { className: 'hint', textContent: 'Group' }));
+        groupRow.append(el('button', { className: 'mode' + (!l.g ? ' on' : ''), textContent: 'None', onclick: () => { setGroup(l, 0); rebuild(); } }));
+        for (const g of groupIds())
+            groupRow.append(el('button', { className: 'mode' + (l.g === g ? ' on' : ''), textContent: String(g), onclick: () => { setGroup(l, g); rebuild(); } }));
+        if (nf)
+            groupRow.append(el('button', { className: 'mode', textContent: '+ New', title: 'Start a new group with this shape', onclick: () => { setGroup(l, nf); collapsed.delete(nf); rebuild(); } }));
+        if (l.g) {
+            const g = l.g;
+            groupRow.append(
+                el('button', { className: 'mode' + (groupMove ? ' on' : ''), textContent: 'Drag moves group', onclick: () => { groupMove = !groupMove; rebuild(); } }),
+                el('button', { className: 'mode', textContent: 'Copy group', onclick: () => copyGroup(g) }),
+                el('button', { className: 'mode', textContent: 'Delete group', onclick: () => { layers = layers.filter(m => m.g !== g); sel = Math.min(sel, layers.length - 1); rebuild(); } }));
+        }
+
         const color = el('input', { type: 'color', value: l.c, title: 'Colour' });
         color.oninput = () => { l.c = color.value; draw(); updateButtons(); };
         color.onchange = rebuild;
         box.append(
             el('h3', { textContent: 'Selected shape' }), shapes,
+            groupRow,
             el('div', { className: 'row' }, el('label', { className: 'srow' }, el('span', { textContent: 'Colour' }), color),
                 el('button', { className: 'mode' + (l.o ? ' on' : ''), textContent: l.o ? 'Outside the circle' : 'Inside the circle', title: 'Inside shapes are cut off at the edge of the circle (skins). Outside shapes can stick out (hats, horns, mustaches).', onclick: () => { l.o = l.o ? 0 : 1; rebuild(); } })),
             slider('Width', 'w', SKIN_SIZE_MIN, SKIN_SIZE_MAX, 0.01, v => v.toFixed(2)),
             slider('Height', 'h', SKIN_SIZE_MIN, SKIN_SIZE_MAX, 0.01, v => v.toFixed(2)),
             slider('Rotation', 'r', -180, 180, 1, v => v + '°'),
+            slider('X', 'x', -SKIN_POS, SKIN_POS, 0.01, v => v.toFixed(2)),
+            slider('Y', 'y', -SKIN_POS, SKIN_POS, 0.01, v => v.toFixed(2)),
             el('div', { className: 'row' },
                 el('button', { className: 'mode', textContent: 'Forward', onclick: () => move(sel, sel + 1) }),
                 el('button', { className: 'mode', textContent: 'Back', onclick: () => move(sel, sel - 1) }),
@@ -150,14 +197,27 @@
                 el('button', { className: 'mode', textContent: 'Delete', onclick: () => { layers.splice(sel, 1); sel = Math.min(sel, layers.length - 1); rebuild(); } })));
         return box;
     }
+    function layerRow(i) {
+        const l = layers[i], chip = el('span', { className: 'chip' });
+        chip.style.background = l.c;
+        return el('button', { className: 'layer' + (i === sel ? ' sel' : ''), onclick: () => { sel = i; rebuild(); } }, chip, SHAPE_NAMES[l.t] + (l.o ? ' (outside)' : ''));
+    }
     function layerList() {
-        const list = el('div', { className: 'skinlist' });
+        const list = el('div', { className: 'skinlist' }), seen = new Set();
         if (!layers.length)
             list.append(el('p', { className: 'hint', textContent: 'No shapes yet: your player looks plain.' }));
         for (let i = layers.length - 1; i >= 0; i--) { // top of the list = drawn last = on top
-            const l = layers[i], chip = el('span', { className: 'chip' });
-            chip.style.background = l.c;
-            list.append(el('button', { className: 'layer' + (i === sel ? ' sel' : ''), onclick: () => { sel = i; rebuild(); } }, chip, SHAPE_NAMES[l.t] + (l.o ? ' (outside)' : '')));
+            const g = layers[i].g || 0;
+            if (!g) { list.append(layerRow(i)); continue; }
+            if (seen.has(g)) continue;
+            seen.add(g);
+            const members = [];
+            for (let j = layers.length - 1; j >= 0; j--) if (layers[j].g === g) members.push(j);
+            const open = !collapsed.has(g);
+            list.append(el('button', { className: 'layer grp' + (members.includes(sel) ? ' sel' : ''), onclick: () => { if (open) collapsed.add(g); else collapsed.delete(g); sel = members[0]; rebuild(); } },
+                el('span', { textContent: open ? '▾' : '▸' }), `Group ${g} (${members.length})`));
+            if (open)
+                for (const j of members) { const r = layerRow(j); r.style.marginLeft = '16px'; list.append(r); }
         }
         return list;
     }
@@ -168,16 +228,30 @@
         if (saveBtn) saveBtn.disabled = !dirty();
         if (revertBtn) revertBtn.disabled = !dirty();
     }
+    async function switchSlot(i) {
+        if (dirty()) { msg = 'Save or revert your changes before switching skins.'; rebuild(); return; }
+        if (i === skinState().slot)
+            return;
+        if (account.user && account.profile) {
+            try { await account.selectSkinSlot(i); } catch (e) { msg = e.message; rebuild(); return; }
+            if (typeof net !== 'undefined' && net.on)
+                net.refreshIdentity(); // the room sees the new skin
+        } else
+            skinSetLocalSlot(i);
+        load();
+        msg = '';
+        rebuild();
+    }
     async function save() {
-        const clean = skinClean(layers);
-        skinSaveLocal(clean);
+        const clean = skinClean(layers), slot = skinState().slot;
+        skinSaveLocal(clean, slot);
         layers = clean.map(l => ({ ...l }));
         sel = Math.min(sel, layers.length - 1);
         base = snapshot();
         if (account.user && account.profile) {
             msg = 'Saving...'; rebuild();
             try {
-                await account.saveSkin(clean);
+                await account.saveSkin(clean, slot);
                 msg = 'Saved to your account. Other players online will see it.';
                 if (typeof net !== 'undefined' && net.on)
                     net.refreshIdentity();
@@ -198,11 +272,20 @@
             shapesRow.append(el('button', { className: 'mode', textContent: '+ ' + SHAPE_NAMES[t], onclick: () => addLayers([L(t, 0, 0, 0.4, 0.4, 0, '#ffffff', 0)]) }));
         const presetRow = el('div', { className: 'row' });
         for (const p of PRESETS)
-            presetRow.append(el('button', { className: 'mode', textContent: p.name, onclick: () => addLayers(p.layers) }));
+            presetRow.append(el('button', { className: 'mode', textContent: p.name, onclick: () => addLayers(p.layers, p.layers.length > 1) }));
 
+        const st = skinState(), slotRow = el('div', { className: 'row' }, el('span', { className: 'hint', textContent: 'Skin slot' }));
+        for (let i = 0; i < SKIN_SLOTS; i++)
+            slotRow.append(el('button', {
+                className: 'mode' + (st.slot === i ? ' on' : ''),
+                textContent: (i + 1) + (st.skins[i].length ? '' : ' (empty)'),
+                title: 'Wear and edit skin ' + (i + 1),
+                onclick: () => switchSlot(i)
+            }));
+            
         // left: the preview, which stays in view while you scroll the controls; right: everything you can change
         root.append(el('div', { className: 'skinwrap' },
-            el('div', { className: 'skinleft' }, cv, teamRow,
+            el('div', { className: 'skinleft' }, slotRow, cv, teamRow,
                 el('div', { className: 'row', style: 'margin-top:10px' }, saveBtn, revertBtn, el('button', { className: 'mode', textContent: 'Clear all', onclick: () => { layers = []; sel = -1; rebuild(); } })),
                 el('p', { className: 'hint', textContent: msg || 'Inside shapes are cut off at the circle; outside ones can stick out like a hat. Your team colour always shows as a rim, so everyone can tell the teams apart. Online, only signed-in players show their skin to others.' })),
             el('div', { className: 'skinright' },

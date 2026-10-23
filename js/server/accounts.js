@@ -6,7 +6,7 @@
 //        names/{nameLower}  { uid }   (claims a name so two players cannot share it)
 'use strict';
 
-const { skinClean } = require('../skin-data.js'); // the one definition of a valid skin, shared with the browser
+const { skinClean, skinsClean, skinSlotOk } = require('../skin-data.js'); // the one definition of a valid skin, shared with the browser
 const NAME_RE = /^[A-Za-z0-9_]{3,16}$/;
 const START_RATING = 1000, ELO_K = 32, MIN_RATING = 100;
 const LB_TTL_MS = 5 * 60 * 1000, LB_FETCH = 60, LB_SHOW = 50; // the leaderboard is rebuilt at most every 5 minutes (about LB_FETCH reads each time)
@@ -45,7 +45,10 @@ async function verify(token) { // the player's uid, or null if the token is miss
     try { return (await auth.verifyIdToken(token)).uid; } catch (e) { return null; }
 }
 
-const pub = p => ({ name: p.name, rating: p.rating, matches: p.matches, wins: p.wins, losses: p.losses, pointsFor: p.pointsFor, pointsAgainst: p.pointsAgainst, settings: p.settings || {}, skin: skinClean(p.skin) });
+const pub = p => {
+    const s = skinSlots(p);
+    return { name: p.name, rating: p.rating, matches: p.matches, wins: p.wins, losses: p.losses, pointsFor: p.pointsFor, pointsAgainst: p.pointsAgainst, settings: p.settings || {}, skin: skinClean(p.skin), skins: s.skins, slot: s.slot };
+};
 async function getProfile(uid) { const s = await players().doc(uid).get(); return s.exists ? s.data() : null; }
 
 async function identify(token) { // for the websocket join: { uid, name, skin } (name is null until they have chosen one; skin is [] for none), or null for a guest
@@ -72,7 +75,7 @@ async function setName(uid, raw) { // first call creates the profile; later call
         if (old)
             tx.update(pref, { name, nameLower: key, updatedAt: now });
         else
-            tx.set(pref, { name, nameLower: key, settings: {}, skin: [], rating: START_RATING, matches: 0, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, createdAt: now, updatedAt: now });
+            tx.set(pref, { name, nameLower: key, settings: {}, skin: [], skins: skinsToStore(skinsClean([])), slot: 0, rating: START_RATING, matches: 0, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, createdAt: now, updatedAt: now });
     });
 }
 
@@ -89,14 +92,30 @@ async function saveSettings(uid, raw) {
     await ref.update({ settings, updatedAt: Date.now() });
 }
 
-async function saveSkin(uid, raw) { // anything that is not a list is refused; a list is cleaned (bad layers dropped, numbers clamped) and what was actually stored is returned
+async function saveSkin(uid, raw, rawSlot) { // writes the skin into a slot (default: the one being worn) and makes that slot the worn one
     if (!Array.isArray(raw))
         throw userError('Bad skin.');
-    const skin = skinClean(raw), ref = players().doc(uid);
-    if (!(await ref.get()).exists)
+    const ref = players().doc(uid), snap = await ref.get();
+    if (!snap.exists)
         throw userError('Pick a name first.');
-    await ref.update({ skin, updatedAt: Date.now() });
-    return skin;
+    const cur = skinSlots(snap.data()), slot = rawSlot === undefined ? cur.slot : rawSlot;
+    if (!skinSlotOk(slot))
+        throw userError('Bad skin slot.');
+    const skin = skinClean(raw);
+    cur.skins[slot] = skin;
+    await ref.update({ skins: skinsToStore(cur.skins), slot, skin, updatedAt: Date.now() });
+    return { skin, skins: cur.skins, slot };
+}
+
+async function selectSkinSlot(uid, slot) {
+    if (!skinSlotOk(slot))
+        throw userError('Bad skin slot.');
+    const ref = players().doc(uid), snap = await ref.get();
+    if (!snap.exists)
+        throw userError('Pick a name first.');
+    const cur = skinSlots(snap.data()), skin = cur.skins[slot];
+    await ref.update({ slot, skin, updatedAt: Date.now() });
+    return { skin, skins: cur.skins, slot };
 }
 
 async function leaderboard() {
@@ -185,7 +204,9 @@ async function handleApi(req, res, pathname) {
             return send(200, { ok: true });
         }
         if (pathname === '/api/skin')
-            return send(200, { skin: await saveSkin(uid, body.skin) });
+            return send(200, await saveSkin(uid, body.skin, body.slot));
+        if (pathname === '/api/skin-slot')
+            return send(200, await selectSkinSlot(uid, body.slot));
         send(404, { error: 'not found' });
     } catch (e) {
         send(e.user ? 400 : 500, { error: e.user ? e.message : 'Something went wrong on the server.' });

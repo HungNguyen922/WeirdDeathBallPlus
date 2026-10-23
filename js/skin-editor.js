@@ -236,8 +236,11 @@
             try { await account.selectSkinSlot(i); } catch (e) { msg = e.message; rebuild(); return; }
             if (typeof net !== 'undefined' && net.on)
                 net.refreshIdentity(); // the room sees the new skin
-        } else
+        } else {
             skinSetLocalSlot(i);
+            if (typeof net !== 'undefined' && net.on)
+                net.refreshIdentity();
+        }
         load();
         msg = '';
         rebuild();
@@ -256,8 +259,11 @@
                 if (typeof net !== 'undefined' && net.on)
                     net.refreshIdentity();
             } catch (e) { msg = 'Saved on this device, but not to your account: ' + e.message; }
-        } else
-            msg = account.user ? 'Saved on this device. Choose a name on the Account tab to save it to your account.' : 'Saved on this device. Sign in on the Account tab so other players online can see it.';
+        } else {
+            msg = account.user ? 'Saved on this device. Choose a name on the Account tab to save it to your account.' : 'Saved on this device. Sign in on the Account tab to keep it on every device.';
+            if (typeof net !== 'undefined' && net.on)
+                net.refreshIdentity();
+        }
         rebuild();
     }
 

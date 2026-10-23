@@ -1,5 +1,31 @@
 // INPUT - keyboard bindings, the AI toggle buttons / keys, and mouse clicks on the special-ability menu and the Menu tile.
 const AI_NAMES = ['Blue', 'Red', 'Blue 2', 'Red 2'];
+// ---- Flex (offline): any of the 4 seats on Blue, Red or off, each human or computer ----
+const flex = { on: false, cfg: [{ team: 0, ai: false }, { team: 1, ai: true }, { team: -1, ai: true }, { team: -1, ai: true }] };
+function applyFlex() { // push flex.cfg into the game; restarts the match
+    if (net.on)
+        return;
+    if (!flex.cfg.some(c => c.team >= 0))
+        flex.cfg[0].team = 0; // somebody has to be playing
+    const ids = [], teams = [];
+    flex.cfg.forEach((c, id) => { if (c.team >= 0) { ids.push(id); teams.push(c.team); } });
+    pickFixed = false;
+    flex.cfg.forEach((c, id) => setAI(id, c.team >= 0 && c.ai));
+    setRoster(ids, teams);
+    document.querySelectorAll('#keytable tr.team2').forEach((tr, k) => { tr.style.display = players.includes(allPlayers[2 + k]) ? '' : 'none'; });
+}
+function setFlex(on) {
+    if (net.on)
+        return;
+    flex.on = !!on;
+    if (on)
+        applyFlex();
+    else {
+        setAI(0, false);
+        setAI(1, false);
+        setTeams(1); // plain 1v1 again (also puts the team colours back)
+    }
+}
 function setAI(i, on) {
     if (net.on) // NET: online, seats are fixed
         return;
@@ -17,6 +43,7 @@ for (const i of [0, 1, 2, 3])
 function setTeams(size) {
     if (net.on) // NET: online matches are 1v1 for now
         return;
+    flex.on = false;
     setTeamSize(size);
     setAI(2, size === 2);
     setAI(3, size === 2);
@@ -27,8 +54,8 @@ function setTeams(size) {
     btn.classList.toggle('on', size === 2);
 }
 document.getElementById('mode2v2').addEventListener('click', () => {
-    if (!net.on)
-        setTeams(teamSize === 2 ? 1 : 2);
+    if (!net.on) 
+        setTeams(teamSize === 2 && !flex.on ? 1 : 2);
     else if (net.host) // online this button is the room's 2v2 lobby switch (host only; menu.js labels it)
         net.setLobby2v2(!net.lobby2v2);
     cv.focus();

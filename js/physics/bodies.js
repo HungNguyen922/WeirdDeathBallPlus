@@ -9,15 +9,22 @@ const allPlayers = [p1, p2, p3, p4];
 const players = [p1, p2], ball = new Ball(); // `players` = who is in the current match (edited in place by layoutTeams)
 // 2v2 spawns: one player this far from the ball (center to center), the other this far from the goal scoop (measured from where the ramp meets the floor).
 const SPAWN_BALL_D = 4 * PL, SPAWN_SCOOP_D = 2 * PL;
-function layoutRoster(ids) { // ids = the player ids in the match, ascending; takes effect on the next newRound()
+function layoutRoster(ids, teams = ids.map(id => id % 2)) { // teams[k] = the team of ids[k]; takes effect on the next newRound()
     players.length = 0;
-    for (const id of ids)
-        players.push(allPlayers[id]);
-    const per = t => ids.filter(id => id % 2 === t).length; // players on team t
-    p1.sx = per(0) > 1 ? NETX - SPAWN_BALL_D : 250;
-    p2.sx = per(1) > 1 ? NETX + SPAWN_BALL_D : W - 250;
-    p3.sx = RUN + SPAWN_SCOOP_D;
-    p4.sx = W - RUN - SPAWN_SCOOP_D;
+    ids.forEach((id, k) => {
+        const p = allPlayers[id];
+        p.team = teams[k];
+        p.color = p.team === 0 ? BLUE : RED;
+        players.push(p);
+    });
+    for (const t of [0, 1]) { // each team spawns spread along its own side: the first player nearest the ball, the others toward the goal scoop
+        const mine = players.filter(p => p.team === t), n = mine.length;
+        const hi = NETX - SPAWN_BALL_D, span = Math.max(hi - (RUN + SPAWN_SCOOP_D), (n - 1) * 40); // (at least 40 u apart, so four fit)
+        mine.forEach((p, k) => {
+            const x = n === 1 ? 250 : hi - span * k / (n - 1);
+            p.sx = t === 0 ? x : W - x;
+        });
+    }
 }
 function layoutTeams(size) { // 1 = 1v1, 2 = 2v2 (offline)
     layoutRoster(size === 2 ? [0, 1, 2, 3] : [0, 1]);

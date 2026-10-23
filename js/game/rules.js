@@ -5,6 +5,8 @@ const SWAP_EVERY = 5; // points between side swaps (0 = never)
 const SWAP_BANNER_T = 1.2; // seconds the "SIDE CHANGE" banner holds the game after the teams trade ends
 const POINT_PAUSE = 1.6; // s the world holds still after a point (the goal celebration plays across it)
 const WIN_PAUSE = 4;     // s after the point that wins the match (the victory celebration plays across it)
+const FLEX_RESPAWN_T = 2; // sandbox: seconds before a dead player comes back
+const isSandbox = () => players.length > 0 && (!players.some(p => p.team === 0) || !players.some(p => p.team === 1)); // a team is empty: nothing to beat, nothing to score
 let swapBanner = 0; // > 0: the banner is showing and the world is frozen (counts down; part of the saved state)
 let swapAt = -1; // the score total the last swap happened at, so one total can only swap once (a double KO must not swap twice)
 let score = [0, 0], pause = 0, over = false, msg = '';
@@ -174,9 +176,9 @@ function setTeamSize(size) { // 1 = 1v1, 2 = 2v2: restarts the match
     layoutTeams(size);
     resetMatch();
 }
-function setRoster(ids) { // the online server: exactly these players (0 / 2 Blue, 1 / 3 Red). A team may have one player or two; restarts the match
-    teamSize = ids.some(id => ids.some(o => o !== id && o % 2 === id % 2)) ? 2 : 1;
-    layoutRoster(ids);
+function setRoster(ids, teams = ids.map(id => id % 2)) { // the online server and Flex: exactly these players, teams[k] = the team of ids[k]. Restarts the match
+    layoutRoster(ids, teams);
+    teamSize = [0, 1].some(t => players.filter(p => p.team === t).length > 1) ? 2 : 1;
     resetMatch();
 }
 function resetMatch() { // R key
@@ -245,8 +247,9 @@ function update() {
     for (let i = pegs.length - 1; i >= 0; i--)
         if (pegs[i].life <= 0)
             pegs.splice(i, 1); // fizzled out
-    if (!players.some(p => p.team === 0) || !players.some(p => p.team === 1))
-        return; // a team with nobody on it: nothing to play
+    if (!players.length)
+        return;
+    const sandbox = isSandbox();
     if (swapBanner > 0) { // the sides just changed: hold the world still while the banner plays
         swapBanner = Math.max(0, swapBanner - DT);
         return;
@@ -310,25 +313,42 @@ function update() {
     events.onBodyStep(ball);
     if (ball.pull)
         ball.pull.t = Math.max(0, ball.pull.t - DT);
-    if (scorer !== null)
-        return point(sideSwap(scorer), 'scores!');
-    for (const d of [...decoys]) { // decoys: the same physics and goals as the death ball, but no kill
-        const sc = d.step();
+    if (scorer !== null) {
+        if (!sandbox)
+            return point(sideSwap(scorer), 'scores!');
+        ball.reset(); // sandbox: nothing is scored, the ball just goes back to the middle
+        events.onNewRound();
+    }
+    for (const d of [...decoys]) { // decoys: the same physics as the death ball, but they can never score (see the veils in ball.js)
+        d.step();
         events.onBodyStep(d);
         if (d.dead)
             removeDecoy(d);
-        else if (sc !== null)
-            return point(sideSwap(sc), 'scores!'); // (this used the ball's result, which is null here: a decoy goal awarded a nonsense point)
     }
     for (let i = 0; i < decoys.length; i++) { // decoys are solid: they bump into players, the death ball and each other (the death ball itself still just kills)
         const d = decoys[i];
         for (const p of players)
             if (p.alive) {
-                const dvx = d.vx, dvy = d.vy, hit = collide(p, d, 1, BALL_M, DECOY_BOUNCE_PLAYER);
-                crashPush(p.crashK, d, dvx, dvy); // Awakened: a decoy takes the same multiplied push
+                if (p.team !== d.team && Math.hypot(p.x - d.x, p.y - d.y) < p.r + d.r) { // an opponent touching it: a crash shot, then dead (checked BEFORE collide(), which pushes them apart)
+                    const hit = crashShot(p, d);
+                    if (hit > IMPACT_V0) {
+                        const dx = d.x - p.x, dy = d.y - p.y, m = Math.hypot(dx, dy) || 1;
+                        events.onImpact(p, p.x + dx / m * p.r, p.y + dy / m * p.r, dx / m, dy / m, hit);
+                    }
+                    if (p.awakeT > 0)
+                        continue; // Awakened: unkillable, the crash bounces you off instead
+                    p.alive = false;
+                    p.rope = null;
+                    p.pending = null;
+                    p.onBall = false;
+                    p.tball = null;
+                    continue;
+                }
+                const dvx = d.vx, dvy = d.vy, hit = collide(p, d, 1, BALL_M, DECOY_BOUNCE_PLAYER); // the owner and teammates just bump it, as before
+                crashPush(p.crashK, d, dvx, dvy);
                 if (hit > IMPACT_V0) {
                     const dx = d.x - p.x, dy = d.y - p.y, m = Math.hypot(dx, dy) || 1;
-                    events.onImpact(p, p.x + dx / m * p.r, p.y + dy / m * p.r, dx / m, dy / m, hit); // sparks fly the way the decoy is pushed
+                    events.onImpact(p, p.x + dx / m * p.r, p.y + dy / m * p.r, dx / m, dy / m, hit);
                 }
             }
         collide(ball, d, BALL_M, BALL_M, DECOY_BOUNCE_BALL);
@@ -356,6 +376,15 @@ function update() {
     for (const p of players)
         if (p.exploT > 0 && dead > p.exploDead)
             p.explodeRefund();
+    if (sandbox) { // nobody to beat: a dead player comes back at their spawn a moment later
+        for (const p of players)
+            if (!p.alive && (p.deadT += DT) >= FLEX_RESPAWN_T) {
+                p.reset();
+                for (const k in p.cd)
+                    p.cd[k] = 0; // practice: abilities are ready again
+            }
+        return;
+    }
     const teamAlive = t => players.some(p => p.team === t && p.alive); // a team is out when all its players are dead
     if (!teamAlive(0) && !teamAlive(1)) {
         msg = 'Double KO';

@@ -7,7 +7,7 @@ const smokeEase = u => 1 - (1 - u) * (1 - u);
 // screen nobody can be hidden from anybody, so there the cloud is only drawn (see through), never hides anything. Returns 0, 1 or null.
 function smokeViewer() {
     if (net.on)
-        return net.slot >= 0 ? net.slot % 2 : null;
+        return net.slot >= 0 ? allPlayers[net.slot].team : null;
     const cpu = t => players.filter(p => p.team === t).every(p => ai[p.id].on);
     return cpu(0) !== cpu(1) ? (cpu(0) ? 1 : 0) : null;
 }

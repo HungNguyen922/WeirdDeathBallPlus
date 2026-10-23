@@ -98,7 +98,7 @@ const gameMenu = (() => {
         pickBtn.textContent = 'Specials: ' + (pickFixed ? 'Pick screens' : 'Free swap');
         pickBtn.classList.toggle('on', pickFixed);
         const locked = net.on && !net.host; // online, only the host can change this
-        pickBtn.disabled = locked;
+        pickBtn.disabled = locked || inFlex();
         pickBtn.title = locked ? 'Only the host (the player who created the room) can change this.' : pickTitle;
     }
     const twoBtn = document.getElementById('twomode'), twoTitle = twoBtn ? twoBtn.title : '';
@@ -163,6 +163,54 @@ const gameMenu = (() => {
         teamBtn.disabled = !net.host;
         teamBtn.title = net.host ? 'On: new players fill Blue, Red, Blue 2 and Red 2 automatically, and the match starts once all four seats are taken (restarts the match). Off: new players wait for you to place them.' : 'Only the host (the player who created the room) can change this.';
     }
+
+    // The Flex button: enables you to get sandbox room making for solo and online play.
+    const flexBtn = document.getElementById('flexmode'), flexEl = document.getElementById('flexsetup'), flexGroup = document.getElementById('flexgroup'), whoGroup = document.getElementById('whogroup');
+    const inFlex = () => (net.on ? !!net.flex : flex.on);
+    function labelFlex() {
+        if (!flexBtn)
+            return;
+        flexBtn.textContent = 'Flex: ' + (inFlex() ? 'On' : 'Off');
+        flexBtn.classList.toggle('on', inFlex());
+        flexBtn.disabled = net.on && !net.host;
+    }
+    function renderFlex() { // offline: the four seats, each Blue / Red / Off and Human / AI
+        const show = flex.on && !net.on;
+        if (flexGroup) flexGroup.hidden = !show;
+        if (whoGroup) whoGroup.style.display = show ? 'none' : '';
+        if (!flexEl || !show)
+            return;
+        flexEl.textContent = '';
+        flex.cfg.forEach((c, id) => {
+            const row = document.createElement('div'), name = document.createElement('span');
+            row.className = 'row';
+            name.textContent = 'Player ' + (id + 1);
+            name.style.cssText = 'font-weight:700;min-width:70px';
+            row.appendChild(name);
+            for (const [label, team, cls] of [['Blue', 0, 'blue'], ['Red', 1, 'red'], ['Off', -1, '']]) {
+                const b = document.createElement('button');
+                b.className = 'mode ' + cls + (c.team === team ? ' on' : '');
+                b.textContent = label;
+                b.addEventListener('click', () => { c.team = team; applyFlex(); renderFlex(); renderPicker(); });
+                row.appendChild(b);
+            }
+            if (c.team >= 0) {
+                const b = document.createElement('button');
+                b.className = 'mode' + (c.ai ? ' on' : '');
+                b.textContent = c.ai ? 'AI' : 'Human';
+                b.addEventListener('click', () => { c.ai = !c.ai; applyFlex(); renderFlex(); renderPicker(); });
+                row.appendChild(b);
+            }
+            flexEl.appendChild(row);
+        });
+    }
+    if (flexBtn)
+        flexBtn.addEventListener('click', () => {
+            if (net.on) { if (net.host) net.setFlex(!net.flex); }
+            else setFlex(!flex.on);
+            setTimeout(() => { labelFlex(); labelPick(); renderFlex(); renderPicker(); renderRoster(); }, net.on ? 300 : 0);
+            if (canvas) canvas.focus();
+        });
     // "Ranked" toggle (online only): the host decides whether the match counts toward ratings. The label follows the roster message, so it catches up a moment after the click.
     const rankedBtn = document.getElementById('rankedmode');
     function labelRanked() {
@@ -215,22 +263,19 @@ const gameMenu = (() => {
                 pickEl.textContent = 'You are spectating: there is no player to change.';
                 return;
             }
-            const color = seat % 2 === 0 ? '#42a5f5' : '#ef5350';
+            const color = p.color;
             addRow(pickEl, p, 0, twoSpecials ? 'Special 1' : 'Special', color);
             if (twoSpecials)
                 addRow(pickEl, p, 1, 'Special 2', color);
             return;
         }
-        const humans = [0, 1].map(i => allPlayers[i]).filter(p => players.includes(p) && !ai[p.id].on);
+        const humans = allPlayers.filter(p => players.includes(p) && !ai[p.id].on);
         if (!humans.length) {
             pickEl.textContent = 'Both players are computer-controlled (they always use Dash). Switch one to Human to pick its special.';
             return;
         }
         for (const p of humans) {
-            const nm = p.id === 0 ? 'Blue' : 'Red', color = p.id === 0 ? '#42a5f5' : '#ef5350';
-            addRow(pickEl, p, 0, twoSpecials ? nm + ' 1' : nm, color);
-            if (twoSpecials)
-                addRow(pickEl, p, 1, nm + ' 2', color);
+            const nm = playerLabel(p), color = p.color;
         }
     }
     // Players tab (online): Blue, Red and the waiting list. The host gets buttons to move people; a team holds two players at most, and the match waits while a team is empty.
@@ -276,14 +321,17 @@ const gameMenu = (() => {
         for (const g of [{ team: 0, title: 'Blue', cls: 'blue' }, { team: 1, title: 'Red', cls: 'red' }, { team: -1, title: 'Waiting', cls: '' }]) {
             const list = net.members.filter(m => m.team === g.team), box = document.createElement('div'), h = document.createElement('h3');
             box.className = 'team';
-            h.textContent = g.title + ' (' + list.length + (g.team >= 0 ? '/2' : '') + ')';
+            h.textContent = g.title + ' (' + list.length + (g.team >= 0 && !net.flex ? '/2' : '') + ')';
             if (g.cls)
                 h.classList.add(g.cls);
             box.appendChild(h);
             if (!list.length) {
                 const p = document.createElement('p');
                 p.className = 'hint';
-                p.textContent = g.team >= 0 ? (net.lobby2v2 ? 'Nobody yet: the 2v2 match waits until both teams are full.' : 'Nobody yet: the match waits until both teams have a player.') : 'Nobody waiting.';
+                p.textContent = g.team >= 0
+                    ? (net.flex ? 'Nobody yet. An empty team is allowed in Flex: with one team empty it is a sandbox.'
+                        : net.lobby2v2 ? 'Nobody yet: the 2v2 match waits until both teams are full.' : 'Nobody yet: the match waits until both teams have a player.')
+                    : 'Nobody waiting.';
                 box.appendChild(p);
             }
             for (const m of list)
@@ -325,6 +373,7 @@ const gameMenu = (() => {
         labelTwo();
         labelSwap();
         labelTeams();
+        labelFlex(); renderFlex();
         labelRanked();
         renderPicker();
         renderRoster();
@@ -339,6 +388,7 @@ const gameMenu = (() => {
         labelTwo();
         labelSwap();
         labelTeams();
+        labelFlex(); renderFlex();
         labelRanked();
         renderPicker();
         renderRoster();

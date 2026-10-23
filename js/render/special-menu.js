@@ -20,11 +20,11 @@ const SPECIALS = [
     { id: 'mines', name: 'MINES', icon: 'mines' },
 ];
 const ui = { open: -1, slot: 0, hover: null }; // open = index of the player whose menu is open (-1 = none), slot = which of their specials it edits (0 first, 1 second)
-const hintX = i => (sideSwap(i) === 0 ? -OX / 2 : W + OX / 2); // i is 0 (Blue) or 1 (Red) here, which is also the team
 const spCx = slot => (twoSpecials ? (slot ? 63 : 21) : 46); // centre of a special's cap, from the block's centre (the caps move when there are four)
 const spSz = () => (twoSpecials ? 36 : 40);
-const spKey = (i, slot = 0) => ({ x: hintX(i) + spCx(slot) - spSz() / 2, y: HINT_ACT_Y + HINT_DY - spSz() / 2, w: spSz(), h: spSz() }); // a special's keycap
-const spItem = (i, n, slot = 0) => ({ x: hintX(i) + spCx(slot) - 20, y: HINT_ACT_Y + HINT_DY + 25 + n * 32, w: 40, h: 32 }); // menu rows, directly under it
+const spotOf = id => hintSpots()[id] || { wall: id % 2, row: 0 };
+const spKey = (i, slot = 0) => { const s = spotOf(i); return { x: wallX(s.wall) + spCx(slot) - spSz() / 2, y: HINT_ACT_Y + HINT_DY + s.row * HINT_ROW_H - spSz() / 2, w: spSz(), h: spSz() }; };
+const spItem = (i, n, slot = 0) => { const s = spotOf(i); return { x: wallX(s.wall) + spCx(slot) - 20, y: HINT_ACT_Y + HINT_DY + s.row * HINT_ROW_H + 25 + n * 32, w: 40, h: 32 }; };
 const menuKey = () => ({ x: W / 2 - 60, y: H + 104, w: 120, h: 24 }); // the Menu button: a pill on the floor, centred under the online status line
 const inRect = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 function uiHit(x, y) {
@@ -32,10 +32,11 @@ function uiHit(x, y) {
         for (let n = 0; n < SPECIALS.length; n++)
             if (inRect(spItem(ui.open, n, ui.slot), x, y))
                 return { type: 'item', i: ui.open, n, slot: ui.slot };
-    for (const i of [0, 1])
-        for (const slot of twoSpecials ? [0, 1] : [0])
-            if (!pickFixed && inRect(spKey(i, slot), x, y))
-                return { type: 'key', i, slot };
+    for (const p of players)
+        if (!pickFixed && spotOf(p.id).row === 0)
+            for (const slot of twoSpecials ? [0, 1] : [0])
+                if (inRect(spKey(p.id, slot), x, y))
+                    return { type: 'key', i: p.id, slot };
     if (inRect(menuKey(), x, y))
         return { type: 'menu' };
     return null;

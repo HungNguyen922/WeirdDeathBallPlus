@@ -65,7 +65,9 @@ const net = {
     describe() {
         if (!this.ws || this.ws.readyState > 1)
             return 'Disconnected. Reload the page to reconnect.';
-        const who = this.slot >= 0 ? 'you are ' + (this.slot % 2 === 0 ? 'Blue' : 'Red') + (this.slot >= 2 ? ' 2' : '') : 'spectating';
+        const me = this.members.find(m => m.c === this.you), team = me ? me.team : -1;
+        const mates = this.members.filter(m => m.team === team && m.slot >= 0).sort((a, b) => a.slot - b.slot), nth = mates.findIndex(m => m.c === this.you);
+        const who = this.slot >= 0 ? 'you are ' + (team === 0 ? 'Blue' : 'Red') + (nth > 0 ? ' ' + (nth + 1) : '') : 'spectating';
         const seated = this.members.filter(m => m.slot >= 0).length;
         const state = !this.running ? (this.lobby2v2 ? ` - 2v2 lobby: waiting for players (${seated}/4)...` : this.slot >= 0 ? ' - waiting for an opponent...' : ' - waiting for players...') : '';
         return `Online${this.ranked ? ' (ranked)' : ''}, room "${this.room}": ${who}${state}${this.rtt ? ` (ping ${Math.round(this.rtt)} ms${this.tps ? `, server ${this.tps} ticks/s` : ''}${this.extra ? ', ' + this.extra() : ''}, buffer ${Math.round(this.delayMs)} ms)` : ''}`;
@@ -84,7 +86,7 @@ const net = {
             const me = allPlayers[0] || {};
             Promise.resolve(typeof account !== 'undefined' ? account.freshToken() : null).catch(() => null).then(token => { // signed in? the server uses the token to know who you are
                 if (ws.readyState === 1)
-                    ws.send(JSON.stringify({ t: 'join', room, special: me.special, special2: me.special2, lobby2v2: want2v2, token: token || undefined }));
+                    ws.send(JSON.stringify({ t: 'join', room, special: me.special, special2: me.special2, lobby2v2: want2v2, token: token || undefined, skin: typeof skinMy === 'function' ? skinMy() : undefined }));
             });
             this.pingTimer = setInterval(() => this.ws && this.ws.readyState === 1 && this.ws.send(JSON.stringify({ t: 'ping', c: performance.now() })), NET_PING_MS);
         };
@@ -119,6 +121,7 @@ const net = {
         } else if (m.t === 'roster') {
             this.running = m.running;
             this.lobby2v2 = !!m.lobby2v2;
+            this.flex = !!m.flex;
             this.ranked = !!m.ranked;
             this.host = !!m.host;
             this.members = m.members || [];
@@ -209,16 +212,24 @@ const net = {
         if (this.ws && this.ws.readyState === 1)
             this.ws.send(JSON.stringify({ t: 'lobby2v2', v: !!v }));
     },
+    setFlex(v) { // host only (the server checks)
+        if (this.ws && this.ws.readyState === 1)
+            this.ws.send(JSON.stringify({ t: 'flex', v: !!v }));
+    },
     setRanked(v) { // host only (the server checks): rate this match (needs everyone signed in) or play it casually. Restarts the match.
         if (this.ws && this.ws.readyState === 1)
             this.ws.send(JSON.stringify({ t: 'ranked', v: !!v }));
     },
-    async refreshIdentity() { // my name or skin changed on my account: the server checks my token again and sends the room a fresh roster
-        if (!this.ws || this.ws.readyState !== 1 || typeof account === 'undefined')
+    async refreshIdentity() { // my name or skin changed: a signed-in player has the server look their account up again, a guest just sends the skin
+        if (!this.ws || this.ws.readyState !== 1)
             return;
-        const token = await account.freshToken().catch(() => null);
-        if (token && this.ws && this.ws.readyState === 1)
+        const token = typeof account !== 'undefined' ? await account.freshToken().catch(() => null) : null;
+        if (!this.ws || this.ws.readyState !== 1)
+            return;
+        if (token)
             this.ws.send(JSON.stringify({ t: 'refresh', token }));
+        else if (typeof skinMy === 'function')
+            this.ws.send(JSON.stringify({ t: 'skin', skin: skinMy() }));
     },
     sendChat(text) { // returns false when there is no open connection (chat.js then tells the player)
         if (!this.ws || this.ws.readyState !== 1)

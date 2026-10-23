@@ -17,6 +17,7 @@ class Player {
         this.r = 16;
         this.ground = false;
         this.alive = true;
+        this.deadT = 0; // sandbox: how long this player has been dead
         this.rope = null;
         this.pending = null;
         this.onBall = false;

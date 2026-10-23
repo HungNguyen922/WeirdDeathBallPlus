@@ -16,8 +16,10 @@
 //                      {t:'two', shift}                        (host only)
 //                      {t:'swap', v}                       host only: switch sides every 5 points (true) or never (false); restarts the match
 //                      {t:'lobby2v2', v}                   host only: 2v2 lobby on (newcomers fill Blue, Red, Blue 2, Red 2 and the match waits for all four seats) or off
+//                      {t:'flex', v}   host only: Flex on (any 1-4 players on any teams, a team may be empty = sandbox) or off
 //                      {t:'assign', c, to}                 host only: move member c to team 0 (Blue), 1 (Red) or -1 (waiting); restarts the match if seats change
 //                      {t:'chat', text}                    say something to everybody in the room (trimmed, at most CHAT_MAX characters, rate limited)
+//                      {t:'skin', skin}
 //                      {t:'ping', c}                       latency probe
 //                      {t:'refresh', token}                I changed my name or skin on my account: look me up again (the token must belong to the same account) and send everyone a fresh roster
 //   server -> client   {t:'welcome', room, slot, cid, tick, hz, snapEvery}   slot: 0..3 = a seat, -1 = waiting / spectating; cid = your member id
@@ -54,6 +56,8 @@ function __setKeys(i, bits) {
 }
 `;
 
+const { skinClean } = require('../skin-data.js');
+
 class Room {
     constructor(name) {
         this.name = name;
@@ -71,6 +75,7 @@ class Room {
         this.swapSides = true; // the host's "switch sides every 5 points" option
         this.ranked = false; // the host's "Ranked" option: only a ranked match changes ratings. Needs everyone seated signed in (see rankedOk)
         this.lobby2v2 = false; // 2v2 lobby: newcomers fill all four seats automatically and the match waits until every seat is taken
+        this.flex = false; // Flex: the host puts any 1 to 4 players on any teams; a team may be empty (then nothing is scored)
         this.tick = 0;
         this.running = false;
         this.acc = 0;
@@ -98,8 +103,17 @@ class Room {
     // Work out the seats from each connection's team: a team's members take its seats in the order they joined the team. Returns true if any seat changed.
     reseat() {
         const old = this.seats, seats = [null, null, null, null];
-        for (const t of [0, 1])
-            [...this.conns].filter(c => c.team === t).sort((a, b) => a.order - b.order).slice(0, TEAM_MAX).forEach((c, i) => { seats[2 * i + t] = c; });
+        if (this.flex) { // any seat on any team: a player keeps the seat they have, a new one takes the first free
+            const want = [...this.conns].filter(c => c.team >= 0).sort((a, b) => a.order - b.order).slice(0, 4);
+            for (const c of want)
+                if (old[c.slot] === c)
+                    seats[c.slot] = c;
+            for (const c of want)
+                if (!seats.includes(c))
+                    seats[seats.indexOf(null)] = c;
+        } else
+            for (const t of [0, 1])
+                [...this.conns].filter(c => c.team === t).sort((a, b) => a.order - b.order).slice(0, TEAM_MAX).forEach((c, i) => { seats[2 * i + t] = c; });
         let changed = false;
         for (let i = 0; i < 4; i++)
             if (old[i] !== seats[i]) {
@@ -126,8 +140,8 @@ class Room {
             this.ranked = false;
             this.say('Ranked is off: everyone seated has to be signed in.');
         }
-        const need = this.lobby2v2 ? TEAM_MAX : 1; // a 2v2 lobby waits for full teams, otherwise one player each is enough
-        const ready = this.teamCount(0) >= need && this.teamCount(1) >= need; // an empty (or, in a 2v2 lobby, unfilled) team means the match waits
+        const need = this.lobby2v2 ? TEAM_MAX : 1;
+        const ready = this.flex ? this.seats.some(Boolean) : this.teamCount(0) >= need && this.teamCount(1) >= need; // Flex needs only one player: an empty team is allowed
         if (ready && (changed || !this.running))
             this.start();
         else if (!ready)
@@ -137,7 +151,7 @@ class Room {
             this.snapshot(); // someone watching a paused room still gets to see the board
     }
     join(conn, special, special2) {
-        let team = this.lobby2v2 ? this.openTeam() : [0, 1].find(t => this.teamCount(t) === 0); // a 2v2 lobby seats newcomers anywhere there is room; otherwise a team with nobody on it, and later arrivals wait for the host
+        let team = this.flex ? -1 : this.lobby2v2 ? this.openTeam() : [0, 1].find(t => this.teamCount(t) === 0);
         if (team === undefined)
             team = -1;
         if (team < 0 && [...this.conns].filter(c => c.team < 0).length >= MAX_SPECTATORS)
@@ -167,25 +181,26 @@ class Room {
         const c = [...this.conns].find(x => x.cid === cid);
         if (!c || ![0, 1, -1].includes(to) || c.team === to)
             return;
-        if (to >= 0 && this.teamCount(to) >= TEAM_MAX)
-            return; // that team is full
+        if (to >= 0 && (this.flex ? c.team < 0 && [...this.conns].filter(x => x.team >= 0).length >= 4 : this.teamCount(to) >= TEAM_MAX))
+            return; // full (Flex: four seats in total, any split)
         c.team = to;
         c.order = this.nextOrder++; // joins the end of that team's seat order
         this.settle(this.reseat());
     }
     start() {
-        const sim = this.sim, ids = [];
+        const sim = this.sim, ids = [], teams = [];
         this.seats.forEach((c, i) => {
             if (!c)
                 return;
             ids.push(i);
+            teams.push(c.team);
             sim.run('allPlayers[' + i + '].special2 = ' + JSON.stringify(c.special2)); // was never applied, so a second special chosen on joining was ignored
             sim.run(`allPlayers[${i}].special = '${c.special}'`); // before the restart, so a pick screen opens with the right choice highlighted
         });
-        sim.run(`pickFixed = ${this.fixed}`);
+        sim.run(`pickFixed = ${this.fixed && !this.flex}`); // the pick screens only have room for two per team
         sim.run(`twoSpecials = ${this.twoSpecials}`);
         sim.run(`swapOn = ${this.swapSides}`);
-        sim.run(`setRoster([${ids.join(',')}])`); // exactly these players; also restarts the match (and opens the first pick screen when they are on)
+        sim.run(`setRoster([${ids.join(',')}], [${teams.join(',')}])`); // exactly these players; also restarts the match (and opens the first pick screen when they are on)
         sim.ctx.__ev.length = 0;
         this.tick = 0;
         this.acc = 0;
@@ -229,12 +244,14 @@ class Room {
             c.send(msg);
     }
     rankedOk() { // can the current match be rated? accounts on, both teams seated, everybody seated signed in with a name, nobody sitting twice
+        if (this.flex) return false;
         if (!accounts.enabled())
             return false;
         const seated = this.seats.filter(Boolean), ids = seated.map(c => c.uid);
         return this.teamCount(0) >= 1 && this.teamCount(1) >= 1 && seated.every(c => c.uid && c.name) && new Set(ids).size === ids.length;
     }
     setRanked(conn, v) { // the host's Ranked switch. Either way it restarts the match, so a ranked match always starts at 0-0.
+        if (v && this.flex) return this.say('Ranked is not available in Flex.', conn);
         v = !!v;
         if (v === this.ranked)
             return;
@@ -247,9 +264,27 @@ class Room {
         this.roster(); // carries the new setting
     }
     setLobby2v2(v) { // the host's 2v2 switch. On: everyone already waiting takes the open seats and the match waits for all four. Off: back to host-placed teams; nobody is moved off a team.
+        if (v && this.flex) { this.flex = false; this.trimTeams(); }
         this.lobby2v2 = !!v;
         this.fillSeats();
         this.settle(this.reseat());
+    }
+    trimTeams() { // back to normal teams: a team holds two players at most, the extras wait
+        for (const t of [0, 1])
+            [...this.conns].filter(c => c.team === t).sort((a, b) => a.order - b.order).slice(TEAM_MAX).forEach(c => { c.team = -1; });
+    }
+    setFlex(v) { // the host's Flex switch. Restarts the match.
+        this.flex = !!v;
+        if (this.flex) {
+            this.lobby2v2 = false;
+            if (this.ranked) {
+                this.ranked = false;
+                this.say('Ranked is off in Flex.');
+            }
+        } else
+            this.trimTeams();
+        this.reseat();
+        this.settle(true);
     }
     chat(conn, raw) { // relay one chat message to everybody in the room (the sender included, so everyone sees the same order)
         if (typeof raw !== 'string')
@@ -270,7 +305,7 @@ class Room {
         const members = [...this.conns]
             .sort((a, b) => (a.slot < 0) - (b.slot < 0) || a.slot - b.slot || a.order - b.order) // seated by seat, then the waiting list in order
             .map(c => ({ c: c.cid, team: c.team, slot: c.slot, host: c === this.host, name: c.name || null, skin: c.skin && c.skin.length ? c.skin : null }));
-        const base = { t: 'roster', slots: this.seats.map(Boolean), spectators: members.filter(m => m.slot < 0).length, running: this.running, lobby2v2: this.lobby2v2, ranked: this.ranked, members };
+        const base = { t: 'roster', slots: this.seats.map(Boolean), spectators: members.filter(m => m.slot < 0).length, running: this.running, lobby2v2: this.lobby2v2, flex: this.flex, ranked: this.ranked, members };
         for (const c of this.conns)
             c.send(JSON.stringify({ ...base, host: c === this.host, you: c.cid }));
     }
@@ -333,7 +368,7 @@ class Room {
     matchOver(done) { // Blue sits in seats 0 and 2, Red in 1 and 3. Rated only if everyone seated is signed in (accounts.recordMatch checks that).
         if (!this.ranked || !accounts.enabled())
             return;
-        const teams = [0, 1].map(t => this.seats.filter((c, i) => c && i % 2 === t).map(c => c.uid || null));
+        const teams = [0, 1].map(t => this.seats.filter(c => c && c.team === t).map(c => c.uid || null));
         accounts.recordMatch({ teams, score: done.score });
     }
 }
@@ -410,7 +445,7 @@ function startServer(port = 8080, host = '0.0.0.0') {
                     return;
                 conn.uid = id ? id.uid : null;
                 conn.name = id && id.name ? id.name : null;
-                conn.skin = id ? id.skin : []; // (already cleaned by accounts.js)
+                conn.skin = id ? id.skin : skinClean(m.skin); // an account's stored skin wins; a guest supplies their own (cleaned)
                 const name = typeof m.room === 'string' && /^[A-Za-z0-9_-]{1,24}$/.test(m.room) ? m.room : 'lobby';
                 let r = rooms.get(name);
                 if (!r) {
@@ -443,10 +478,20 @@ function startServer(port = 8080, host = '0.0.0.0') {
                 room.setRanked(conn, m.v);
             else if (m.t === 'lobby2v2' && room && room.host === conn)
                 room.setLobby2v2(m.v);
+            else if (m.t === 'flex' && room && room.host === conn)
+                room.setFlex(m.v);
             else if (m.t === 'assign' && room && room.host === conn)
                 room.assign(Number(m.c), Number(m.to));
             else if (m.t === 'chat' && room)
                 room.chat(conn, m.text);
+            else if (m.t === 'skin' && room && !conn.uid) { // guests only; signed-in players use 'refresh', which reads their account
+                const now = Date.now();
+                if (now - (conn.skinAt || 0) < 500)
+                    return; // each one re-sends the roster to the whole room, so keep it from being spammed
+                conn.skinAt = now;
+                conn.skin = skinClean(m.skin);
+                room.roster();
+            }
             else if (m.t === 'refresh' && room && conn.uid && typeof m.token === 'string') {
                 accounts.identify(m.token).then(id => { // only the same account may refresh its own seat; a different or bad token changes nothing
                     if (!id || id.uid !== conn.uid || gone)

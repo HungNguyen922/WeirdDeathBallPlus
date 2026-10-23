@@ -165,18 +165,12 @@ const hintKeys = (seat, acts) => acts.map(a => { // corner labels for a seat, st
 const HINT_DY = -55, HINT_ROW_H = 186, HINT_ACT_Y = 203, HINT_LABEL_Y = 239; // first block's shift, step to the second block, centre of the grapple / weight / special row, baseline of their labels
 const wallX = t => (sideSwap(t) === 0 ? -OX / 2 : W + OX / 2); // the wall mass beside the goal this team defends
 function drawKeyHints() {
-    const cfg = [ // one block per seat (player id): Blue's two seats on the left wall, Red's two on the right; dirs = labels for up / left / down / right, act = labels for grapple / weight / special
-        { i: 0, p: p1, x: wallX(0), col: '#42a5f5', name: 'BLUE'},
-        { i: 1, p: p2, x: wallX(1), col: '#ef5350', name: 'RED'},
-        { i: 2, p: p3, x: wallX(0), col: '#42a5f5', name: 'BLUE 2'},
-        { i: 3, p: p4, x: wallX(1), col: '#ef5350', name: 'RED 2'},
-    ];
+    const spots = hintSpots();
     cx.textAlign = 'center';
-    for (const { i: pi, p, x, col, name } of cfg) {
-        if (!players.includes(p))
-            continue;
-        const dirs = hintKeys(pi, ['up', 'l', 'dn', 'r']), act = hintKeys(pi, ['z', 'x', 'sp', 'sp2']); // up / left / down / right, then grapple / weight / special / special 2
-        const row = players.filter(q => q.team === p.team).indexOf(p), hasMenu = pi < 2; // a team's first seat sits on top; only the first two players have the special dropdown (teammates always use Dash)
+    for (const p of players) {
+        const pi = p.id, spot = spots[pi], x = wallX(spot.wall), col = p.color, name = playerLabel(p);
+        const dirs = hintKeys(pi, ['up', 'l', 'dn', 'r']), act = hintKeys(pi, ['z', 'x', 'sp', 'sp2']);
+        const row = spot.row, hasMenu = row === 0; // the special dropdown is too tall for the second row: those players use Menu > Game
         cx.save();
         cx.translate(0, HINT_DY + row * HINT_ROW_H);
         const k = smokeHidesKeys(p) ? noKeys() : p.keys; // Smoke Screen: the other team sees no key pressed
@@ -237,4 +231,20 @@ function drawKeyHints() {
         });
         cx.restore();
     }
+}
+
+function hintSpots() { // player id -> { wall: the team whose wall it sits on, row: 0 or 1 }
+    const spots = [], used = [0, 0], over = [];
+    for (const t of [0, 1])
+        for (const p of players.filter(q => q.team === t))
+            if (used[t] < 2) spots[p.id] = { wall: t, row: used[t]++ }; else over.push(p);
+    for (const p of over) {
+        const w = used[0] < 2 ? 0 : 1;
+        spots[p.id] = { wall: w, row: used[w]++ };
+    }
+    return spots;
+}
+function playerLabel(p) { // BLUE, BLUE 2, RED...
+    const mates = players.filter(q => q.team === p.team), n = mates.indexOf(p);
+    return (p.team === 0 ? 'BLUE' : 'RED') + (n > 0 ? ' ' + (n + 1) : '');
 }

@@ -260,10 +260,11 @@ const MARIONETTE_FX = 0.6;            // length (s) of its streak effect (displa
 // ball is light, BALL_M against a player's 1, so players knock it around). One per player: casting again (once DECOY_COOLDOWN has run out) removes the old one and puts a new
 // one at the new spot. The cooldown starts when the decoy appears.
 const DECOY_CAST = 1;                 // s from pressing until the decoy appears
-const DECOY_COOLDOWN = 5;            // s before the next decoy
+const DECOY_COOLDOWN = 5;             // s before the next decoy
 const DECOY_BOUNCE_PLAYER = 1;        // bounciness of a decoy against players (0 = dead stop, 1 = perfectly bouncy)
 const DECOY_BOUNCE_BALL = 1;          // bounciness of a decoy against the death ball and other decoys
 const DECOY_TELL = false;             // true = draw a dashed ring in the caster's color around the decoy (false = a perfect lookalike)
+const DECOY_VEIL_E = 1;             // how much of its speed a decoy keeps when it bounces off a veil
 
 // --- Arrow -------------------------------------------------------------------------------------------------------------------------------------------------------
 // Hold the special key to charge (ARROW_CHARGE_T s to full), release to fire along the aim. LEFT / RIGHT turn it at ARROW_TURN rad/s; a double tap within ARROW_DBL_T s snaps it.

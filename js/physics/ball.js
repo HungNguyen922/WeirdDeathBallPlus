@@ -83,6 +83,17 @@ class Ball {
             else
                 this.reset();
         }
+        if (this.decoy) { // the veils: a decoy can never enter a goal, so it can never score (the death ball is the only thing that does)
+            if (this.x < this.r) {
+                this.x = this.r;
+                if (this.vx < 0) this.vx *= -DECOY_VEIL_E;
+            }
+            if (this.x > W - this.r) {
+                this.x = W - this.r;
+                if (this.vx > 0) this.vx *= -DECOY_VEIL_E;
+            }
+            return null;
+        }
         if (this.x < -OUT_D)
             return 1; // ball crossed the left threshold line: right team scores
         if (this.x > W + OUT_D)

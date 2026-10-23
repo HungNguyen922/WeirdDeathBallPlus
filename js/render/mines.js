@@ -34,19 +34,6 @@ function drawMines() {
                 cx.globalAlpha = 0.9; cx.beginPath(); cx.arc(c.x, cy, MINE_DRAW_R + 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f); cx.stroke();
                 cx.globalAlpha = 1;
             }
-        if (p.mineFx) { // the blast: a flash and a ring spreading out to MINE_R
-            const u = 1 - p.mineFx.t / MINE_FX;
-            for (const pt of p.mineFx.pts) {
-                const R = MINE_R * (0.25 + 0.75 * Math.sqrt(u)), w = 3 + 1.5 * Math.sqrt(pt.n);
-                cx.fillStyle = p.color; cx.globalAlpha = (1 - u) * 0.18;
-                cx.beginPath(); cx.arc(pt.x, pt.y, R, 0, 7); cx.fill();
-                cx.strokeStyle = '#ffffff'; cx.lineWidth = w; cx.globalAlpha = (1 - u) * 0.9;
-                cx.beginPath(); cx.arc(pt.x, pt.y, R, 0, 7); cx.stroke();
-                cx.strokeStyle = p.color; cx.lineWidth = w + 5; cx.globalAlpha = (1 - u) * 0.35;
-                cx.beginPath(); cx.arc(pt.x, pt.y, R, 0, 7); cx.stroke();
-            }
-            cx.globalAlpha = 1;
-        }
     }
     cx.restore();
 }

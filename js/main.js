@@ -27,5 +27,25 @@ function frame(t) {
     requestAnimationFrame(frame);
 }
 
+(function warmUpPointFx() { // pay the one-time costs (font lookup, JIT, first gradients) at load, not on the first goal
+    const sMsg = msg, sPause = pause, sOver = over;
+    try {
+        cx.save();
+        cx.translate(OX, HUD);
+        for (const [t, win] of [[0, false], [1, true]]) {
+            msg = (t === 0 ? 'Blue' : 'Red') + ' scores!';
+            over = win;
+            pause = 1; // e = 0.6 s into a goal, 3 s into a win (so confetti and fireworks run too)
+            drawPointFx();
+        }
+        drawBanner('GET READY', 0.5, 0); // same font, used by the pick screens and side changes
+        cx.restore();
+        cx.clearRect(0, 0, cv.width, cv.height);
+    } catch (e) {
+        console.warn('point fx warm-up failed', e);
+    } finally {
+        msg = sMsg; pause = sPause; over = sOver;
+    }
+})();
 newRound();
 requestAnimationFrame(frame);

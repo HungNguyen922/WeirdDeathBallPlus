@@ -78,7 +78,8 @@ function detonateMines(p) {
     const mine = mines.filter(m => m.owner === p);
     if (!mine.length)
         return false;
-    p.mineFx = { t: MINE_FX, pts: mine.map(m => ({ x: m.x, y: mineY(m), n: m.n })) };
+    const hits = [];
+    p.mineFx = { t: MINE_FX, pts: mine.map(m => ({ x: m.x, y: mineY(m), n: m.n })), hits };
     const bodies = [...players.filter(q => q.alive), ball, ...decoys.filter(d => !d.dead), ...arrows];
     for (const q of bodies) {
         const isArrow = q.stuck !== undefined, qr = q.r === undefined ? ARROW_R : q.r;
@@ -91,7 +92,7 @@ function detonateMines(p) {
                 continue;
             const nx = d > 1e-6 ? dx / d : 0, ny = d > 1e-6 ? dy / d : -1; // (exactly on top of it: straight up)
             const power = Math.pow(1 - Math.min(1, d / reach), MINE_FALLOFF);
-            const k = m.n * (MINE_KICK_MIN + (MINE_KICK_MAX - MINE_KICK_MIN) * power);
+            const k = (m.n * MINE_STACK_FACTOR) * (MINE_KICK_MIN + (MINE_KICK_MAX - MINE_KICK_MIN) * power);
             kx += nx * k;
             ky += ny * k;
         }
@@ -102,6 +103,7 @@ function detonateMines(p) {
             kx *= MINE_KICK_CAP / km;
             ky *= MINE_KICK_CAP / km;
         }
+        hits.push({ x: q.x, y: q.y, r: qr, ux: kx / km, uy: ky / km, k: Math.min(1, km / MINE_KICK_MAX) });
         if (isArrow)
             arrowKnock(q, q.vx + kx, q.vy + ky);
         else {

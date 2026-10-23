@@ -233,7 +233,7 @@ const IMPACT_V1 = 1000;               // the impact speed (u/s) that gives the b
 const START_CD = 1;                   // share of each ability's full cooldown still running at the start of a round (0 = ready at once, 1 = full cooldown)
 
 // --- Dash --------------------------------------------------------------------------------------------------------------------------------------------------------
-const DASH_V = 420;                   // dash impulse (u/s) in the arrow direction(s) held
+const DASH_V = 500;                   // dash impulse (u/s) in the arrow direction(s) held
 const DASH_FX = 0.6;                  // how long (s) the dash streak is drawn (display only)
 const DASH_CAST = 0.1;                // s from pressing until the dash happens
 const DASH_COOLDOWN = 5;              // s before the next dash (on top of: one dash per trip off the floor)
@@ -458,19 +458,20 @@ const PONG_FLICK_MAX_MULT = 2;  // BALL_FLICK_MAX is multiplied by this while Po
 // --- Mines ---------------------------------------------------------------------------------------------------------------------------------------------------------
 // Press the special key to plant a mine on the nearest surface (MINE_CAST s). Hold the special key and press weight to blow up all your mines: everything within MINE_R of a mine
 // is pushed away from it, harder for a stacked mine, and the pushes of nearby mines add. See physics/mines.js.
-const MINE_CAST = 1;            // s to plant one
-const MINE_DRAW_R = PL;       // dome radius (u) of a single mine. Raise it for bigger mines
+const MINE_CAST = 0;            // s to plant one
+const MINE_DRAW_R = PL;         // dome radius (u) of a single mine. Raise it for bigger mines
 const MINE_DRAW_STACK = 1.5;    // extra radius per additional mine in a stack
 const MINE_MAX = 5;            // most mines one player can have out (a stack of 3 counts as 3)
 const MINE_REACH = 2 * PL;      // a surface must be this close to your centre to start planting
-const MINE_LEASH = 3.5 * PL;    // drift further than this from the spot while planting and the plant is cancelled
-const MINE_STACK_R = PL;        // a new mine this close to one of your own joins it
+const MINE_LEASH = 5 * PL;      // drift further than this from the spot while planting and the plant is cancelled
+const MINE_STACK_R = 2 * PL;    // a new mine this close to one of your own joins it
+const MINE_STACK_FACTOR = 1.2   // the explosion gets multiplicatively stronger for each mine in the stack.
 const MINE_R = 2 * PL;          // blast radius: from the mine to the edge of the body
-const MINE_KICK_MIN = 400;      // u/s per mine at the very edge of the blast
-const MINE_KICK_MAX = 1200;      // u/s per mine dead centre
+const MINE_KICK_MIN = 150;      // u/s per mine at the very edge of the blast
+const MINE_KICK_MAX = 500;      // u/s per mine dead centre
 const MINE_FALLOFF = 1.2;       // shape between edge and centre (1 = linear, higher = stays weak until really close)
 const MINE_KICK_CAP = 3600;     // most one blast can give one body, however many mines are near it
-const MINE_COOLDOWN = 1;        // s after planting or blasting before the key can plant again
+const MINE_COOLDOWN = 4;        // s after planting or blasting before the key can plant again
 const MINE_FX = 0.5;            // s the blast ring is drawn (display only)
 
 // --- The ability table: reads every cooldown above, so it has to stay below them ------------------------------------------------------------------------------------

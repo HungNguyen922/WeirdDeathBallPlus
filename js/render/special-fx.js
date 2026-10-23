@@ -1,76 +1,78 @@
-// RENDER - special effects: Explode blast, Awakened aura and Warp markers. Read-only on game state.
-function drawExplode() { // Explode: a crisp zone of exactly EXPLODE_R (brighter toward the middle, where the blast is strongest), a flash, two shock rings, motion lines bursting out of the blast point, and a streak behind every body that was hit
-    const fr = v => v - Math.floor(v), hash = i => fr(Math.sin(i * 127.1 + 311.7) * 43758.5453); // a fixed pseudo-random value per line, so the burst looks the same every time without storing anything
+// One blast: a zone of radius R, flash, two shock rings, motion lines and a streak on every body that was hit.
+// fx = { x, y, t, hits }, col = team colour, dur = how long the effect lasts (s), pr = the caster's radius, lines = how many motion lines
+function drawBlast(fx, col, R, dur, pr, lines = 18) {
+    const fr = v => v - Math.floor(v), hash = i => fr(Math.sin(i * 127.1 + 311.7) * 43758.5453);
     const clamp = v => Math.max(0, Math.min(1, v)), easeOut = u => 1 - (1 - u) * (1 - u);
+    const f = 1 - fx.t / dur, wave = Math.min(1, f / 0.35), e = easeOut(wave), hold = f < 0.55 ? 1 : 1 - (f - 0.55) / 0.45;
     cx.save();
     cx.lineCap = 'round';
-    for (const p of players) {
-        const fx = p.explodeFx;
-        if (!fx)
+    const zg = cx.createRadialGradient(fx.x, fx.y, 0, fx.x, fx.y, R);
+    zg.addColorStop(0, col + 'aa'); zg.addColorStop(0.5, col + '44'); zg.addColorStop(1, col + '14');
+    cx.globalAlpha = hold; cx.fillStyle = zg;
+    cx.beginPath(); cx.arc(fx.x, fx.y, R, 0, 7); cx.fill();
+    if (f < 0.2) {
+        const u = f / 0.2;
+        cx.globalAlpha = 0.9 * (1 - u); cx.fillStyle = '#fff';
+        cx.beginPath(); cx.arc(fx.x, fx.y, pr + (R * 0.6) * easeOut(u), 0, 7); cx.fill();
+    }
+    if (wave < 1) {
+        cx.globalAlpha = 0.45 * (1 - wave); cx.fillStyle = '#fff';
+        cx.beginPath(); cx.arc(fx.x, fx.y, R * e, 0, 7); cx.fill();
+        cx.globalAlpha = 1 - 0.6 * wave; cx.strokeStyle = col; cx.lineWidth = 5;
+        cx.beginPath(); cx.arc(fx.x, fx.y, Math.max(1, R * e - 2), 0, 7); cx.stroke();
+    }
+    const w2 = clamp((f - 0.1) / 0.6);
+    if (w2 > 0 && w2 < 1) {
+        cx.globalAlpha = 0.8 * (1 - w2); cx.strokeStyle = '#fff'; cx.lineWidth = 1 + 3 * (1 - w2);
+        cx.beginPath(); cx.arc(fx.x, fx.y, R * (0.5 + 0.9 * easeOut(w2)), 0, 7); cx.stroke();
+    }
+    cx.save();
+    cx.globalCompositeOperation = 'lighter';
+    const r0 = pr + 3;
+    for (let i = 0; i < lines; i++) {
+        const h = hash(i), h2 = hash(i + 0.5), ang = (i / lines) * Math.PI * 2 + (h - 0.5) * 0.28;
+        const delay = 0.12 * h2, u = clamp((f - delay) / 0.7);
+        if (u <= 0 || u >= 1)
             continue;
-        const col = p.team === 0 ? '#42a5f5' : '#ef5350', f = 1 - fx.t / EXPLODE_FX;
-        const wave = Math.min(1, f / 0.35), e = easeOut(wave); // the first wave reaches the edge 35% of the way through
-        const hold = f < 0.55 ? 1 : 1 - (f - 0.55) / 0.45; // the zone stays fully visible for 55% of the effect, then fades
-        // the zone: brightest in the middle (where the push is strongest), faint at the edge
-        const zg = cx.createRadialGradient(fx.x, fx.y, 0, fx.x, fx.y, EXPLODE_R);
-        zg.addColorStop(0, col + 'aa'); zg.addColorStop(0.5, col + '44'); zg.addColorStop(1, col + '14');
-        cx.globalAlpha = hold; cx.fillStyle = zg;
-        cx.beginPath(); cx.arc(fx.x, fx.y, EXPLODE_R, 0, 7); cx.fill();
-        // a hard white flash at the very start
-        if (f < 0.2) {
-            const u = f / 0.2;
-            cx.globalAlpha = 0.9 * (1 - u); cx.fillStyle = '#fff';
-            cx.beginPath(); cx.arc(fx.x, fx.y, p.r + (EXPLODE_R * 0.6) * easeOut(u), 0, 7); cx.fill();
-        }
-        // wave 1: a bright disc growing to the edge with a coloured front (never past EXPLODE_R)
-        if (wave < 1) {
-            cx.globalAlpha = 0.45 * (1 - wave); cx.fillStyle = '#fff';
-            cx.beginPath(); cx.arc(fx.x, fx.y, EXPLODE_R * e, 0, 7); cx.fill();
-            cx.globalAlpha = 1 - 0.6 * wave; cx.strokeStyle = col; cx.lineWidth = 5;
-            cx.beginPath(); cx.arc(fx.x, fx.y, Math.max(1, EXPLODE_R * e - 2), 0, 7); cx.stroke();
-        }
-        // wave 2: a thinner ring that follows and carries on past the edge, fading
-        const w2 = clamp((f - 0.1) / 0.6);
-        if (w2 > 0 && w2 < 1) {
-            cx.globalAlpha = 0.8 * (1 - w2); cx.strokeStyle = '#fff'; cx.lineWidth = 1 + 3 * (1 - w2);
-            cx.beginPath(); cx.arc(fx.x, fx.y, EXPLODE_R * (0.5 + 0.9 * easeOut(w2)), 0, 7); cx.stroke();
-        }
-        // motion lines: streaks that burst out of the blast point, some reaching well past the zone
-        cx.save();
-        cx.globalCompositeOperation = 'lighter';
-        const N = 18, r0 = p.r + 3;
-        for (let i = 0; i < N; i++) {
-            const h = hash(i), h2 = hash(i + 0.5), ang = (i / N) * Math.PI * 2 + (h - 0.5) * 0.28;
-            const delay = 0.12 * h2, u = clamp((f - delay) / 0.7);
-            if (u <= 0 || u >= 1)
-                continue;
-            const reach = EXPLODE_R * (0.9 + 0.9 * h), head = r0 + reach * easeOut(u), tail = r0 + reach * easeOut(Math.max(0, u - 0.4 - 0.2 * h2)); // the tail trails the head, so the line looks like it is shooting outward
-            const a = Math.pow(1 - u, 1.2), ux = Math.cos(ang), uy = Math.sin(ang);
-            cx.strokeStyle = col; cx.globalAlpha = 0.35 * a; cx.lineWidth = 7 * (1 - u * 0.6); // soft glow under the line
-            cx.beginPath(); line(fx.x + ux * tail, fx.y + uy * tail, fx.x + ux * head, fx.y + uy * head); cx.stroke();
-            cx.strokeStyle = '#fff'; cx.globalAlpha = 0.95 * a; cx.lineWidth = (1.2 + 2.2 * h2) * (1 - u * 0.7); // hot core
-            cx.beginPath(); line(fx.x + ux * tail, fx.y + uy * tail, fx.x + ux * head, fx.y + uy * head); cx.stroke();
-        }
-        cx.restore();
-        // the edge: a solid line whose OUTER side is exactly EXPLODE_R (drawn half a line-width inside it)
-        const lw = 3;
-        cx.globalAlpha = hold; cx.strokeStyle = '#fff'; cx.lineWidth = lw;
-        cx.beginPath(); cx.arc(fx.x, fx.y, EXPLODE_R - lw / 2, 0, 7); cx.stroke();
-        // every body that was inside when it went off: a flash ring where it was, and a streak behind it showing which way it was sent (longer = hit harder)
-        for (const h of fx.hits || []) {
-            cx.globalAlpha = 1 - f; cx.strokeStyle = '#fff'; cx.lineWidth = 3 * (1 - f) + 1;
-            cx.beginPath(); cx.arc(h.x, h.y, h.r + 4 + 10 * f, 0, 7); cx.stroke();
-            if (h.ux !== undefined) {
-                const L = (26 + 90 * h.k) * (0.4 + 0.6 * easeOut(clamp(f / 0.3))) * (1 - f * 0.5);
-                cx.strokeStyle = col; cx.globalAlpha = 0.45 * (1 - f); cx.lineWidth = 8 * (1 - f) + 2;
-                cx.beginPath(); line(h.x, h.y, h.x - h.ux * L, h.y - h.uy * L); cx.stroke();
-                cx.strokeStyle = '#fff'; cx.globalAlpha = 0.9 * (1 - f); cx.lineWidth = 2.5 * (1 - f) + 0.8;
-                cx.beginPath(); line(h.x, h.y, h.x - h.ux * L, h.y - h.uy * L); cx.stroke();
-            }
+        const reach = R * (0.9 + 0.9 * h), head = r0 + reach * easeOut(u), tail = r0 + reach * easeOut(Math.max(0, u - 0.4 - 0.2 * h2));
+        const a = Math.pow(1 - u, 1.2), ux = Math.cos(ang), uy = Math.sin(ang);
+        cx.strokeStyle = col; cx.globalAlpha = 0.35 * a; cx.lineWidth = 7 * (1 - u * 0.6);
+        cx.beginPath(); line(fx.x + ux * tail, fx.y + uy * tail, fx.x + ux * head, fx.y + uy * head); cx.stroke();
+        cx.strokeStyle = '#fff'; cx.globalAlpha = 0.95 * a; cx.lineWidth = (1.2 + 2.2 * h2) * (1 - u * 0.7);
+        cx.beginPath(); line(fx.x + ux * tail, fx.y + uy * tail, fx.x + ux * head, fx.y + uy * head); cx.stroke();
+    }
+    cx.restore();
+    const lw = 3;
+    cx.globalAlpha = hold; cx.strokeStyle = '#fff'; cx.lineWidth = lw;
+    cx.beginPath(); cx.arc(fx.x, fx.y, R - lw / 2, 0, 7); cx.stroke();
+    for (const h of fx.hits || []) {
+        cx.globalAlpha = 1 - f; cx.strokeStyle = '#fff'; cx.lineWidth = 3 * (1 - f) + 1;
+        cx.beginPath(); cx.arc(h.x, h.y, h.r + 4 + 10 * f, 0, 7); cx.stroke();
+        if (h.ux !== undefined) {
+            const L = (26 + 90 * h.k) * (0.4 + 0.6 * easeOut(clamp(f / 0.3))) * (1 - f * 0.5);
+            cx.strokeStyle = col; cx.globalAlpha = 0.45 * (1 - f); cx.lineWidth = 8 * (1 - f) + 2;
+            cx.beginPath(); line(h.x, h.y, h.x - h.ux * L, h.y - h.uy * L); cx.stroke();
+            cx.strokeStyle = '#fff'; cx.globalAlpha = 0.9 * (1 - f); cx.lineWidth = 2.5 * (1 - f) + 0.8;
+            cx.beginPath(); line(h.x, h.y, h.x - h.ux * L, h.y - h.uy * L); cx.stroke();
         }
     }
     cx.restore();
 }
+function drawExplode() {
+    for (const p of players)
+        if (p.explodeFx)
+            drawBlast(p.explodeFx, p.team === 0 ? '#42a5f5' : '#ef5350', EXPLODE_R, EXPLODE_FX, p.r);
+}
+function drawMineBlasts() { // Mines: the same blast at every mine that went off (the hit streaks are drawn once, from the first one)
+    for (const p of players) {
+        const fx = p.mineFx;
+        if (!fx)
+            continue;
+        const col = p.team === 0 ? '#42a5f5' : '#ef5350';
+        fx.pts.forEach((pt, i) => drawBlast({ x: pt.x, y: pt.y, t: fx.t, hits: i === 0 ? fx.hits : null }, col, MINE_R, MINE_FX, 6, 10));
+    }
+}
+
 function drawAwakened() { // Awakened: a golden pulsing aura on a powered-up player, with a ring that drains as the time runs out
     const tm = performance.now();
     cx.save();

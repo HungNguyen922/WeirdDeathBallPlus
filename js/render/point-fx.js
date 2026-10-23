@@ -10,20 +10,40 @@ const FX_GOLD = '#ffd54a';
 let fxAmp = 1; // overall opacity of the effect being drawn (the victory scene fades out at the end)
 
 // The big slanted lettering with a white rim and a dark drop shadow, in a team colour. sc = scale, alpha, tilt in radians.
+const fxTitleCache = new Map(); // "text|size|rgb" -> { cv, w, h }
+function fxTitleSprite(txt, size, rgb) {
+    const key = txt + '|' + size + '|' + rgb;
+    let s = fxTitleCache.get(key);
+    if (s)
+        return s;
+    if (fxTitleCache.size > 24)
+        fxTitleCache.clear();
+    const cv2 = document.createElement('canvas'), g = cv2.getContext('2d'), font = '900 ' + size + 'px Impact, "Arial Black", system-ui, sans-serif';
+    g.font = font;
+    const w = Math.ceil(g.measureText(txt).width + size * 0.8), h = Math.ceil(size * 1.5);
+    cv2.width = w; cv2.height = h; // (resizing resets the context, so everything is set again below)
+    g.translate(w / 2, h / 2);
+    g.transform(1, 0, -0.2, 1, 0, 0); // italic slant
+    g.font = font;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineJoin = 'miter'; g.miterLimit = 8;
+    g.lineWidth = size * 0.17; g.strokeStyle = '#0b0610'; g.strokeText(txt, 3, 5);
+    g.lineWidth = size * 0.1; g.strokeStyle = '#ffffff'; g.strokeText(txt, 0, 0);
+    g.fillStyle = 'rgb(' + rgb + ')'; g.fillText(txt, 0, 0);
+    const gr = g.createLinearGradient(0, -size / 2, 0, size / 2);
+    gr.addColorStop(0, 'rgba(255,255,255,.35)'); gr.addColorStop(0.5, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(0,0,0,.35)');
+    g.fillStyle = gr; g.fillText(txt, 0, 0);
+    fxTitleCache.set(key, s = { cv: cv2, w, h });
+    return s;
+}
 function fxTitle(txt, x, y, size, rgb, sc, alpha, tilt) {
+    if (alpha <= 0 || sc <= 0)
+        return;
+    const s = fxTitleSprite(txt, size, rgb);
     cx.save();
     cx.translate(x, y); cx.rotate(tilt); cx.scale(sc, sc);
     cx.globalAlpha = alpha;
-    cx.transform(1, 0, -0.2, 1, 0, 0); // italic slant
-    cx.font = '900 ' + size + 'px Impact, "Arial Black", system-ui, sans-serif';
-    cx.textAlign = 'center'; cx.textBaseline = 'middle';
-    cx.lineJoin = 'miter'; cx.miterLimit = 8;
-    cx.lineWidth = size * 0.17; cx.strokeStyle = '#0b0610'; cx.strokeText(txt, 3, 5);
-    cx.lineWidth = size * 0.1; cx.strokeStyle = '#ffffff'; cx.strokeText(txt, 0, 0);
-    cx.fillStyle = 'rgb(' + rgb + ')'; cx.fillText(txt, 0, 0);
-    const g = cx.createLinearGradient(0, -size / 2, 0, size / 2); // a light top and a dark bottom give it some body
-    g.addColorStop(0, 'rgba(255,255,255,.35)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,.35)');
-    cx.fillStyle = g; cx.fillText(txt, 0, 0);
+    cx.drawImage(s.cv, -s.w / 2, -s.h / 2);
     cx.restore();
 }
 
@@ -104,12 +124,15 @@ function drawWinFx(t, col, e) {
     cx.fillRect(-OX, 0, CW, H + PIT);
     const N = 16, R = Math.max(W, H) * 1.2, rot = e * 0.3; // the sunburst: wedges that turn slowly
     cx.fillStyle = 'rgba(' + rgb + ',' + 0.17 * k + ')';
+    cx.beginPath();
     for (let i = 0; i < N; i++) {
         const a = rot + i * (Math.PI * 2 / N), w = Math.PI / N;
-        cx.beginPath(); cx.moveTo(mx, my);
-        cx.lineTo(mx + Math.cos(a) * R, my + Math.sin(a) * R); cx.lineTo(mx + Math.cos(a + w) * R, my + Math.sin(a + w) * R);
-        cx.closePath(); cx.fill();
+        cx.moveTo(mx, my);
+        cx.lineTo(mx + Math.cos(a) * R, my + Math.sin(a) * R);
+        cx.lineTo(mx + Math.cos(a + w) * R, my + Math.sin(a + w) * R);
+        cx.closePath();
     }
+    cx.fill();
     const gl = cx.createRadialGradient(mx, my, 0, mx, my, 340 * inn + 1); // a glow behind the words
     gl.addColorStop(0, 'rgba(' + rgb + ',' + 0.5 * k + ')'); gl.addColorStop(1, 'rgba(' + rgb + ',0)');
     cx.fillStyle = gl; cx.fillRect(mx - 360, my - 360, 720, 720);

@@ -1,14 +1,22 @@
 // SERVER - serves the game files and runs online matches.  Start:  node server/server.js [port]     then open  http://localhost:8080/?room=test  in two tabs.
 //
 // Model (authoritative host): the server owns the real simulation, one per room. Clients send only their key presses; the server steps the sim at the game's fixed rate and
-// sends everybody a snapshot of the whole world (saveState) 30 times a second, plus the one-off events (goals, impacts, bat hits) the renderer needs for its effects.
+// sends everybody a snapshot of the whole world (saveState) 20 times a second (30 while playing at SNAP_EVERY=4), plus the one-off events (goals, impacts, bat hits) the renderer needs for its effects.
+//
+// Bandwidth savers (Render's free tier meters outbound traffic):
+//   - SNAP_EVERY defaults to 6 (20 Hz). SNAP_EVERY=4 gives the old 30 Hz.
+//   - Spectators / waiting players get every second snapshot.
+//   - A room where nobody has pressed anything for IDLE_AFTER_MS, and where nothing moves, sends 1 snapshot a second.
+//   - Delta encoding (clients that join with delta:true): every KF_EVERY snapshots is a KEYFRAME (the full world). In between, only the players' fields that differ from the keyframe are sent.
+//     Deltas are relative to the keyframe, not to the previous snapshot, so a client that skips snapshots (backlog) can still apply any delta, as long as it holds the current keyframe.
+//   - /health reports the measured snapshot traffic.
 //
 // Teams: a connection is on Blue (team 0), on Red (team 1) or waiting / spectating (team -1). A team has at most TEAM_MAX players. Seats are player ids: Blue sits in 0 then 2, Red in
 // 1 then 3, in the order they joined the team. The first player into a room goes to Blue, the second to Red; everybody after that waits until the HOST (the player who made the room,
 // passed on if they leave) moves them. The match runs only while both teams have a player (1v1, 1v2 and 2v2 all work); any change to who is seated restarts it.
 //
 // Protocol: JSON text messages over a WebSocket.
-//   client -> server   {t:'join', room, special, lobby2v2}  join a room; lobby2v2 = true only counts for the player who creates the room (they become the host)
+//   client -> server   {t:'join', room, special, lobby2v2, delta}  join a room; lobby2v2 = true only counts for the player who creates the room (they become the host); delta = true: send me delta snapshots
 //                      {t:'in', n, k}                      my keys changed. n = my input counter, k = bit mask: l1 r2 up4 dn8 z16 x32 sp64 sp2 128.   (z = grapple, x = weight, sp = special)
 //                      {t:'sp', s}                         equip special ability s (ignored while pick screens are on)
 //                      {t:'fixed', v}                      host only: specials only on pick screens (true) or free swapping (false); restarts the match
@@ -26,6 +34,9 @@
 //                      {t:'slot', slot}                    your seat changed (the host moved you)
 //                      {t:'roster', slots:[bool x4], spectators, running, lobby2v2, host, you, members:[{c, team, slot, host, name, skin}]}   skin = the account's skin (a list of layers, see js/skin-data.js) or null
 //                      {t:'snap', tick, ack, s, ev}         s = saveState(), ack = my last input counter the server has applied, ev = [[name, tick, ...args], ...]
+//                        delta clients also get:  kf = keyframe id.  With no pd, s is complete and IS the keyframe (remember s.players under that id).
+//                        With pd, s has no `players`; pd[i] describes player i against the keyframe's player i:  0 = unchanged, null = not in the match, {f: player} = replace,
+//                        {d: {changed fields}, x: [removed fields]} = patch.
 //                      {t:'chat', c, team, text}           somebody in the room said something (c = their member id, team = 0 Blue / 1 Red / -1 waiting); also sent back to the sender.  {t:'chat', sys:true, text} is a note from the server to one player
 //                      {t:'pong', c, tick, tps}    {t:'error', msg}
 const http = require('http'), fs = require('fs'), path = require('path');
@@ -33,8 +44,13 @@ const { attachWebSocket } = require('./ws.js');
 const { loadSim, ROOT } = require('./sim-node.js');
 const accounts = require('./accounts.js');
 
+const STATS = { bytes: 0, snaps: 0, since: Date.now() }; // measured snapshot traffic (see /health)
 const TICK_HZ = 120, DT_MS = 1000 / TICK_HZ;
-const SNAP_EVERY = [1, 2, 3, 4, 5, 6].includes(+process.env.SNAP_EVERY) ? +process.env.SNAP_EVERY : 4; // a snapshot every 4 ticks = 30 Hz. SNAP_EVERY=2 node js/server/server.js sends 60 Hz: a little less lag, about twice the bandwidth (clients adapt, the value is sent in 'welcome')
+const SNAP_EVERY = [1, 2, 3, 4, 5, 6, 8].includes(+process.env.SNAP_EVERY) ? +process.env.SNAP_EVERY : 6; // a snapshot every 6 ticks = 20 Hz. SNAP_EVERY=4 = 30 Hz (the old default), 8 = 15 Hz. (clients adapt, the value is sent in 'welcome')
+const IDLE_EVERY = 120;         // ticks between snapshots in an idle room (1 per second). Must be a multiple of every allowed SNAP_EVERY (120 is).
+const IDLE_AFTER_MS = 20000;    // a room is idle when nobody changed their keys for this long, no key is held, no event is waiting and the ball is (nearly) still
+const IDLE_BALL_V = 60;         // u/s: a ball faster than this keeps the room awake
+const KF_EVERY = 30;            // delta encoding: every this-many snapshots is a keyframe (full world). Keep it EVEN (spectators skip odd snapshots and must never miss a keyframe)
 const SNAP_BACKLOG = 48 * 1024; // a client with more than this still unsent skips snapshots (each one is the full world, so a skipped one costs nothing; a queue of stale ones makes it lag for seconds)
 const MAX_CATCHUP = 8; // never run more than this many ticks in one go (after a stall, drop the debt instead of spiralling)
 const MAX_ROOMS = 50, MAX_SPECTATORS = 8, MSG_PER_SEC = 400;
@@ -58,6 +74,33 @@ function __setKeys(i, bits) {
 
 const { skinClean } = require('../skin-data.js');
 
+// ---- delta encoding helpers ----
+function fieldStrings(p) { // a player's own fields as JSON text, one string per field (undefined fields are dropped, exactly as JSON would drop them)
+    const o = {};
+    for (const k in p) {
+        const v = JSON.stringify(p[k]);
+        if (v !== undefined)
+            o[k] = v;
+    }
+    return o;
+}
+function playerDelta(p, base) { // JSON text: how player p differs from the keyframe's version of it (base = fieldStrings of that, or null)
+    if (!p)
+        return base ? 'null' : '0';
+    if (!base)
+        return '{"f":' + JSON.stringify(p) + '}';
+    const cur = fieldStrings(p), parts = [], gone = [];
+    for (const k in cur)
+        if (base[k] !== cur[k])
+            parts.push(JSON.stringify(k) + ':' + cur[k]);
+    for (const k in base)
+        if (!(k in cur))
+            gone.push(k);
+    if (!parts.length && !gone.length)
+        return '0';
+    return '{"d":{' + parts.join(',') + '}' + (gone.length ? ',"x":' + JSON.stringify(gone) : '') + '}';
+}
+
 class Room {
     constructor(name) {
         this.name = name;
@@ -80,6 +123,11 @@ class Room {
         this.running = false;
         this.acc = 0;
         this.last = performance.now();
+        this.lastInput = Date.now(); // when anybody last changed their keys (idle rooms send fewer snapshots)
+        this.snapN = 0;     // snapshots made since the match started (decides keyframes and which ones spectators skip)
+        this.kfSeq = 0;     // keyframe ids handed out (never reused, so a stale client can never match a new keyframe)
+        this.kfId = 0;      // id of the current keyframe
+        this.kfBase = null; // the current keyframe's players, as fieldStrings per player (null = no keyframe yet)
         this.tps = 0; this.tpsN = 0; this.tpsT = performance.now(); // achieved sim ticks per second (should sit at 120)
     }
     get everyone() { return [...this.conns]; }
@@ -164,6 +212,7 @@ class Room {
         this.conns.add(conn);
         if (!this.host)
             this.host = conn;
+        this.lastInput = Date.now(); // somebody just arrived: wake the room
         const changed = this.reseat();
         conn.send(JSON.stringify({ t: 'welcome', room: this.name, slot: conn.slot, cid: conn.cid, tick: this.tick, hz: TICK_HZ, snapEvery: SNAP_EVERY }));
         this.settle(changed);
@@ -205,6 +254,9 @@ class Room {
         this.tick = 0;
         this.acc = 0;
         this.last = performance.now();
+        this.lastInput = Date.now();
+        this.snapN = 0;      // the first snapshot of a match is always a keyframe
+        this.kfBase = null;
         this.running = true;
         this.snapshot(); // everyone sees the fresh board straight away
     }
@@ -309,6 +361,13 @@ class Room {
         for (const c of this.conns)
             c.send(JSON.stringify({ ...base, host: c === this.host, you: c.cid }));
     }
+    isActive() { // should this room send snapshots at the full rate right now?
+        const ball = this.sim.run('ball');
+        return this.bits.some(Boolean)                                   // somebody is holding a key
+            || Date.now() - this.lastInput < IDLE_AFTER_MS               // or pressed one recently
+            || this.sim.ctx.__ev.length > 0                              // or an effect (goal, impact, bat hit) is waiting to be sent
+            || Math.hypot(ball.vx, ball.vy) > IDLE_BALL_V;               // or the ball is still moving
+    }
     advance(now) {
         if (!this.running) {
             this.last = now;
@@ -332,7 +391,7 @@ class Room {
             n++;
             this.tpsN++;
             this.acc -= DT_MS;
-            if (this.tick % SNAP_EVERY === 0)
+            if (this.tick % SNAP_EVERY === 0 && (this.tick % IDLE_EVERY === 0 || this.isActive())) // idle rooms only snapshot once a second
                 this.snapshot();
         }
         if (this.acc > DT_MS * MAX_CATCHUP)
@@ -344,12 +403,23 @@ class Room {
         }
     }
     snapshot() {
-        const ctx = this.sim.ctx;
-        const s = JSON.stringify(ctx.saveState()), evNew = ctx.__ev.slice();
+        const ctx = this.sim.ctx, state = ctx.saveState(), n = this.snapN++;
+        const evNew = ctx.__ev.slice();
         ctx.__ev.length = 0;
         const evJson = JSON.stringify(evNew);
-        const out = (c, ack) => {
-            if (c.backlog() > SNAP_BACKLOG) { // not keeping up: skip this one, but keep its effects for the next one it gets
+        const isKey = !this.kfBase || n % KF_EVERY === 0;     // a keyframe: the full world, and the base for the deltas that follow
+        let fullStr = null, delta = null;
+        const full = () => fullStr || (fullStr = JSON.stringify(state));
+        const getDelta = () => delta || (delta = { // the world without its players, and the players as differences from the keyframe
+            rest: JSON.stringify({ ...state, players: undefined }),
+            pd: '[' + state.players.map((p, i) => playerDelta(p, this.kfBase[i])).join(',') + ']'
+        });
+        if (isKey) {
+            this.kfId = ++this.kfSeq;
+            this.kfBase = state.players.map(p => (p ? fieldStrings(p) : null));
+        }
+        const out = (c, ack, skip = false) => {
+            if (skip || c.backlog() > SNAP_BACKLOG) { // not keeping up (or a spectator's skipped turn): keep its effects for the next one it gets
                 c.heldEv = (c.heldEv || []).concat(evNew).slice(-80);
                 return;
             }
@@ -358,12 +428,27 @@ class Room {
                 ev = JSON.stringify(c.heldEv.concat(evNew));
                 c.heldEv = null;
             }
-            c.send('{"t":"snap","tick":' + this.tick + ',"ack":' + ack + ',"s":' + s + ',"ev":' + ev + '}');
+            let s, extra = '';
+            if (c.delta && isKey) { // keyframe: full state, tagged so the client keeps its players
+                s = full();
+                extra = '"kf":' + this.kfId + ',';
+                c.kf = this.kfId;
+            } else if (c.delta && c.kf === this.kfId) { // it holds the current keyframe: send only what differs
+                const d = getDelta();
+                s = d.rest;
+                extra = '"kf":' + this.kfId + ',"pd":' + d.pd + ',';
+            } else
+                s = full(); // plain client, or one that missed the keyframe (it gets full snapshots until the next keyframe reaches it)
+            const msg = '{"t":"snap","tick":' + this.tick + ',"ack":' + ack + ',' + extra + '"s":' + s + ',"ev":' + ev + '}';
+            STATS.bytes += msg.length;
+            STATS.snaps++;
+            c.send(msg);
         };
+        const half = n % 2 === 1 && !isKey; // spectators and waiting players get every second snapshot (never a keyframe: KF_EVERY is even)
         this.seats.forEach((c, i) => c && out(c, this.seq[i]));
         for (const c of this.conns)
             if (c.slot < 0)
-                out(c, 0);
+                out(c, 0, half);
     }
     matchOver(done) { // Blue sits in seats 0 and 2, Red in 1 and 3. Rated only if everyone seated is signed in (accounts.recordMatch checks that).
         if (!this.ranked || !accounts.enabled())
@@ -394,7 +479,11 @@ function startServer(port = 8080, host = '0.0.0.0') {
         let p;
         try { p = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch (e) { res.writeHead(400).end(); return; }
         if (p === '/health') {
-            res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ ok: true, rooms: rooms.size }));
+            const hours = (Date.now() - STATS.since) / 3.6e6;
+            res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({
+                ok: true, rooms: rooms.size,
+                snapshotMB: +(STATS.bytes / 1e6).toFixed(2), snapshots: STATS.snaps, hoursUp: +hours.toFixed(2), mbPerHour: +(STATS.bytes / 1e6 / Math.max(hours, 1e-6)).toFixed(1)
+            }));
             return;
         }
         if (p.startsWith('/api/')) {
@@ -446,6 +535,8 @@ function startServer(port = 8080, host = '0.0.0.0') {
                 conn.uid = id ? id.uid : null;
                 conn.name = id && id.name ? id.name : null;
                 conn.skin = id ? id.skin : skinClean(m.skin); // an account's stored skin wins; a guest supplies their own (cleaned)
+                conn.delta = m.delta === true; // this client can apply delta snapshots (see the protocol notes at the top)
+                conn.kf = null;
                 const name = typeof m.room === 'string' && /^[A-Za-z0-9_-]{1,24}$/.test(m.room) ? m.room : 'lobby';
                 let r = rooms.get(name);
                 if (!r) {
@@ -462,6 +553,8 @@ function startServer(port = 8080, host = '0.0.0.0') {
                 room = r;
             } else if (m.t === 'in' && room && conn.slot >= 0) { // (conn.slot follows the host moving people around)
                 if (Number.isInteger(m.k) && m.k >= 0 && m.k <= 255) {
+                    if (m.k !== room.bits[conn.slot])
+                        room.lastInput = Date.now(); // a real change of keys wakes an idle room
                     room.bits[conn.slot] = m.k;
                     if (Number.isInteger(m.n))
                         room.seq[conn.slot] = m.n;
@@ -533,5 +626,3 @@ if (require.main === module) {
         console.log('  stop:  Ctrl+C');
     });
 }
-
-

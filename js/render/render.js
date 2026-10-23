@@ -37,6 +37,7 @@ function drawScene() {
     drawAwakened();
     drawPongRings();    // new: next to the Awakened ring, so Smoke hides it from the other team too
     drawExplode();
+    drawMineBlasts();
     drawGrappleRange();
     drawRopes();
     drawDashStreaks();

@@ -50,6 +50,14 @@ function netClearAI() { // online every seat is a person: the offline AI flags m
             ai[i].on = false;
 }
 
+function netApplyDelta(base, d) { // a player from the keyframe + the fields that changed (the result is read-only: never edit it, it shares values with the keyframe)
+    const o = { ...base, ...(d.d || {}) };
+    if (d.x)
+        for (const k of d.x)
+            delete o[k];
+    return o;
+}
+
 const net = {
     on: false, slot: -1, ws: null, room: '', running: false, rtt: 0, status: '', lobby2v2: false, ranked: false,
     members: [], you: 0,
@@ -86,7 +94,7 @@ const net = {
             const me = allPlayers[0] || {};
             Promise.resolve(typeof account !== 'undefined' ? account.freshToken() : null).catch(() => null).then(token => { // signed in? the server uses the token to know who you are
                 if (ws.readyState === 1)
-                    ws.send(JSON.stringify({ t: 'join', room, special: me.special, special2: me.special2, lobby2v2: want2v2, token: token || undefined, skin: typeof skinMy === 'function' ? skinMy() : undefined }));
+                    ws.send(JSON.stringify({ t: 'join', room, special: me.special, special2: me.special2, lobby2v2: want2v2, delta: true, token: token || undefined, skin: typeof skinMy === 'function' ? skinMy() : undefined }));
             });
             this.pingTimer = setInterval(() => this.ws && this.ws.readyState === 1 && this.ws.send(JSON.stringify({ t: 'ping', c: performance.now() })), NET_PING_MS);
         };
@@ -148,6 +156,11 @@ const net = {
             this.reset();
             events.onNewRound();
         }
+        if (m.pd) { // a delta: rebuild the players from the keyframe we hold
+            const base = this.kf && this.kf.id === m.kf ? this.kf.players : (last ? last.s.players : []); // (the fallback never happens on an ordered connection: the keyframe always arrives first)
+            m.s.players = base.map((bp, i) => { const d = m.pd[i]; return d === 0 ? bp : d === null ? null : 'f' in d ? d.f : netApplyDelta(bp, d); });
+        } else if (m.kf !== undefined)
+            this.kf = { id: m.kf, players: m.s.players }; // a keyframe: remember its players
         if (this.buf.length && m.tick === this.buf[this.buf.length - 1].tick) { // the same tick again (a paused room re-sends its board): refresh it, but it says nothing about the connection, so keep it out of the clock and jitter estimates
             this.buf[this.buf.length - 1].s = m.s;
             for (const e of m.ev)
@@ -176,6 +189,7 @@ const net = {
         this.buf = [];
         this.evq = [];
         this.cur = null;
+        this.kf = null;
     },
     // ---- sending ----
     sendKeys() {

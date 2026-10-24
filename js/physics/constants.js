@@ -379,12 +379,12 @@ const EXPLODE_AMP_GAIN = 0.5;         // extra speed added on top, as a share of
 
 // --- Hopper ---
 const HOPPER_MOVE = 1;                // share of normal run acceleration and top speed
-const HOPPER_CRAWL = 1600;            // u/s you can crawl along a surface you are stuck to
+const HOPPER_CRAWL = 1000;            // u/s you can crawl along a surface you are stuck to
 const HOPPER_CRAWL_FINE = 400;        // u/s you can crawl along a surface you are stuck to while holding the weight key (for fine positioning)
 const HOPPER_HOP_V = 2400;            // hop speed (u/s)
 const HOPPER_HOP_T = 1;               // longest a hop can last (s), a safety timeout
 const HOPPER_GRACE = 1;               // s you stay stuck after a hop lands without holding the key (so you can chain hops)
-const HOPPER_COOLDOWN = 2;            // s, starts when the hop starts
+const HOPPER_COOLDOWN = 5;            // s, starts when the hop starts
 
 // --- Boomerang ---    
 const BOOMERANG_MAX = 10;              // most one player can have out at once (2 volleys)
@@ -474,8 +474,15 @@ const MINE_KICK_CAP = 3600;     // most one blast can give one body, however man
 const MINE_COOLDOWN = 4;        // s after planting or blasting before the key can plant again
 const MINE_FX = 0.5;            // s the blast ring is drawn (display only)
 
+// SPLIT
+const SPLIT_BASE_R = 16, SPLIT_FACTOR = 0.5, SPLIT_MIN_S = 0.25, SPLIT_MAX = 4; // a full-size radius; each split halves; smallest body; most bodies
+const SPLIT_KICK = 140, SPLIT_HOP = 120;                    // u/s the two halves fly apart / the copy hops up
+const SPLIT_LOCK = 0.6, SPLIT_SWITCH_LOCK = 0.25, SPLIT_MERGE_GAP = 2; // s with no merging after a split / a switch; extra reach for a merge
+const SPLIT_RANGE_POW = 1; // grapple range = RANGE * s^POW. 0.5 = proportional to radius; 1 = proportional to area (much harsher); 0 = no change
+const SPLIT_COOLDOWN = 10;
+
 // --- The ability table: reads every cooldown above, so it has to stay below them ------------------------------------------------------------------------------------
-const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN }, portal: { cd: PORTAL_COOLDOWN }, swap: { cd: SWAP_COOLDOWN }, smoke: { cd: SMOKE_COOLDOWN }, pong: { cd: PONG_COOLDOWN }, mines: { cd: MINE_COOLDOWN } }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
+const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN }, portal: { cd: PORTAL_COOLDOWN }, swap: { cd: SWAP_COOLDOWN }, smoke: { cd: SMOKE_COOLDOWN }, pong: { cd: PONG_COOLDOWN }, mines: { cd: MINE_COOLDOWN }, split: { cd: SPLIT_COOLDOWN} }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 
 // =====================================================================================================================================================================
 // 11  MATCH

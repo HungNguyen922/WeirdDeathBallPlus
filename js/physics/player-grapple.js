@@ -98,7 +98,7 @@ mixin(Player, {
             const hd = Math.hypot(hp.x - this.x, hp.y - this.y);
             c.push({ p: hp, d: hd, len: Math.max(hd, 41), b: true, ground: false, ball: b, decoy: b !== ball });
         }
-        return c.filter(o => o.d <= RANGE);
+        return c.filter(o => o.d <= playerReach(this));
     },
     inReach(ball) { return this.candidates(ball).length > 0; },
     // Tether to the nearest thing in reach (no priorities). Rope length = distance at press.
@@ -147,7 +147,7 @@ mixin(Player, {
             const fxL = this.floorFx();
             if (fxL.hyper) this.boostFx = BOOST_FX;                      // (display: this jump is being boosted)
             if (fxL.xeric && this.keys.x) this.fizzleFx = FIZZLE_FX;     // (display: this weighted jump is being cut)
-            this.len = Math.min(RANGE, Math.max(d, MIN_LEN) + GJ_REACH_GROUND * air * (this.keys.x ? GJ_REACH_WEIGHTED : 1) * (fxL.hyper ? HYPER_REACH : 1));
+            this.len = Math.min(playerReach(this), Math.max(d, MIN_LEN) + GJ_REACH_GROUND * air * (this.keys.x ? GJ_REACH_WEIGHTED : 1) * (fxL.hyper ? HYPER_REACH : 1));
             this.driveT = GJ_DRIVE_T;
             this.driveVmax = lift * GJ_DRIVE_BOOST * air * (this.keys.x && fxL.xeric ? XERIC_JUMP : 1); // top speed away from the pivot this jump can reach (a xeric under a weighted jump makes it a misfire)
             this.driveAcc = this.driveVmax / GJ_DRIVE_T; // delivered by step() as a pull away from the pivot, not as one kick

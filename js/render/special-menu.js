@@ -18,6 +18,7 @@ const SPECIALS = [
     { id: 'smoke', name: 'SMOKE', icon: 'smoke' },
     { id: 'pong', name: 'PONG', icon: 'pong' },
     { id: 'mines', name: 'MINES', icon: 'mines' },
+    { id: 'split', name: 'SPLIT', icon: 'split' },
 ];
 const ui = { open: -1, slot: 0, hover: null }; // open = index of the player whose menu is open (-1 = none), slot = which of their specials it edits (0 first, 1 second)
 const spCx = slot => (twoSpecials ? (slot ? 63 : 21) : 46); // centre of a special's cap, from the block's centre (the caps move when there are four)

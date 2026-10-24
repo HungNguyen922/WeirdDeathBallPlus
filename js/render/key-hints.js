@@ -143,6 +143,15 @@ function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebel
         cx.moveTo(6, -1); cx.lineTo(9, -5);
         cx.stroke();
         cx.beginPath(); cx.arc(0, 8, 7, Math.PI, 0); cx.fill();
+    } else if (kind === 'split') { // mitosis: a cell pinched in two, a nucleus in each half
+        const a = Math.atan2(3.317, 5);
+        cx.lineWidth = 2.2;
+        cx.moveTo(0, -3.317);
+        cx.arc(-5, 0, 6, -a, a, true);
+        cx.arc(5, 0, 6, Math.PI - a, -(Math.PI - a), true);
+        cx.closePath(); cx.stroke();
+        cx.beginPath(); cx.arc(-5, 0, 2, 0, 7); cx.fill();
+        cx.beginPath(); cx.arc(5, 0, 2, 0, 7); cx.fill();
     } else if (kind === 'locked') { // padlock
         cx.fillRect(-6, -1, 12, 9);
         cx.beginPath(); cx.arc(0, -2, 4.5, Math.PI, 0); cx.stroke();

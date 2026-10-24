@@ -69,6 +69,8 @@ mixin(Player, {
         } else if (id === 'warp') { // instant: no cast, no timer (see warpPress)
             this.warpPress();
             return true;
+        } else if (id === 'split') { // instant: halve yourself (or, with weight held, switch bodies)
+            return this.splitPress();
         } else if (id === 'boomerang') { // instant: no cast
             if (this.cd.boomerang <= 0 && (this.sim || boomCount(this) < BOOMERANG_MAX)) {
                 if (!this.sim)

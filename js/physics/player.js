@@ -57,6 +57,7 @@ class Player {
     }
     reset() {
         this.x = sidesSwapped ? W - this.sx : this.sx; // sx is the spawn on the team's normal side; a swapped team spawns mirrored
+        this.s = 1; this.r = SPLIT_BASE_R; this.clones = []; this.splitLock = 0;
         this.y = H - this.r;
         this.vx = this.vy = 0;
         this.alive = true;

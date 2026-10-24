@@ -7,7 +7,7 @@ function drawGrappleRange() { // range indicator when nothing is in reach
             cx.lineWidth = 2;
             cx.setLineDash([8, 8]);
             cx.beginPath();
-            cx.arc(p.x, p.y, RANGE, 0, 7);
+            cx.arc(p.x, p.y, playerReach(p), 0, 7);
             cx.stroke();
             cx.setLineDash([]);
         }

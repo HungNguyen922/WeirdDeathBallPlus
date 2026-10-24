@@ -19,6 +19,7 @@ const PICK_DESC = { // two short lines under the highlighted special
     portal: ['Hold, turn with the arrows,', 'release. Two linked portals.'],
     pong: ['Rubber floor and walls: spin', 'grips and the flick is x2.'],
     mines: ['Plant mines on surfaces (1 s).', 'Hold special + weight: blast.'],
+    split: ['Halve yourself, leave a copy.', 'Touch a copy to merge back.', 'Weight + key: swap bodies.'],
 };
 const pickSp = id => SPECIALS.find(a => a.id === id) || SPECIALS[0];
 const PICK_NAMES = ['BLUE', 'RED', 'BLUE 2', 'RED 2']; // by player id

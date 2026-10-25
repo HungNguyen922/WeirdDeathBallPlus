@@ -173,7 +173,7 @@ mixin(Player, {
             if (this.gCool === 0)
                 this.gCharge = 0; // lockout over: the meter does NOT jump to full, it restarts from 0 (grapple again right away and it just overcharges again)
         }
-        const z = k.z && this.gCool <= 0;
+        const z = k.z && this.gCool <= 0 && this.stunT <= 0;
         if (!z && !primed)
             this.kickReq = false; // a primed kick survives the grapple being up
         if (z && !this.rope && !this.pending)

@@ -244,6 +244,7 @@ const gameMenu = (() => {
             row.appendChild(name);
             for (const s of SPECIALS) {
                 const b = document.createElement('button');
+                b.disabled = !!s.locked
                 b.className = 'mode' + (s.id === cur ? ' on' : '');
                 b.textContent = s.name.charAt(0) + s.name.slice(1).toLowerCase();
                 b.addEventListener('click', () => {

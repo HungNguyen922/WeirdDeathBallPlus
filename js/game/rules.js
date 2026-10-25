@@ -29,7 +29,7 @@ const events = {
 // their normal keys. On the screen: left / right / up / down move the cursor over a grid PICK_COLS wide, grapple or special locks the choice in, weight takes it back.
 // The computer always takes Dash (it is the only special the AI knows how to use). When everybody is locked in, a short countdown runs and the point starts.
 const PICK_EVERY = 5, PICK_COLS = 5, PICK_GO_T = 0.9; // points between screens, icons per row, seconds of "get ready" after the last lock-in
-const PICK_LIST = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened', 'explode', 'hopper', 'boomerang', 'portal', 'swap', 'smoke', 'pong', 'mines', 'split', ]; // the grid, in reading order (same ids as SPECIALS in render/special-menu.js)
+const PICK_LIST = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened', 'explode', 'hopper', 'boomerang', 'portal', 'swap', 'smoke', 'pong', 'mines', 'split', 'fighter' ]; // the grid, in reading order (same ids as SPECIALS in render/special-menu.js)
 let pickFixed = false; // the toggle: true = specials are only chosen on pick screens, false = swap any time from the keycap
 const pick = { on: false, t: 0, go: 0, at: -1, cur: [0, 0, 0, 0], ready: [false, false, false, false], prev: [0, 0, 0, 0], stage: [0, 0, 0, 0] };
 const keyBits = k => (k.l ? 1 : 0) | (k.r ? 2 : 0) | (k.up ? 4 : 0) | (k.dn ? 8 : 0) | (k.z ? 16 : 0) | (k.x ? 32 : 0) | (k.sp ? 64 : 0) | (k.sp2 ? 128 : 0);
@@ -110,16 +110,17 @@ function pickStep() { // one physics step of an open pick screen
         pick.cur[id] = row * PICK_COLS + col;
         if (fresh & (16 | 64 | 128)) { // grapple or either special key locks it in
             const choice = PICK_LIST[pick.cur[id]];
+            if (choice === 'fighter' && !twoSpecials) continue;           // not available
             if (!twoSpecials) {
                 p.special = choice;
                 pick.ready[id] = true;
             } else if (pick.stage[id] === 0) { // first choice made: now pick the second
                 p.special = choice;
+                if (choice === 'fighter') { p.special2 = 'fighter'; pick.ready[id] = true; continue; } // takes both slots
                 pick.stage[id] = 1;
-                if (p.special2 === choice)
-                    p.special2 = PICK_LIST.find(s => s !== choice);
+                if (p.special2 === choice || p.special2 === 'fighter') p.special2 = PICK_LIST.find(s => s !== choice && s !== 'fighter');
                 pick.cur[id] = Math.max(0, PICK_LIST.indexOf(p.special2));
-            } else if (choice !== p.special) { // (the second one cannot be the same as the first: the press does nothing)
+            } else if (choice !== p.special && choice !== 'fighter') { // (the second one cannot be the same as the first: the press does nothing)
                 p.special2 = choice;
                 pick.ready[id] = true;
             }
@@ -134,18 +135,32 @@ function setPickMode(on) { // the menu toggle: restarts the match, so the first 
 }
 // Equip a special in slot 0 (first) or 1 (second). No ability can be in both slots: picking the one the other slot has swaps them.
 function equipSpecial(p, slot, id) {
+    if (id === 'fighter') {
+        if (!twoSpecials || ai[p.id].on) return; // two-special matches only, human only
+        p.special = p.special2 = 'fighter';
+        return;
+    }
     const a = slot ? 'special2' : 'special', b = slot ? 'special' : 'special2';
-    if (p[b] === id)
+    if (p[b] === 'fighter')
+        p[b] = PICK_LIST.find(s => s !== 'fighter' && s !== id); // leaving Fighter frees the other slot
+    else if (p[b] === id)
         p[b] = p[a];
     p[a] = id;
 }
+
 function setTwoSpecials(on) { // the menu toggle: restarts the match
     twoSpecials = !!on;
-    for (const p of allPlayers)
+    for (const p of allPlayers) {
+        if (!twoSpecials && (p.special === 'fighter' || p.special2 === 'fighter')) {
+            p.special = 'dash'; // Fighter only exists with two specials: it turns back into plain specials
+            p.special2 = 'plinko';
+        }
         if (p.special2 === p.special)
-            p.special2 = PICK_LIST.find(s => s !== p.special);
+            p.special2 = PICK_LIST.find(s => s !== p.special && s !== 'fighter');
+    }
     resetMatch();
 }
+
 function setSwapMode(on) { // the menu toggle: restarts the match so the sides start the right way round
     swapOn = !!on;
     resetMatch();
@@ -158,6 +173,7 @@ function newRound() {
     clearPortals();
     clearSwaps();
     clearMines();
+    clearFireballs();
     ai.forEach((a, i) => aiReset(i)); // forget any look-ahead / plan from the last round
     players.forEach(p => p.reset()); 
     ball.reset(); 
@@ -309,6 +325,7 @@ function update() {
             }
     stepArrows();
     stepBoomerangs();
+    stepFireballs();
     const scorer = ball.step();
     events.onBodyStep(ball);
     if (ball.pull)

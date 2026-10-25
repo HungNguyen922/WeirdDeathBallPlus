@@ -49,6 +49,7 @@ function drawScene() {
     drawImpacts();
     drawArrows();
     drawBoomerangs();
+    drawFireballs(); drawFighterMoves(); drawFighterInputs(); drawStuns();
     smokeEndHide(hid);
     drawSmoke();
     drawPointFx();

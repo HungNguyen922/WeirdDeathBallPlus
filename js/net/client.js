@@ -37,7 +37,7 @@ function netMixState(a, b, u) { // two saveState() snapshots -> one in between. 
     if (a === b || u <= 0)
         return a;
     const s = u < 0.5 ? a : b;
-    return { ...s, players: netMixList(a.players, b.players, u), ball: netMixBody(a.ball, b.ball, u), decoys: netMixList(a.decoys, b.decoys, u), pegs: netMixList(a.pegs, b.pegs, u), arrows: netMixList(a.arrows, b.arrows, u), boomerangs: netMixList(a.boomerangs || [], b.boomerangs || [], u), saw: netMix(a.saw, b.saw, u) };
+    return { ...s, players: netMixList(a.players, b.players, u), ball: netMixBody(a.ball, b.ball, u), decoys: netMixList(a.decoys, b.decoys, u), pegs: netMixList(a.pegs, b.pegs, u), arrows: netMixList(a.arrows, b.arrows, u), boomerangs: netMixList(a.boomerangs || [], b.boomerangs || [], u), saw: netMix(a.saw, b.saw, u), fireballs: netMixList(a.fireballs || [], b.fireballs || [], u), };
 }
 
 function netClearAI() { // online every seat is a person: the offline AI flags must not carry over (they kept drawing "AI" tags and let the computer steer predicted players)

@@ -20,6 +20,7 @@ mixin(Player, {
     },
     // A special key went down (or a queued arrow came off cooldown): start that ability. Returns true if it started or fired.
     startAbility(id, key, ball) {
+        if (this.stunT > 0) return false;
         const k = this.keys, hx = (k.r ? 1 : 0) - (k.l ? 1 : 0), hy = (k.dn ? 1 : 0) - (k.up ? 1 : 0);
         if (AIMING.includes(id) && this.casts.some(c => AIMING.includes(c.type)))
             return false; // two aiming casts would fight over the same arrow keys
@@ -71,6 +72,8 @@ mixin(Player, {
             return true;
         } else if (id === 'split') { // instant: halve yourself (or, with weight held, switch bodies)
             return this.splitPress();
+        } else if (id === 'fighter') { 
+            return this.fighterPress(key);
         } else if (id === 'boomerang') { // instant: no cast
             if (this.cd.boomerang <= 0 && (this.sim || boomCount(this) < BOOMERANG_MAX)) {
                 if (!this.sim)

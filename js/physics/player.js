@@ -57,6 +57,9 @@ class Player {
     }
     reset() {
         this.x = sidesSwapped ? W - this.sx : this.sx; // sx is the spawn on the team's normal side; a swapped team spawns mirrored
+        this.face = this.x < NETX ? 1 : -1; this.dirHist = []; this.fTick = 0; this.move = null;
+        this.fBuf = null;
+        this.stunT = 0;
         this.s = 1; this.r = SPLIT_BASE_R; this.clones = []; this.splitLock = 0;
         this.y = H - this.r;
         this.vx = this.vy = 0;
@@ -103,7 +106,11 @@ class Player {
     }
     get grounded() { return this.ground; }
     // The specials that are active right now, as [key, ability id]: the first always, the second only when the match uses two and it is not the same ability.
-    slots() { return twoSpecials && this.special2 && this.special2 !== this.special ? [['sp', this.special], ['sp2', this.special2]] : [['sp', this.special]]; }
+    slots() {
+        if (twoSpecials && this.special === 'fighter' && this.special2 === 'fighter') return [['sp', 'fighter'], ['sp2', 'fighter']];
+        const s1 = this.special === 'fighter' ? 'dash' : this.special; // a stray Fighter outside its mode counts as Dash
+        return twoSpecials && this.special2 && this.special2 !== 'fighter' && this.special2 !== s1 ? [['sp', s1], ['sp2', this.special2]] : [['sp', s1]];
+    }
     has(id) { return this.slots().some(s => s[1] === id); }
     casting(type) { return this.casts.find(c => c.type === type) || null; } // the running cast of this kind, or null
     endCast(c) {
@@ -151,6 +158,7 @@ class Player {
             this.explodeFx = null;
         if (this.mineFx && (this.mineFx = { ...this.mineFx, t: this.mineFx.t - DT }).t <= 0)
             this.mineFx = null;
+        this.stunT = Math.max(0, this.stunT - DT);
         this.gBurst = Math.max(0, this.gBurst - DT);
         this.stickGrace = Math.max(0, this.stickGrace - DT);
         this.boostFx = Math.max(0, this.boostFx - DT);
@@ -163,7 +171,8 @@ class Player {
         this.dribT = Math.max(0, this.dribT - DT);
         if (this.gjT > GJ_CHAIN_T)
             this.gjN = 0; // chain broken
-        const dir = this.casting('arrow') ? 0 : (k.r ? 1 : 0) - (k.l ? 1 : 0);
+        const lock = this.moveLocked();
+        const dir = this.casting('arrow') || lock ? 0 : (k.r ? 1 : 0) - (k.l ? 1 : 0);
         // Constant acceleration toward the max speed (the demo shows a steady ramp, not a hard build-up curve).
         // Movement is halved for Hopper Special
         const mv = this.has('hopper') ? HOPPER_MOVE : 1;
@@ -173,11 +182,13 @@ class Player {
         else if (!dir && this.grounded && !this.rope)
             this.vx *= 1 - GROUND_BRAKE * DT; // no ground braking while tethered, so the rope bounce is not eaten
         this.tickTimers();
+        this.fighterRecord();
         this.stepCasts(ball);
+        this.fighterStep(ball);
         // Jump: pressing UP on the ground launches at JUMP_V. While UP stays held in the air, gravity drops to G_FLOAT, which
         // gives the long, symmetric float seen in the demo; releasing UP restores full gravity G. While tethered and
         // holding UP, a floaty arc keeps swings and floats working.
-        if (k.up && this.grounded)
+        if (k.up && this.grounded && !lock) 
             this.vy = -JUMP_V;
         let g = (k.up ? G_FLOAT : G) * (heavy ? 1.35 : 1);
         if (k.up && this.rope) {
@@ -188,6 +199,11 @@ class Player {
         }
         if (k.dn)
             g = G * DOWN_G * (heavy ? 1.35 : 1); // DOWN: drop faster (also cancels the UP float), which keeps dribbles low
+        if (this.stunT > 0) {
+            g *= FIGHTER_STUN_GRAV;
+            this.vx *= 1 - FIGHTER_STUN_DRAG * DT;
+            this.vy *= 1 - FIGHTER_STUN_DRAG * DT;
+        }
         this.stepGrapple(ball, dir);
         if (this.hopT > 0 || this.clinging)
             g = 0;

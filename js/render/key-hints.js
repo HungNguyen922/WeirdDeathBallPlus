@@ -152,6 +152,18 @@ function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebel
         cx.closePath(); cx.stroke();
         cx.beginPath(); cx.arc(-5, 0, 2, 0, 7); cx.fill();
         cx.beginPath(); cx.arc(5, 0, 2, 0, 7); cx.fill();
+    } else if (kind === 'fighter') { // a fist: four knuckles on a palm, finger lines and a thumb
+        cx.lineWidth = 2;
+        cx.roundRect(-9, -2, 18, 12, 3); cx.stroke();
+        cx.beginPath();
+        for (const kx of [-5.5, -1.8, 1.8, 5.5]) { // knuckles
+            cx.moveTo(kx + 3, -5); cx.arc(kx, -5, 3, 0, 7);
+        }
+        cx.fill();
+        cx.beginPath(); cx.lineWidth = 1.6;
+        for (const fx of [-3.6, 0, 3.6]) { cx.moveTo(fx, -2); cx.lineTo(fx, 4); } // finger dividers
+        cx.moveTo(-9, 6); cx.lineTo(3, 6);                                          // thumb across the fingers
+        cx.stroke();
     } else if (kind === 'locked') { // padlock
         cx.fillRect(-6, -1, 12, 9);
         cx.beginPath(); cx.arc(0, -2, 4.5, Math.PI, 0); cx.stroke();

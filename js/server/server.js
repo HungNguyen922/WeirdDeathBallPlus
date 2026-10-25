@@ -56,7 +56,7 @@ const MAX_CATCHUP = 8; // never run more than this many ticks in one go (after a
 const MAX_ROOMS = 50, MAX_SPECTATORS = 8, MSG_PER_SEC = 400;
 const CHAT_MAX = 120, CHAT_BURST = 5, CHAT_WINDOW_MS = 5000; // chat: longest message, and at most CHAT_BURST messages per CHAT_WINDOW_MS per player
 const TEAM_MAX = 2; // players per team (seats 0 / 2 are Blue, 1 / 3 are Red)
-const SPECIAL_IDS = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened', 'explode', 'hopper', 'boomerang', 'portal', 'swap', 'smoke', 'pong', 'mines', 'split', ]; // the same ids as in render/special-menu.js and game/rules.js
+const SPECIAL_IDS = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened', 'explode', 'hopper', 'boomerang', 'portal', 'swap', 'smoke', 'pong', 'mines', 'split', 'fighter', ]; // the same ids as in render/special-menu.js and game/rules.js
 
 // Code that runs INSIDE a room's sandbox: it captures the game's events (the renderer's hooks) into a list, and applies input bits to a player's keys.
 const ROOM_PRELUDE = `
@@ -241,6 +241,7 @@ class Room {
         this.seats.forEach((c, i) => {
             if (!c)
                 return;
+            this.fixFighter(c); 
             ids.push(i);
             teams.push(c.team);
             sim.run('allPlayers[' + i + '].special2 = ' + JSON.stringify(c.special2)); // was never applied, so a second special chosen on joining was ignored
@@ -260,21 +261,39 @@ class Room {
         this.running = true;
         this.snapshot(); // everyone sees the fresh board straight away
     }
+    fixFighter(conn) { // Fighter takes both slots and only exists with two specials on; anything else turns back into plain specials
+        if (conn.special !== 'fighter' && conn.special2 !== 'fighter')
+            return;
+        if (this.twoSpecials && conn.special === 'fighter' && conn.special2 === 'fighter')
+            return;
+        conn.special = 'dash';
+        conn.special2 = 'plinko';
+    }
     setSpecial(conn, id, slot = 0) {
         if (!SPECIAL_IDS.includes(id) || this.fixed)
             return;
-        const a = slot === 1 ? 'special2' : 'special', b = slot === 1 ? 'special' : 'special2';
-        if (this.twoSpecials && conn[b] === id)
-            conn[b] = conn[a]; // picking the one in the other slot swaps them
-        conn[a] = id;
-        if (conn.special2 === conn.special) // (two specials off: keep the invariant anyway)
-            conn.special2 = SPECIAL_IDS.find(s => s !== conn.special);
-        if (conn.slot >= 0) // remembered on the connection, so it follows the player if they are moved
+        if (id === 'fighter') {
+            if (!this.twoSpecials)
+                return;                                   // not available in one-special rooms
+            conn.special = conn.special2 = 'fighter';     // takes both slots
+        } else {
+            const a = slot === 1 ? 'special2' : 'special', b = slot === 1 ? 'special' : 'special2';
+            if (conn[b] === 'fighter')
+                conn[b] = SPECIAL_IDS.find(s => s !== 'fighter' && s !== id); // leaving Fighter frees the other slot
+            else if (this.twoSpecials && conn[b] === id)
+                conn[b] = conn[a];                        // picking the one in the other slot swaps them
+            conn[a] = id;
+            if (conn.special2 === conn.special)
+                conn.special2 = SPECIAL_IDS.find(s => s !== conn.special && s !== 'fighter');
+        }
+        if (conn.slot >= 0)
             this.sim.run(`allPlayers[${conn.slot}].special = '${conn.special}'; allPlayers[${conn.slot}].special2 = '${conn.special2}'`);
     }
     setTwoSpecials(v) { // restarts the match
         this.twoSpecials = !!v;
         this.sim.run(`twoSpecials = ${this.twoSpecials}`);
+        for (const c of this.conns)
+            this.fixFighter(c);                           // turning two specials off turns any Fighter into Dash + Plinko
         if (this.running)
             this.start();
     }

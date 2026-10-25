@@ -168,12 +168,10 @@ function setSwapMode(on) { // the menu toggle: restarts the match so the sides s
 function newRound() { 
     pegs.length = 0; 
     decoys.length = 0; 
-    clearArrows();
-    clearBoomerangs();
     clearPortals();
     clearSwaps();
     clearMines();
-    clearFireballs();
+    clearProjectiles();
     ai.forEach((a, i) => aiReset(i)); // forget any look-ahead / plan from the last round
     players.forEach(p => p.reset()); 
     ball.reset(); 
@@ -323,9 +321,7 @@ function update() {
                     events.onImpact(b, b.x - nx * b.r, b.y - ny * b.r, nx, ny, hit);
                 }
             }
-    stepArrows();
-    stepBoomerangs();
-    stepFireballs();
+    stepProjectiles();
     const scorer = ball.step();
     events.onBodyStep(ball);
     if (ball.pull)

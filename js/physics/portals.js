@@ -84,7 +84,7 @@ function placePortal(p, c) {
         portals.splice(portals.indexOf(mine[0]), 1); // the oldest closes
     const q = { id: ++portalSeq, x: c.x, y: c.y, ang: c.ang, owner: p, team: p.team, flash: 1 };
     portals.push(q);
-    for (const b of [...players, ball, ...decoys, ...arrows, ...boomerangs]) // whatever is already inside it is ignored until it leaves
+    for (const b of [...players, ball, ...decoys, ...projectiles]) // whatever is already inside it is ignored until it leaves
         if (b.alive !== false && Math.hypot(b.x - q.x, b.y - q.y) < PORTAL_R + (b.r || 0))
             b.pLock = q.id;
     p.cd.portal = PORTAL_COOLDOWN; // (player.js ticks every entry of p.cd down, and reset() fills it from the ABILITY table)
@@ -113,7 +113,7 @@ function stepPortals() { // once per tick, after the bodies have moved
     for (const b of once)
         portalPass(b);
     portalCasts();
-    for (const b of [...once, ...arrows, ...boomerangs]) {
+    for (const b of [...once, ...projectiles]) {
         if (b.pLock) {
             const q = portals.find(o => o.id === b.pLock);
             if (!q || Math.hypot(b.x - q.x, b.y - q.y) > PORTAL_R + (b.r || 0) + 2)

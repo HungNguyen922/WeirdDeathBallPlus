@@ -1,9 +1,7 @@
 // PHYSICS - arrows: the ARROW special's aim / charge logic and its projectiles. Never draws.
 // Load order: after bodies.js (it reads players, ball and decoys at runtime) and before game/rules.js (which calls stepArrows()).
 // Tuning numbers live in constants.js (ARROW_*).
-const arrows = []; // in flight or stuck in the terrain: { x, y, vx, vy, ang, team, owner, stuck, spent, life }
 const stuckSegs = []; // centre lines [x1, y1, x2, y2] of the arrows stuck in the terrain: solid for players, the death ball and decoys (thickness ARROW_HALF_W)
-function clearArrows() { arrows.length = 0; stuckSegs.length = 0; }
 const ARROW_SNAP = { l: Math.PI, r: 0, u: -Math.PI / 2, d: Math.PI / 2 }; // angles are screen angles: 0 = right, -PI/2 = up, PI/2 = down, PI = left
 const wrapAng = a => Math.atan2(Math.sin(a), Math.cos(a));
 // Everything an arrow sticks into. [segment list, extra thickness]: the juts / tunnel ceilings are drawn thick, so they count as thick.
@@ -167,45 +165,36 @@ function arrowPegBounce(a) {
     return false;
 }
 
-function stepArrows() {
-    for (let i = arrows.length - 1; i >= 0; i--) {
-        const a = arrows[i];
-        a.life -= DT;
+PROJ_TYPES.arrow = {
+    r: ARROW_R, life: ARROW_LIFE, g: ARROW_G, swappable: true,
+    steer(a) {
         a.immune = Math.max(0, (a.immune || 0) - DT);
         a.ghost = Math.max(0, (a.ghost || 0) - DT);
-        if (a.life <= 0 || a.x < -OUT_D || a.x > W + OUT_D || a.y > H + PIT) {
-            arrows.splice(i, 1); // timed out, or left the world
-            continue;
-        }
+        if (a.x < -OUT_D || a.x > W + OUT_D || a.y > H + PIT)
+            return 'remove';
         if (a.stuck)
-            continue;
-        a.vy += ARROW_G * DT;
-        const n = Math.max(1, Math.ceil(Math.hypot(a.vx, a.vy) * DT / ARROW_R)); // sub-steps of at most one arrow radius, so a fast arrow cannot skip through a thin wall
-        for (let s = 0; s < n; s++) {
-            a.x += a.vx * DT / n;
-            a.y += a.vy * DT / n;
-            portalPass(a, true); // PORTAL: carried through a portal if its centre is inside one
-            arrowPegBounce(a);
-            arrowBumpPlayers(a);   // teammates, the shooter (after the grace time) and spent arrows are solid
-            if (!a.spent && arrowStrike(a)) { // it has done its one hit: it bounces off limp and keeps falling, still a solid thing that can stick in the terrain
-                arrowBumpPlayers(a);
-                a.spent = true;
-                a.vx *= -ARROW_SPENT_K;
-                a.vy *= -ARROW_SPENT_K;
-                break;
-            }
-            if (!(a.ghost > 0) && arrowHitsTerrain(a)) {
-                a.stuck = true;
-                a.vx = a.vy = 0;
-                a.life = ARROW_STICK_T;
-                break;
-            }
+            return 'hold'; // stuck arrows still tick their life down, but do not move
+    },
+    sub(a) {
+        arrowPegBounce(a);
+        arrowBumpPlayers(a);
+        if (!a.spent && arrowStrike(a)) { // one hit: bounces off limp and keeps falling
+            arrowBumpPlayers(a);
+            a.spent = true;
+            a.vx *= -ARROW_SPENT_K;
+            a.vy *= -ARROW_SPENT_K;
+            return 'stop';
         }
-        if (!a.stuck && !a.spent)
-            a.ang = Math.atan2(a.vy, a.vx); // the arrow nose-dives as gravity bends the flight
-    }
-    stuckSegs.length = 0; // rebuild the solid ones, tail to tip
-    for (const a of arrows)
-        if (a.stuck)
-            stuckSegs.push([a.x - Math.cos(a.ang) * ARROW_LEN, a.y - Math.sin(a.ang) * ARROW_LEN, a.x, a.y]);
+        if (!(a.ghost > 0) && arrowHitsTerrain(a)) {
+            a.stuck = true;
+            a.vx = a.vy = 0;
+            a.life = ARROW_STICK_T;
+            return 'stop';
+        }
+    },
+    after(a) { if (!a.stuck && !a.spent) a.ang = Math.atan2(a.vy, a.vx); }, // nose-dives with gravity
+};
+function fireArrow(p, c) {
+    const ux = Math.cos(c.ang), uy = Math.sin(c.ang), v = ARROW_V_MIN + (ARROW_V_MAX - ARROW_V_MIN) * c.charge, d = p.r + ARROW_R + 2;
+    spawnProjectile('arrow', p, p.x + ux * d, p.y + uy * d, ux * v, uy * v, { ang: c.ang, stuck: false, immune: 0, ghost: 0 });
 }

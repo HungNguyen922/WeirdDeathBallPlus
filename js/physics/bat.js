@@ -20,7 +20,7 @@ function batStep(p, c, ball) {
         for (const q of players)
             if (q !== p && q.alive && (BAT_HITS_TEAMMATES || q.team !== p.team))
                 targets.push(q);
-        for (const a of arrows) // arrows last: they are not tracked in the c.hits mask (their own immunity timer stops a second hit instead)
+        for (const a of projOf('arrow')) // arrows last: they are not tracked in the c.hits mask (their own immunity timer stops a second hit instead)
             if (BAT_HITS_STUCK_ARROWS || !a.stuck)
                 targets.push(a);
     }

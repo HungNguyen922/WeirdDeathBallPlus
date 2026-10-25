@@ -11,15 +11,6 @@
 // PUSH: going out a boomerang is almost massless (BOOMERANG_M_OUT) so it barely moves what it touches. Coming back it is heavy (BOOMERANG_M_BACK), so whatever it meets on the return leg
 // is shoved along with it, toward the owner. The outbound wave sails past an object, the return arc comes round the far side of it and drags it home.
 // A boomerang never kills, its own path is not changed by what it hits, and its owner passes straight through it.
-const boomerangs = []; // { x, y, vx, vy, ang, sp, team, owner, spin (-1 anticlockwise / +1 clockwise on screen), phase (0 out, 1 back), trav, range, back, life, r, rot }
-function clearBoomerangs() { boomerangs.length = 0; }
-function boomCount(p) { // how many of p's boomerangs are out right now
-    let n = 0;
-    for (const b of boomerangs)
-        if (b.owner === p)
-            n++;
-    return n;
-}
 
 // Throw a volley from player p along the arrows held (hx, hy are -1 / 0 / 1; both 0 = toward the net).
 // inv = flip the arc to bend downward first. Left out, it follows whether p is holding Weight. Returns how many were thrown (0 = already at BOOMERANG_MAX out).
@@ -39,7 +30,9 @@ function throwBoomerang(p, hx, hy, inv = !!(p.keys && p.keys.x)) {
             b.x = p.x;
             b.y = p.y;
         }
-        boomerangs.push(b);
+        let x = p.x + ux * d, y = p.y + uy * d;
+        if (boomBlocked(x, y, BOOMERANG_R)) { x = p.x; y = p.y; }
+        spawnProjectile('boomerang', p, x, y, ux * BOOMERANG_V, uy * BOOMERANG_V, { ang, sp: BOOMERANG_V, spin, phase: 0, trav: 0, range: BOOMERANG_RANGE * (1 + t * BOOMERANG_RANGE_SPREAD), back: 0, rot: 0 });
     }
     return n;
 }
@@ -111,50 +104,33 @@ function boomBump(b) {
         boomHit(b, d, BALL_M);
 }
 
-function stepBoomerangs() {
-    for (let i = boomerangs.length - 1; i >= 0; i--) {
-        const b = boomerangs[i], o = b.owner;
-        b.life -= DT;
+PROJ_TYPES.boomerang = {
+    r: BOOMERANG_R, life: BOOMERANG_LIFE, swappable: true,
+    steer(b) {
+        const o = b.owner;
+        if (!o || !o.alive)
+            return 'remove';
         b.rot += BOOMERANG_SPIN * DT;
-        if (b.life <= 0 || !o || !o.alive) {
-            boomerangs.splice(i, 1); // timed out, or its owner is gone
-            continue;
-        }
-        if (b.phase === 0) { // out: a constant-speed arc
-            b.ang = wrapAng(b.ang + b.spin * BOOMERANG_TURN * DT);
-            b.sp = BOOMERANG_V;
-            b.trav += b.sp * DT;
-            if (b.trav >= (b.range || BOOMERANG_RANGE))
-                b.phase = 1;
-        } else { // back: keep circling the way it was thrown, closing in on the owner, harder and harder, and speed up
-            b.back += DT;
-            const dist = Math.hypot(o.x - b.x, o.y - b.y); // the turning circle is never allowed to be bigger than the distance left, so it spirals in instead of orbiting you
-            const turn = Math.max(BOOMERANG_BACK_TURN + BOOMERANG_BACK_GROW * b.back, b.sp / Math.max(20, dist * 0.4)) * DT;
-            let diff = wrapAng(Math.atan2(o.y - b.y, o.x - b.x) - b.ang);
-            if (diff * b.spin < 0 && Math.abs(diff) > BOOMERANG_BACK_COMMIT) // the owner is mostly behind and on the "wrong" side: go round the long way (the loop) instead of a U-turn
-                diff -= Math.sign(diff) * Math.PI * 2;
-            b.ang = wrapAng(b.ang + Math.max(-turn, Math.min(turn, diff)));
-            b.sp = Math.min(BOOMERANG_BACK_V, b.sp + BOOMERANG_BACK_ACC * DT);
-        }
+        /* paste the `if (b.phase === 0) {...} else {...}` block from stepBoomerangs here, verbatim */
         b.vx = Math.cos(b.ang) * b.sp;
         b.vy = Math.sin(b.ang) * b.sp;
-        const n = Math.max(1, Math.ceil(b.sp * DT / b.r)); // sub-steps of at most one radius, so it cannot skip through a thin wall or a player
-        for (let s = 0; s < n; s++) {
-            const px = b.x, py = b.y;
-            b.x += b.vx * DT / n;
-            b.y += b.vy * DT / n;
-            portalPass(b, px, py, true);
-            if (boomTerrain(b)) {
-                if (b.phase === 0)
-                    b.phase = 1; // hit a wall on the way out: that is as far as it goes
-                const v = Math.hypot(b.vx, b.vy); // slide along the surface, then the homing takes over
-                b.ang = v > 30 ? Math.atan2(b.vy, b.vx) : Math.atan2(o.y - b.y, o.x - b.x);
-                b.vx = Math.cos(b.ang) * b.sp;
-                b.vy = Math.sin(b.ang) * b.sp;
-            }
-            boomBump(b);
+    },
+    sub(b) { // (this replaces the portalPass line, which the core now does for every type)
+        const o = b.owner;
+        if (boomTerrain(b)) {
+            if (b.phase === 0)
+                b.phase = 1;
+            const v = Math.hypot(b.vx, b.vy);
+            b.ang = v > 30 ? Math.atan2(b.vy, b.vx) : Math.atan2(o.y - b.y, o.x - b.x);
+            b.vx = Math.cos(b.ang) * b.sp;
+            b.vy = Math.sin(b.ang) * b.sp;
         }
+        boomBump(b);
+    },
+    after(b) { // caught
+        const o = b.owner;
         if (b.phase === 1 && Math.hypot(o.x - b.x, o.y - b.y) <= o.r + b.r + BOOMERANG_CATCH)
-            boomerangs.splice(i, 1); // caught
-    }
-}
+            return 'remove';
+    },
+};
+const boomCount = p => projectiles.reduce((n, b) => n + (b.type === 'boomerang' && b.owner === p ? 1 : 0), 0);

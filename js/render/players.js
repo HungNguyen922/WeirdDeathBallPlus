@@ -15,6 +15,7 @@ function drawPlayers() { // the player discs
         if (sp && sp.outer)
             cx.drawImage(sp.outer, p.x - SKIN_EXTENT * p.r, p.y - SKIN_EXTENT * p.r, 2 * SKIN_EXTENT * p.r, 2 * SKIN_EXTENT * p.r); // hats etc. on top of the outline
         cx.globalAlpha = 1;
+        drawFacing(p);
         if (p.alive) {
             drawGrappleRing(p);
             drawFloorFx(p);

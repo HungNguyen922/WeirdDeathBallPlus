@@ -18,10 +18,9 @@ function swapBodies(self) {
     for (const d of decoys)
         if (!d.dead)
             out.push(d);
-    for (const a of arrows)
-        out.push(a); // arrows stuck in the terrain count too (doSwap pulls them free)
-    for (const b of boomerangs)
-        out.push(b);
+    for (const b of projectiles) 
+        if (PROJ_TYPES[b.type].swappable) 
+            out.push(b)
     return out;
 }
 // The body a swap from p with aim ang would pick: the nearest in the cone (far = false) or the furthest (far = true), or null.

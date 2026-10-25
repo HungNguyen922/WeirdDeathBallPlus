@@ -172,9 +172,7 @@ function predShape(mixed) {
         out.ball = { ...b, x: b.x + pred.errBall.x, y: b.y + pred.errBall.y };
         if (PRED_SHOTS) { // everybody's projectiles live on my clock (they are tied to their owner by id, not by list position, so nothing else needs re-pointing)
             out.pegs = ps.pegs.slice();
-            out.arrows = ps.arrows.slice();
-            out.boomerangs = (ps.boomerangs || []).slice();
-            out.fireballs = (ps.fireballs || []).slice();
+            out.projectiles = (ps.projectiles || []).slice();
         } else {
             out.pegs = mixed.pegs.filter(q => q.owner !== slot).concat(ps.pegs.filter(q => q.owner === slot));
             out.arrows = mixed.arrows.filter(a => a.owner !== slot).concat(ps.arrows.filter(a => a.owner === slot));

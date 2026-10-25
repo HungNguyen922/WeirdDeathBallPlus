@@ -70,7 +70,7 @@ mixin(Player, {
         for (const d of decoys)
             if (!d.dead)
                 blast(d);
-        for (const a of arrows)
+        for (const a of projOf('arrow'))
             blast(a);
     },
     // A death happened within the window: the cooldown is refunded (and, if EXPLODE_CARRY, kept through the round reset that a kill ending the round is followed by).

@@ -63,9 +63,7 @@ function saveState() {
         ball: body(ball),
         decoys: decoys.map(body),
         pegs: pegs.map(owned),
-        arrows: arrows.map(owned),
-        fireballs: fireballs.map(owned),
-        boomerangs: boomerangs.map(owned),
+        projectiles: projectiles.map(owned),
         portals: portals.map(owned),
         portalSeq,
         mines: mines.map(owned),
@@ -136,12 +134,7 @@ function loadState(s) {
     });
     pegs.length = 0;
     pegs.push(...relink(s.pegs));
-    arrows.length = 0;
-    arrows.push(...relink(s.arrows));
-    boomerangs.length = 0;
-    boomerangs.push(...relink(s.boomerangs || []));
-    fireballs.length = 0;
-    fireballs.push(...relink(s.fireballs || []));
+    projectiles.length = 0; projectiles.push(...relink(s.projectiles || []));
     portals.length = 0;
     portals.push(...relink(s.portals || []));
     portalSeq = s.portalSeq || 0;

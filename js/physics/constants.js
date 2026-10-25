@@ -482,6 +482,7 @@ const SPLIT_RANGE_POW = 1; // grapple range = RANGE * s^POW. 0.5 = proportional 
 const SPLIT_COOLDOWN = 10;
 
 // --- Fighter ---
+const FIGHTER_NET_DEAD = 6; // u either side of the net line where facing holds, so hovering on the line does not make it flicker
 const FIGHTER_BUFFER_T = 0.5;         // s of direction history kept
 const FIGHTER_BTN_BUFFER_T = 0.03;     // s a button pressed during a move is remembered and fires when the move ends
 const FIGHTER_STUN_GRAV = 0.5;   // gravity multiplier on a stunned player (floatier = easier juggles)

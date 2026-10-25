@@ -60,6 +60,7 @@ class Player {
         this.face = this.x < NETX ? 1 : -1; this.dirHist = []; this.fTick = 0; this.move = null;
         this.fBuf = null;
         this.stunT = 0;
+        this.hLast = 1; this.pL = false; this.pR = false;
         this.s = 1; this.r = SPLIT_BASE_R; this.clones = []; this.splitLock = 0;
         this.y = H - this.r;
         this.vx = this.vy = 0;

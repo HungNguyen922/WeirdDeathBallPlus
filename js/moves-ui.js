@@ -75,18 +75,25 @@ const movesUi = (() => {
             add('Zone', mv.zone === 'home' ? 'only on your own half' : 'only on the enemy half');
         return rows;
     }
+    const openMoves = new Set(); // ids of moves the player has expanded (kept across rebuilds)
     function buildFighter(seat) {
         const keyOf = a => keyName(keybinds.map[Math.max(0, seat)][a]), box = el('div');
-        box.append(el('p', { className: 'hint', textContent: 'Fighter takes both special keys: ' + keyOf('sp') + ' is P (punch) and ' + keyOf('sp2') + ' is K (kick). Motions are shown as if you face right; "forward" is always toward the net, so on the right half they are mirrored. Times are physics ticks (' + Math.round(1 / DT) + ' per second); speeds are in u/s, one player length is ' + PL + ' u.' }));
-        for (const [btn, title] of [['sp', 'P moves'], ['sp2', 'K moves']]) {
+        box.append(el('p', { className: 'hint', textContent: 'Fighter takes both special keys: ' + keyOf('sp') + ' is P (Phsyical) and ' + keyOf('sp2') + ' is S (Special). Motions are shown as if you face right; "forward" is always toward the net, so on the right half they are mirrored. Times are physics ticks (' + Math.round(1 / DT) + ' per second); speeds are in u/s, one player length is ' + PL + ' u.' }));
+        for (const [btn, title] of [['sp', 'P moves'], ['sp2', 'S moves']]) {
             const list = FIGHTER_MOVES.filter(m => m.button === btn);
             if (!list.length)
                 continue;
             box.append(el('h3', { textContent: title + ' (' + keyOf(btn) + ')' }));
-            for (const mv of list)
-                box.append(el('div', { className: 'move' },
-                    el('h4', {}, el('span', { textContent: mv.name || mv.id }), el('span', { className: 'mot', textContent: mv.motion ? motionText(mv.motion) : 'plain press' })),
-                    table(fighterStats(mv, keyOf))));
+            for (const mv of list) {
+                const d = el('details', { className: 'move', open: openMoves.has(mv.id) },
+                    el('summary', {},
+                        el('span', { className: 'nm', textContent: mv.name || mv.id }),
+                        el('span', { className: 'mot', textContent: mv.motion ? motionText(mv.motion) : 'plain press' }),
+                        el('span', { className: 'tot', textContent: (mv.startup + mv.active + mv.recovery) + ' ticks' })),
+                    table(fighterStats(mv, keyOf)));
+                d.addEventListener('toggle', () => { if (d.open) openMoves.add(mv.id); else openMoves.delete(mv.id); });
+                box.append(d);
+            }
         }
         box.append(el('h3', { textContent: 'General rules' }), table([
             ['Motion leniency', 'neutral between steps is ignored; a diagonal may be skipped, a straight step may not'],

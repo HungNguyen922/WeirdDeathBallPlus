@@ -30,6 +30,15 @@ const events = {
 // The computer always takes Dash (it is the only special the AI knows how to use). When everybody is locked in, a short countdown runs and the point starts.
 const PICK_EVERY = 5, PICK_COLS = 5, PICK_GO_T = 0.9; // points between screens, icons per row, seconds of "get ready" after the last lock-in
 const PICK_LIST = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened', 'explode', 'hopper', 'boomerang', 'portal', 'swap', 'smoke', 'pong', 'mines', 'split', 'fighter' ]; // the grid, in reading order (same ids as SPECIALS in render/special-menu.js)
+const PICK_DUAL = ['fighter']; // abilities that take both slots: they get their own row(s) at the bottom
+const pickRows = (() => { // rows of PICK_LIST indices
+    const norm = [], dual = [], rows = [];
+    PICK_LIST.forEach((id, i) => (PICK_DUAL.includes(id) ? dual : norm).push(i));
+    for (const list of [norm, dual])
+        for (let i = 0; i < list.length; i += PICK_COLS)
+            rows.push(list.slice(i, i + PICK_COLS));
+    return rows;
+})();
 let pickFixed = false; // the toggle: true = specials are only chosen on pick screens, false = swap any time from the keycap
 const pick = { on: false, t: 0, go: 0, at: -1, cur: [0, 0, 0, 0], ready: [false, false, false, false], prev: [0, 0, 0, 0], stage: [0, 0, 0, 0] };
 const keyBits = k => (k.l ? 1 : 0) | (k.r ? 2 : 0) | (k.up ? 4 : 0) | (k.dn ? 8 : 0) | (k.z ? 16 : 0) | (k.x ? 32 : 0) | (k.sp ? 64 : 0) | (k.sp2 ? 128 : 0);
@@ -75,7 +84,7 @@ function pickStep() { // one physics step of an open pick screen
             closePick();
         return;
     }
-    const n = PICK_LIST.length, rows = Math.ceil(n / PICK_COLS), rowLen = r => Math.min(PICK_COLS, n - r * PICK_COLS);
+    const rows = pickRows.length, rowLen = r => pickRows[r].length;
     for (const p of players) {
         const id = p.id, bits = keyBits(p.keys), fresh = bits & ~pick.prev[id];
         pick.prev[id] = bits;
@@ -97,7 +106,7 @@ function pickStep() { // one physics step of an open pick screen
             pick.cur[id] = Math.max(0, PICK_LIST.indexOf(p.special));
             continue;
         }
-        let row = Math.floor(pick.cur[id] / PICK_COLS), col = pick.cur[id] % PICK_COLS;
+        let row = pickRows.findIndex(r => r.includes(pick.cur[id])), col = pickRows[row].indexOf(pick.cur[id]);
         if (fresh & 1)
             col = (col + rowLen(row) - 1) % rowLen(row);
         if (fresh & 2)
@@ -107,7 +116,7 @@ function pickStep() { // one physics step of an open pick screen
         if (fresh & 8)
             row = (row + 1) % rows;
         col = Math.min(col, rowLen(row) - 1); // the last row is shorter
-        pick.cur[id] = row * PICK_COLS + col;
+        pick.cur[id] = pickRows[row][col];
         if (fresh & (16 | 64 | 128)) { // grapple or either special key locks it in
             const choice = PICK_LIST[pick.cur[id]];
             if (choice === 'fighter' && !twoSpecials) continue;           // not available

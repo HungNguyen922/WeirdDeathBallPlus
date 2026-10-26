@@ -187,9 +187,9 @@ function drawPickScreen() {
         return;
     }
     const TS = 80, GAP = 14, n = PICK_LIST.length, gx = W / 2 - (PICK_COLS * TS + (PICK_COLS - 1) * GAP) / 2, gy = 150, tm = performance.now();
-    const tileAt = k => { // the last row may be shorter: centre it
-        const row = Math.floor(k / PICK_COLS), len = Math.min(PICK_COLS, n - row * PICK_COLS);
-        return { x: gx + (PICK_COLS - len) * (TS + GAP) / 2 + (k % PICK_COLS) * (TS + GAP), y: gy + row * (TS + GAP) };
+    const tileAt = k => { // each row is centred, so the lone Fighter tile sits in the middle
+        const row = pickRows.findIndex(r => r.includes(k)), r = pickRows[row];
+        return { x: gx + (PICK_COLS - r.length) * (TS + GAP) / 2 + r.indexOf(k) * (TS + GAP), y: gy + row * (TS + GAP) };
     };
     cx.save();
     cx.fillStyle = 'rgba(9,5,18,.93)'; // backdrop over the playing area, with a wash of each team's colour at its edge

@@ -388,7 +388,7 @@ const HOPPER_COOLDOWN = 5;            // s, starts when the hop starts
 
 // --- Boomerang ---    
 const BOOMERANG_MAX = 10;              // most one player can have out at once (2 volleys)
-const BOOMERANG_VOLLEY = 5;            // thrown per press
+const BOOMERANG_VOLLEY = 3;            // thrown per press
 const BOOMERANG_FAN = 0.75;             // rad, total spread of launch angles across the volley
 const BOOMERANG_RANGE_SPREAD = 1;    // outer boomerangs go this much farther / inner ones shorter (0.5 = +/-25%)
 const BOOMERANG_COOLDOWN = 4;        // s between throws

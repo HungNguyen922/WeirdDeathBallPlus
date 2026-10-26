@@ -20,7 +20,7 @@ function fresh(a, b) {
     check(P(sim, 'explodeFx') !== null && P(sim, 'cd.explode') > 0, 'Explode fired on the second key mid-charge');
     check(P(sim, 'casts.length') === 1 && P(sim, 'casts[0].type') === 'arrow', 'the arrow is still charging');
     sim.run('players[0].keys.sp = false'); ticks(sim, 4);
-    check(sim.run('arrows.length') === 1, 'releasing the first key still fires the arrow');
+    check(sim.run('projOf("arrow").length') === 1, 'releasing the first key still fires the arrow');
 }
 { // barbwire and an arrow charge together
     const sim = fresh('arrow', 'barbwire');

@@ -7,7 +7,7 @@
 //   - input: players' `keys` ARE saved (they are part of a player), but a rollback loop overwrites them with the real inputs each tick.
 //   - the AI's thinking (`ai[]`): it only ever runs on the authority, and it just produces keys.
 //   - anything drawn: trails, impact sparks, hud flashes, audio. Clients make those from `events`.
-//   - stuckSegs: rebuilt from `arrows` every step by stepArrows().
+//   - stuckSegs: rebuilt from `projectiles` every step by stepProjectiles().
 // References between objects (a decoy's owner, an arrow's owner, a player's tethered ball) are saved as ids / indices, not objects.
 
 // Deep copy of plain data (numbers, strings, booleans, null, undefined, arrays, plain objects). Own implementation rather than structuredClone so it behaves the same in
@@ -141,10 +141,7 @@ function loadState(s) {
     mines.length = 0;
     mines.push(...relink(s.mines || []));
     mineSeq = s.mineSeq || 0;
-    stuckSegs.length = 0;
-    for (const a of arrows)
-        if (a.stuck)
-            stuckSegs.push([a.x - Math.cos(a.ang) * ARROW_LEN, a.y - Math.sin(a.ang) * ARROW_LEN, a.x, a.y]);
+    rebuildStuck();
     // Tethers last, once the decoys exist.
     allPlayers.forEach((p, i) => {
         const r = s.players[i] ? s.players[i].tball : null;

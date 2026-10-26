@@ -30,6 +30,7 @@
 <button class="tab on" role="tab" data-tab="game" aria-selected="true">Game</button>
 <button class="tab" role="tab" data-tab="controls" aria-selected="false">Controls</button>
 <button class="tab" role="tab" data-tab="players" aria-selected="false">Players</button>
+<button class="tab" role="tab" data-tab="moves" aria-selected="false" hidden>Moves</button>
 <button class="tab" role="tab" data-tab="skin" aria-selected="false">Skin</button>
 <button class="tab" role="tab" data-tab="account" aria-selected="false">Account</button>
 </div>
@@ -141,6 +142,10 @@
 <div id="roster"></div>
 </section>
 
+<section data-panel="moves" hidden>
+<div id="movesinfo"></div>
+</section>
+
 <section data-panel="skin" hidden>
 <div id="skinedit"></div>
 </section>
@@ -212,6 +217,7 @@
 <script src="js/menu.js"></script>
 <script src="js/account-ui.js"></script>
 <script src="js/skin-editor.js"></script>
+<script src="js/moves-ui.js"></script>
 <script src="js/main.js"></script>
 </body></html>
 

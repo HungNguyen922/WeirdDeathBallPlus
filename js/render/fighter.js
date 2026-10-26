@@ -1,22 +1,3 @@
-// RENDER - Fighter: fireballs, and a hitbox preview while a move is running. Display only.
-function drawFireballs() {
-    const tm = performance.now();
-    for (const f of fireballs) {
-        const col = f.team === 0 ? '#42a5f5' : '#ef5350', pulse = 0.5 + 0.5 * Math.sin(tm / 60 + f.x * 0.05);
-        cx.save();
-        cx.globalCompositeOperation = 'lighter';
-        cx.lineCap = 'round';
-        cx.strokeStyle = col; cx.globalAlpha = 0.45; cx.lineWidth = f.r * 1.4; // the tail
-        cx.beginPath(); line(f.x - f.dir * 46, f.y, f.x, f.y); cx.stroke();
-        cx.globalAlpha = 0.8; cx.lineWidth = f.r * 0.6;
-        cx.beginPath(); line(f.x - f.dir * 28, f.y, f.x, f.y); cx.stroke();
-        const R = f.r * (1.5 + 0.2 * pulse), g = cx.createRadialGradient(f.x, f.y, 0, f.x, f.y, R);
-        g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.4, col); g.addColorStop(1, 'rgba(0,0,0,0)');
-        cx.globalAlpha = 1; cx.fillStyle = g;
-        cx.beginPath(); cx.arc(f.x, f.y, R, 0, 7); cx.fill();
-        cx.restore();
-    }
-}
 function drawFighterMoves() { // the move's hitbox: faint while winding up, bright while it can hurt
     for (const p of players) {
         const m = p.alive && p.move, mv = m && FIGHTER_BY_ID[m.id];
@@ -68,7 +49,21 @@ PROJ_DRAW.arrow = { world(a, col) {
     if (!a.stuck && !a.spent) arrowStreak(a, col);
     arrowShape(a.x, a.y, a.ang, ARROW_LEN, col, a.stuck ? Math.min(1, a.life / 0.5) : 1);
 } };
-PROJ_DRAW.boomerang = { world(b, col) { /* the body of the drawBoomerangs loop, minus `for (const b of boomerangs)` and its save/restore */ } };
+PROJ_DRAW.boomerang = { world(b, col) {
+    const L = b.r * 2.1, e = -L * 0.45, tx = L * 0.45, ty = L * 0.78;
+    if (Math.hypot(b.vx, b.vy) > 1) {
+        cx.lineCap = 'round'; cx.strokeStyle = col; cx.globalAlpha = 0.35; cx.lineWidth = b.r * 1.4;
+        cx.beginPath(); line(b.x - b.vx * 0.05, b.y - b.vy * 0.05, b.x, b.y); cx.stroke();
+        cx.globalAlpha = 1;
+    }
+    cx.translate(b.x, b.y); cx.rotate(b.rot);
+    cx.lineCap = 'round'; cx.lineJoin = 'round';
+    cx.beginPath(); cx.moveTo(tx, -ty); cx.lineTo(e, 0); cx.lineTo(tx, ty);
+    cx.strokeStyle = '#7a4d22'; cx.lineWidth = 8.4; cx.stroke();
+    cx.strokeStyle = '#d9a066'; cx.lineWidth = 5.4; cx.stroke();
+    cx.fillStyle = col;
+    for (const sy of [-ty, ty]) { cx.beginPath(); cx.arc(tx, sy, 2.4, 0, 7); cx.fill(); }
+} };
 PROJ_DRAW.fireball = (f, col) => { // local frame: forward is +x, so the tail is -x
     const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 60 + f.x * 0.05), R = f.r * (1.5 + 0.2 * pulse);
     cx.globalCompositeOperation = 'lighter'; cx.lineCap = 'round'; cx.strokeStyle = col;

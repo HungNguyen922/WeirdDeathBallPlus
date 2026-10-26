@@ -163,20 +163,20 @@ console.log('\nfireball');
     hold(sim, D, 6); hold(sim, DF, 6); hold(sim, F, 4); hold(sim, { r: true, sp: true }, 1);
     check(P(sim, 'move.id') === 'fireball', 'down, down-forward, forward + P starts FIREBALL');
     for (let i = 0; i < 20; i++) { keys(sim, {}); sim.tick(); }
-    check(sim.run('fireballs.length') === 1 && sim.run('fireballs[0].vx') > 400, 'a fireball is out and flying forward');
+    check(sim.run('projOf("fireball").length') === 1 && sim.run('projOf("fireball")[0].vx') > 400, 'a fireball is out and flying forward');
     const snap = JSON.parse(JSON.stringify(sim.save()));
-    sim.run('fireballs.length = 0'); sim.load(snap);
-    check(sim.run('fireballs.length') === 1 && sim.run('fireballs[0].owner === players[0]'), 'save -> JSON -> load keeps it, with its owner');
-    sim.run('ball.x = fireballs[0].x + 70; ball.y = fireballs[0].y; ball.vx = ball.vy = 0; ball.w = 0');
+    sim.run('projectiles.length = 0'); sim.load(snap);
+    check(sim.run('projOf("fireball").length') === 1 && sim.run('projOf("fireball")[0].owner === players[0]'), 'save -> JSON -> load keeps it, with its owner');
+    sim.run('ball.x = projOf("fireball")[0].x + 70; ball.y = projOf("fireball")[0].y; ball.vx = ball.vy = 0; ball.w = 0');
     for (let i = 0; i < 30; i++) { keys(sim, {}); sim.tick(); }
-    check(sim.run('ball.vx') > 300 && sim.run('fireballs.length') === 0 && P(sim, 'alive'), 'it knocks the death ball forward and is used up');
+    check(sim.run('ball.vx') > 300 && sim.run('projOf("fireball").length') === 0 && P(sim, 'alive'), 'it knocks the death ball forward and is used up');
 }
 {
     const sim = fresh();
     hold(sim, D, 6); hold(sim, DF, 6); hold(sim, F, 4); hold(sim, { r: true, sp: true }, 1);
     for (let i = 0; i < 20; i++) { keys(sim, {}); sim.tick(); }
-    sim.run('fireballs[0].x = W - 10'); sim.tick();
-    check(sim.run('fireballs.length') === 0, 'a fireball that reaches a wall disappears');
+    sim.run('projOf("fireball")[0].x = W - 10'); sim.tick();
+    check(sim.run('projOf("fireball").length') === 0, 'a fireball that reaches a wall disappears');
 }
 
 process.exit(fails ? 1 : 0);

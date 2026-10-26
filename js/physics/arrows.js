@@ -1,5 +1,5 @@
 // PHYSICS - arrows: the ARROW special's aim / charge logic and its projectiles. Never draws.
-// Load order: after bodies.js (it reads players, ball and decoys at runtime) and before game/rules.js (which calls stepArrows()).
+// Load order: after bodies.js (it reads players, ball and decoys at runtime) and before game/rules.js (which calls stepProjectiles()).
 // Tuning numbers live in constants.js (ARROW_*).
 const stuckSegs = []; // centre lines [x1, y1, x2, y2] of the arrows stuck in the terrain: solid for players, the death ball and decoys (thickness ARROW_HALF_W)
 const ARROW_SNAP = { l: Math.PI, r: 0, u: -Math.PI / 2, d: Math.PI / 2 }; // angles are screen angles: 0 = right, -PI/2 = up, PI/2 = down, PI = left
@@ -29,12 +29,6 @@ function arrowAimStep(c, k) {
         c.noTilt = false;
     if (now.l !== now.r && !c.noTilt) // exactly one of LEFT / RIGHT is held: RIGHT turns the aim clockwise, LEFT counter-clockwise, all the way round (screen y points down, so +angle is clockwise)
         c.ang = wrapAng(c.ang + (now.r ? 1 : -1) * ARROW_TURN * DT);
-}
-
-// The key was released: loose the arrow along the aim, at a speed that grows with the charge.
-function fireArrow(p, c) {
-    const ux = Math.cos(c.ang), uy = Math.sin(c.ang), v = ARROW_V_MIN + (ARROW_V_MAX - ARROW_V_MIN) * c.charge, d = p.r + ARROW_R + 2;
-    arrows.push({ x: p.x + ux * d, y: p.y + uy * d, vx: ux * v, vy: uy * v, ang: c.ang, team: p.team, owner: p, stuck: false, life: ARROW_LIFE, r: ARROW_R, immune: 0, ghost: 0 });
 }
 
 function arrowHitsTerrain(a) {

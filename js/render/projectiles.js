@@ -1,5 +1,4 @@
 // RENDER - projectiles: the circular timer used by pegs and casts, plinko pegs, arrows (with their streaks) and boomerangs. Read-only on game state.
-// RENDER - everything that moves: pegs, abilities in progress, ropes, players, balls, banner. Read-only on game state.
 function drawTimer(x, y, rad, frac, col) { // circular timer: faint full track plus an arc of the remaining fraction, starting at 12 o'clock
     cx.lineWidth = 2.5;
     cx.strokeStyle = 'rgba(255,255,255,.18)';
@@ -102,31 +101,4 @@ function arrowStreak(a, col) { // a curved streak behind an arrow in flight, fol
         }
     }
     cx.restore();
-}
-function drawArrows() {
-    for (const a of arrows) {
-        const col = a.team === 0 ? '#42a5f5' : '#ef5350';
-        if (!a.stuck && !a.spent)
-            arrowStreak(a, col);
-        arrowShape(a.x, a.y, a.ang, ARROW_LEN, col, a.stuck ? Math.min(1, a.life / 0.5) : 1);
-    }
-}
-function drawBoomerangs() {
-    for (const b of boomerangs) {
-        const col = b.team === 0 ? '#42a5f5' : '#ef5350', L = b.r * 2.1, e = -L * 0.45, tx = L * 0.45, ty = L * 0.78;
-        cx.save();
-        if (Math.hypot(b.vx, b.vy) > 1) { // faint streak along the flight
-            cx.lineCap = 'round'; cx.strokeStyle = col; cx.globalAlpha = 0.35; cx.lineWidth = b.r * 1.4;
-            cx.beginPath(); line(b.x - b.vx * 0.05, b.y - b.vy * 0.05, b.x, b.y); cx.stroke();
-            cx.globalAlpha = 1;
-        }
-        cx.translate(b.x, b.y); cx.rotate(b.rot);
-        cx.lineCap = 'round'; cx.lineJoin = 'round';
-        cx.beginPath(); cx.moveTo(tx, -ty); cx.lineTo(e, 0); cx.lineTo(tx, ty);
-        cx.strokeStyle = '#7a4d22'; cx.lineWidth = 8.4; cx.stroke();
-        cx.strokeStyle = '#d9a066'; cx.lineWidth = 5.4; cx.stroke();
-        cx.fillStyle = col;
-        for (const sy of [-ty, ty]) { cx.beginPath(); cx.arc(tx, sy, 2.4, 0, 7); cx.fill(); }
-        cx.restore();
-    }
 }

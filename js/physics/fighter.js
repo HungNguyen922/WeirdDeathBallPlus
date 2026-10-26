@@ -47,12 +47,12 @@ const FIGHTER_DIAG = [1, 3, 7, 9];
 const FIGHTER_MOVES = [
     // Physical Attacks
     // Forwards
-    { id: 'uppercut', name: 'UPPERCUT', motion: '623', button: 'sp', startup: 6, active: 14, recovery: 34, vx: 80, vy: -420, hit: { x: 22, y: -26, r: 28 }, knock: { x: 140, y: -640 }, ballKnock: { x: 200, y: -820 }, stun: { t: 0.55 }, cancel: true },
-    { id: 'tatsu', name: 'TATSU', motion: '214', button: 'sp', startup: 8, active: 36, recovery: 28, rehit: 6, vx: 0, vy: 0, hit: { x: 0, y: 0, rx: 60, ry: 22 }, away: true, knock: { x: 90, y: -140 }, ballKnock: { x: 450, y: -300 }, stun: { t: 0.3 } },
-    { id: 'rush', name: 'RUSH', motion: '46', button: 'sp', startup: 10, active: 16, recovery: 26, vx: 400, hit: { x: 30, y: 0, r: 26 }, knock: { x: 150, y: -40 }, ballKnock: { x: 700, y: -80 }, stun: { t: 0.5 }, cancel: true },
+    { id: 'uppercut', name: 'UPPERCUT', motion: '623', button: 'sp', startup: 6, active: 14, recovery: 34, vx: 80, vy: -420, hit: { x: 22, y: -26, r: 28 }, knock: { x: 140, y: -640 }, ballKnock: { x: 200, y: -820 }, stun: { t: 0.5 }, cancel: true },
+    { id: 'tatsu', name: 'TATSU', motion: '214', button: 'sp', startup: 8, active: 36, recovery: 28, rehit: 6, vx: 200, vy: 0, hit: { x: 0, y: 0, rx: 60, ry: 22 }, away: true, knock: { x: 90, y: -140 }, ballKnock: { x: 450, y: -300 }, stun: { t: 0.3 } },
+    { id: 'rush', name: 'RUSH', motion: '46', button: 'sp', startup: 10, active: 16, recovery: 26, vx: 200, hit: { x: 30, y: 0, r: 26 }, knock: { x: 150, y: -40 }, ballKnock: { x: 700, y: -80 }, stun: { t: 0.5 }, cancel: true },
     { id: 'whirlwind', name: 'WHIRLWIND', motion: '698', button: 'sp', startup: 8, active: 20, recovery: 32, sweep: { r: 2 * PL, a0: 0, a1: Math.PI, hitR: 24, speed: 500, ballSpeed: 500, steer: true, carry: 1 }, stun: { t: 0.5 }, cancel: true },
     // Backwards
-    { id: 'backdash', name: 'BACKDASH', motion: '64', button: 'sp', back: true, startup: 4, active: 10, recovery: 20, vx: 200 },
+    { id: 'backdash', name: 'BACKDASH', motion: '64', button: 'sp', back: true, startup: 4, active: 10, recovery: 20, vx: 400 },
     
     // Special Attacks
     { id: 'fireball', name: 'FIREBALL', motion: '236', button: 'sp2', startup: 14, active: 2, recovery: 34, fire: { x: 36, y: -2, vx: 500, r: PL / 2, life: 2, knock: { x: 200, y: 0 }, ballKnock: { x: 200, y: 0 }, stun: { t: 0.25 } } },
@@ -130,7 +130,7 @@ PROJ_TYPES.chevron = {
             fighterStun(b, { t: T.stun }); // Awakened players shrug it off inside fighterStun
         return true;
     },
-}
+};
 
 function spawnFireball(p, mv, f = p.face >= 0 ? 1 : -1) {
     const fb = mv.fire, x = p.x + f * fb.x, y = p.y + fb.y;

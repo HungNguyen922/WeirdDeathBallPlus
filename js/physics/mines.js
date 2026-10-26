@@ -80,7 +80,7 @@ function detonateMines(p) {
         return false;
     const hits = [];
     p.mineFx = { t: MINE_FX, pts: mine.map(m => ({ x: m.x, y: mineY(m), n: m.n })), hits };
-    const bodies = [...players.filter(q => q.alive), ball, ...decoys.filter(d => !d.dead), ...arrows];
+    const bodies = [...players.filter(q => q.alive), ball, ...decoys.filter(d => !d.dead), ...projOf('arrow')];
     for (const q of bodies) {
         const isArrow = q.stuck !== undefined, qr = q.r === undefined ? ARROW_R : q.r;
         if (isArrow && q.immune > 0)

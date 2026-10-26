@@ -120,3 +120,12 @@ body.touch #touchui{display:block}
 #skinedit input[type=color] { width: 44px; height: 28px; padding: 0; border: 1px solid var(--mut); border-radius: 6px; background: transparent; cursor: pointer; }
 #skinedit .skinctl > .row, #skinedit .skinctl > .srow { margin-top: 6px; }
 #skinedit button.mode { padding: 2px 9px; font-size: 13px; }
+
+/* moves tab (js/moves-ui.js) */
+#movesinfo h2 { margin: 0 0 8px; font-size: 18px; }
+#movesinfo .move { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+#movesinfo .move h4 { margin: 0 0 4px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 15px; }
+#movesinfo .move h4 .mot { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--mut); }
+#movesinfo table.stats { white-space: normal; }
+#movesinfo table.stats td { padding: 3px 6px; border-bottom: 1px solid var(--line); font-size: 13px; }
+#movesinfo table.stats td.k { width: 150px; color: var(--mut); white-space: nowrap; }

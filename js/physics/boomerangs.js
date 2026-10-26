@@ -1,5 +1,5 @@
 // PHYSICS - boomerangs: the BOOMERANG special's projectiles. Never draws.
-// Load order: after arrows.js (it reuses wrapAng and the arrow terrain lists) and before game/rules.js (which calls stepBoomerangs()).
+// Load order: after arrows.js (it reuses wrapAng and the arrow terrain lists) and before game/rules.js (which calls stepProjectiles()).
 // Tuning numbers live in constants.js (BOOMERANG_*).
 //
 // One press throws a VOLLEY of BOOMERANG_VOLLEY boomerangs in a fan along the arrows held (none held: toward the net). Each one flies OUT along a curved, constant-speed arc until it has covered
@@ -19,20 +19,14 @@ function throwBoomerang(p, hx, hy, inv = !!(p.keys && p.keys.x)) {
     if (n <= 0)
         return 0;
     const base = hx || hy ? Math.atan2(hy, hx) : (p.x < NETX ? 0 : Math.PI);
-    const spin = (Math.cos(base) >= 0 ? -1 : 1) * (inv ? -1 : 1); // thrown right it curves up first (anticlockwise on screen), thrown left the mirror image; inv flips it
+    const spin = (Math.cos(base) >= 0 ? -1 : 1) * (inv ? -1 : 1);
     for (let k = 0; k < n; k++) {
-        const t = n === 1 ? 0 : k / (n - 1) - 0.5; // -0.5 .. 0.5 across the volley
-        const ang = wrapAng(base + t * BOOMERANG_FAN), ux = Math.cos(ang), uy = Math.sin(ang);
-        const d = p.r + BOOMERANG_R + 2;
-        const b = { x: p.x + ux * d, y: p.y + uy * d, vx: ux * BOOMERANG_V, vy: uy * BOOMERANG_V, ang, sp: BOOMERANG_V, team: p.team, owner: p, spin, phase: 0, trav: 0,
-            range: BOOMERANG_RANGE * (1 + t * BOOMERANG_RANGE_SPREAD), back: 0, life: BOOMERANG_LIFE, r: BOOMERANG_R, rot: 0 };
-        if (boomBlocked(b.x, b.y, b.r)) { // thrown straight into a wall, floor or jut: it starts on you, hits the surface on its first step and comes straight back
-            b.x = p.x;
-            b.y = p.y;
-        }
+        const t = n === 1 ? 0 : k / (n - 1) - 0.5;
+        const ang = wrapAng(base + t * BOOMERANG_FAN), ux = Math.cos(ang), uy = Math.sin(ang), d = p.r + BOOMERANG_R + 2;
         let x = p.x + ux * d, y = p.y + uy * d;
-        if (boomBlocked(x, y, BOOMERANG_R)) { x = p.x; y = p.y; }
-        spawnProjectile('boomerang', p, x, y, ux * BOOMERANG_V, uy * BOOMERANG_V, { ang, sp: BOOMERANG_V, spin, phase: 0, trav: 0, range: BOOMERANG_RANGE * (1 + t * BOOMERANG_RANGE_SPREAD), back: 0, rot: 0 });
+        if (boomBlocked(x, y, BOOMERANG_R)) { x = p.x; y = p.y; } // thrown into a wall: starts on you, hits it on the first step and comes back
+        spawnProjectile('boomerang', p, x, y, ux * BOOMERANG_V, uy * BOOMERANG_V,
+            { ang, sp: BOOMERANG_V, spin, phase: 0, trav: 0, back: 0, rot: 0, range: BOOMERANG_RANGE * (1 + t * BOOMERANG_RANGE_SPREAD) });
     }
     return n;
 }
@@ -111,7 +105,22 @@ PROJ_TYPES.boomerang = {
         if (!o || !o.alive)
             return 'remove';
         b.rot += BOOMERANG_SPIN * DT;
-        /* paste the `if (b.phase === 0) {...} else {...}` block from stepBoomerangs here, verbatim */
+        if (b.phase === 0) { // out: a constant-speed arc
+            b.ang = wrapAng(b.ang + b.spin * BOOMERANG_TURN * DT);
+            b.sp = BOOMERANG_V;
+            b.trav += b.sp * DT;
+            if (b.trav >= (b.range || BOOMERANG_RANGE))
+                b.phase = 1;
+        } else { // back: keep circling the way it was thrown, closing in on the owner
+            b.back += DT;
+            const dist = Math.hypot(o.x - b.x, o.y - b.y);
+            const turn = Math.max(BOOMERANG_BACK_TURN + BOOMERANG_BACK_GROW * b.back, b.sp / Math.max(20, dist * 0.4)) * DT;
+            let diff = wrapAng(Math.atan2(o.y - b.y, o.x - b.x) - b.ang);
+            if (diff * b.spin < 0 && Math.abs(diff) > BOOMERANG_BACK_COMMIT)
+                diff -= Math.sign(diff) * Math.PI * 2;
+            b.ang = wrapAng(b.ang + Math.max(-turn, Math.min(turn, diff)));
+            b.sp = Math.min(BOOMERANG_BACK_V, b.sp + BOOMERANG_BACK_ACC * DT);
+        }
         b.vx = Math.cos(b.ang) * b.sp;
         b.vy = Math.sin(b.ang) * b.sp;
     },

@@ -10,7 +10,7 @@ class Player {}
 const AIMING = ['arrow', 'marionette', 'bat'];
 const mk = (id, x, y) => Object.assign(new Player(), { casts: [], cd: { portal: 0 }, netSide: 0, id, team: id % 2, x, y, vx: 0, vy: 0, r: 16, alive: true, keys: { l: 0, r: 0, up: 0, dn: 0, z: 0, x: 0, sp: 0, sp2: 0 }, special: 'portal', special2: 'dash' });
 const allPlayers = [mk(0, 100, 300), mk(1, 800, 300), mk(2, 0, 0), mk(3, 0, 0)], players = [allPlayers[0], allPlayers[1]];
-const ball = { x: 475, y: 100, vx: 0, vy: 0, r: 14 }, decoys = [], arrows = [], boomerangs = [];
+const ball = { x: 475, y: 100, vx: 0, vy: 0, r: 14 }, decoys = [], projectiles = [], PROJ_TYPES = { arrow: { swappable: true }, boomerang: { swappable: true } }, arrow0 = () => projectiles.find(p => p.type === 'arrow'), boom0 = () => projectiles.find(p => p.type === 'boomerang');
 let twoSpecials = false;
 const wrapAng = a => Math.atan2(Math.sin(a), Math.cos(a));
 const ARROW_SNAP = { l: Math.PI, r: 0, u: -Math.PI / 2, d: Math.PI / 2 };

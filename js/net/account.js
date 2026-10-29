@@ -13,12 +13,7 @@ const FB_ERRORS = {
 const GAME_HOST = 'weirddeathballplus.onrender.com'; // your Render service hostname
 const IS_LOCAL = !location.host || /^(localhost|127\.|192\.168\.)/.test(location.hostname);
 
-// Stored as [{ layers }, ...] because Firestore does not allow arrays inside arrays.
-const skinsToStore = skins => skins.map(layers => ({ layers }));
-function skinSlots(p) { // older profiles only have `skin`: it becomes slot 0
-    const skins = Array.isArray(p.skins) ? skinsClean(p.skins.map(s => s && s.layers)) : skinsClean([p.skin]);
-    return { skins, slot: skinSlotOk(p.slot) ? p.slot : 0 };
-}
+// skinSlots() / skinsToStore() live in skin-data.js (shared with the server).
 
 function accountBase() {
     const q = new URLSearchParams(location.search).get('server');

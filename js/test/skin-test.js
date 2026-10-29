@@ -16,7 +16,7 @@ console.log('\nthe validator');
     check(skinClean([layer({ c: 'red' }), layer({ c: '#fff' }), layer({ c: '#ff00zz' }), layer({ c: 'javascript:alert(1)' }), layer({ c: 255 }), layer({ c: '#ff0000; x' })]).length === 0, 'colours must be #rrggbb, nothing else');
     check(skinClean([layer({ c: '#AABBCC' })])[0].c === '#aabbcc', 'colours are lower-cased');
     const wild = skinClean([layer({ x: 99, y: -99, w: 50, h: -3, r: 9000 })])[0];
-    check(wild.x === 1.6 && wild.y === -1.6 && wild.w === 1.2 && wild.h === 0.05 && wild.r === 180, 'numbers are clamped into range (' + JSON.stringify(wild) + ')');
+    check(wild.x === 1.6 && wild.y === -1.6 && wild.w === 2 && wild.h === 0.05 && wild.r === 180, 'numbers are clamped into range (' + JSON.stringify(wild) + ')');
     const bad = skinClean([layer({ x: NaN, y: Infinity, w: '5', h: null, r: undefined })])[0];
     check(bad.x === 0 && bad.y === 0 && bad.w === 0.4 && bad.h === 0.4 && bad.r === 0, 'NaN, Infinity, strings and nulls fall back to defaults');
     check(skinClean([layer({ o: 'yes' }), layer({ o: 0 })]).map(l => l.o).join() === '1,0', 'o is always 0 or 1');
@@ -88,7 +88,7 @@ const api = (method, path, token, body) => new Promise(resolve => {
     const g = client('sk', { skin: [layer({ c: '#ff0000' })] }); await g.opened; await sleep(150); // a guest who tries to hand the server a skin
     const memA = () => g.roster.members.find(m => m.name === 'Ann_1'), memG = () => g.roster.members.find(m => !m.name);
     check(memA() && memA().skin && memA().skin.length === 1 && memA().skin[0].c === '#123456', 'the roster carries the signed-in player\'s skin');
-    check(memG() && memG().skin === null, 'a guest has none, and cannot supply one in the join message');
+    check(memG() && memG().skin && memG().skin.length === 1 && memG().skin[0].c === '#ff0000', 'a guest\'s own skin comes through the join message (cleaned by the server)');
     await api('POST', '/api/skin', 'tok-ann', { skin: [layer({ c: '#abcdef' }), layer({ t: 'star' })] });
     a.send({ t: 'refresh', token: 'tok-ann' }); await sleep(250);
     check(memA().skin.length === 2 && memA().skin[0].c === '#abcdef', 'after a refresh everyone sees the new skin at once');

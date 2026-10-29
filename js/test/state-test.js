@@ -59,10 +59,10 @@ for (const { seed, teamSize } of configs) {
         if (t >= SAVE_AT && t % 40 === 0) hashes.push(sim.hash());
         cover.decoys = Math.max(cover.decoys, sim.run('decoys.length'));
         cover.pegs = Math.max(cover.pegs, sim.run('pegs.length'));
-        cover.arrows = Math.max(cover.arrows, sim.run('arrows.length'));
+        cover.arrows = Math.max(cover.arrows, sim.run('projOf("arrow").length'));
         cover.ropes += sim.run('players.filter(p => p.rope).length') > 0 ? 1 : 0;
         cover.ballRopes += sim.run('players.filter(p => p.rope && p.onBall).length') > 0 ? 1 : 0;
-        for (const ty of sim.run('players.map(p => p.cast ? p.cast.type : null)')) if (ty) cover.casts.add(ty);
+        for (const ty of sim.run('players.flatMap(p => p.casts.map(c => c.type))')) if (ty) cover.casts.add(ty);
     }
     // 1. round trips
     const finalHash = sim.hash();

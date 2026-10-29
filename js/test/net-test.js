@@ -67,11 +67,11 @@ const get = (port, p) => new Promise(res => http.get({ port, host: '127.0.0.1', 
     const dur = (performance.now() - t0) / 1000;
     const span = (a.last().at - a.snaps[0].at) / 1000;
     const rate = (a.snaps.length - 1) / span;
-    check(rate > 26 && rate < 34, `snapshot rate ~30 Hz (measured ${rate.toFixed(1)})`);
-    check(a.snaps.every((s, i) => i === 0 || s.tick - a.snaps[i - 1].tick === 4), 'snapshot ticks advance by 4 (every 4th sim tick), none missing');
+    check(rate > 16 && rate < 24, `snapshot rate ~20 Hz (SNAP_EVERY 6; measured ${rate.toFixed(1)})`);
+    check(a.snaps.every((s, i) => i === 0 || s.tick - a.snaps[i - 1].tick === 6), 'snapshot ticks advance by 6 (every 6th sim tick), none missing');
     const ticksPerSec = (a.last().tick - a.snaps[0].tick) / ((a.last().at - a.snaps[0].at) / 1000);
     check(Math.abs(ticksPerSec - 120) < 6, `server sim runs at 120 ticks/s (measured ${ticksPerSec.toFixed(1)})`);
-    check(w.snaps.length > 20, 'spectator receives snapshots too');
+    check(w.snaps.length > 5, 'spectator receives snapshots too (half rate)');
     const s0 = a.last().s;
     check(s0.inMatch.length === 2 && s0.players[0].special === 'bat' && s0.players[1].special === 'plinko', 'snapshot has the match and each seat\'s chosen special');
     const bytes = JSON.stringify(a.last()).length;

@@ -6,7 +6,7 @@
 //        names/{nameLower}  { uid }   (claims a name so two players cannot share it)
 'use strict';
 
-const { skinClean, skinsClean, skinSlotOk } = require('../skin-data.js'); // the one definition of a valid skin, shared with the browser
+const { skinClean, skinsClean, skinSlotOk, skinSlots, skinsToStore } = require('../skin-data.js'); // the one definition of a valid skin, shared with the browser
 const NAME_RE = /^[A-Za-z0-9_]{3,16}$/;
 const START_RATING = 1000, ELO_K = 32, MIN_RATING = 100;
 const LB_TTL_MS = 5 * 60 * 1000, LB_FETCH = 60, LB_SHOW = 50; // the leaderboard is rebuilt at most every 5 minutes (about LB_FETCH reads each time)

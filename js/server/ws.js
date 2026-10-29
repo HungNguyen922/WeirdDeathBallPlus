@@ -8,6 +8,8 @@ const { EventEmitter } = require('events');
 
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const MAX_PAYLOAD = 64 * 1024; // one message may not be bigger than this (the game's messages are a few KB at most)
+const MAX_PER_IP = +process.env.MAX_CONN_PER_IP || 20; // simultaneous connections from one address (loopback is exempt, so local tests are unaffected)
+const ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean); // same list server.js uses for CORS; empty = any origin
 const PING_EVERY = 15000, DEAD_AFTER = 40000; // ms: ping idle connections, drop ones that have been silent this long
 
 class Conn extends EventEmitter {
@@ -132,18 +134,30 @@ class Conn extends EventEmitter {
 }
 
 function attachWebSocket(httpServer, onConnection) {
-    const live = new Set();
+    const live = new Set(), perIp = new Map();
     httpServer.on('upgrade', (req, socket) => {
         const key = req.headers['sec-websocket-key'];
         if (String(req.headers.upgrade).toLowerCase() !== 'websocket' || !key || req.headers['sec-websocket-version'] !== '13') {
             socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
             return;
         }
+        // ---- abuse limits (see apply-fixes.js) ----
+        const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || socket.remoteAddress || '', loop = /^(::1|127\.|::ffff:127\.)/.test(ip);
+        const origin = req.headers.origin;
+        if (origin && ORIGINS.length && !ORIGINS.includes(origin)) {
+            try { if (new URL(origin).host !== req.headers.host) { socket.end('HTTP/1.1 403 Forbidden\r\n\r\n'); return; } } catch (e) { socket.end('HTTP/1.1 403 Forbidden\r\n\r\n'); return; }
+        }
+        if (!loop && (perIp.get(ip) || 0) >= MAX_PER_IP) {
+            socket.end('HTTP/1.1 429 Too Many Requests\r\n\r\n');
+            return;
+        }
         const accept = crypto.createHash('sha1').update(key + GUID).digest('base64');
         socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
         const conn = new Conn(socket);
         live.add(conn);
-        conn.on('close', () => live.delete(conn));
+        if (!loop)
+            perIp.set(ip, (perIp.get(ip) || 0) + 1);
+        conn.on('close', () => { live.delete(conn); if (!loop) perIp.set(ip, Math.max(0, (perIp.get(ip) || 1) - 1)); });
         onConnection(conn, req);
     });
     const timer = setInterval(() => { // keepalive: ping everyone, drop the dead

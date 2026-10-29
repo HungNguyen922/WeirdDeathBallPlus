@@ -20,7 +20,7 @@ const PICK_DESC = { // two short lines under the highlighted special
     pong: ['Rubber floor and walls: spin', 'grips and the flick is x2.'],
     mines: ['Plant mines on surfaces (1 s).', 'Hold special + weight: blast.'],
     split: ['Halve yourself, leave a copy.', 'Touch a copy to merge back.', 'Weight + key: swap bodies.'],
-    figher: ['Takes both slots. P / K buttons,', 'motion inputs like 236 + a button.'], 
+    fighter: ['Takes both slots. P / K buttons,', 'motion inputs like 236 + a button.'], 
 };
 const pickSp = id => SPECIALS.find(a => a.id === id) || SPECIALS[0];
 const PICK_NAMES = ['BLUE', 'RED', 'BLUE 2', 'RED 2']; // by player id

@@ -18,7 +18,7 @@ function makeBrowser(port, query) {
         document: { getElementById: el, addEventListener() {}, hidden: false },
         window: { addEventListener: (n, f) => (listeners[n] = listeners[n] || []).push(f), dispatchEvent: e => (listeners[e.type] || []).forEach(f => f(e)) },
         location: { search: query || '', protocol: 'http:', host: '127.0.0.1:' + port, pathname: '/' },
-        WebSocket, performance, setInterval, clearInterval, URLSearchParams, Event, console, prompt: () => 'x',
+        WebSocket, performance, setInterval, clearInterval, URLSearchParams, Event, console, prompt: () => 'x', IS_LOCAL: true, GAME_HOST: '',
     });
     const counts = { body: 0, melt: 0, clear: 0, points: [], newRound: 0, impacts: 0, bats: 0 };
     ctx.__counts = counts;

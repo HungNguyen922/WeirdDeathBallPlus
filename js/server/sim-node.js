@@ -20,10 +20,17 @@ const SIM_FILES = [ // same order as index.html's <script> tags, minus everythin
     'js/game/rules.js', 'js/game/simstate.js', 'js/game/ai.js',
 ];
 
+const SIM_SCRIPTS = new Map(); // file -> compiled vm.Script, built once and reused by every room (each room still gets its own fresh context)
+function simScript(f) {
+    let s = SIM_SCRIPTS.get(f);
+    if (!s)
+        SIM_SCRIPTS.set(f, s = new vm.Script(fs.readFileSync(path.join(ROOT, f), 'utf8'), { filename: f }));
+    return s;
+}
 function loadSim() {
     const ctx = vm.createContext({ console });
     for (const f of SIM_FILES)
-        vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
+        simScript(f).runInContext(ctx);
     const run = code => vm.runInContext(code, ctx);
     return {
         ctx,

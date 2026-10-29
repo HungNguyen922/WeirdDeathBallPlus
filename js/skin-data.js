@@ -53,5 +53,12 @@ function skinsClean(raw) {
     return Array.from({ length: SKIN_SLOTS }, (_, i) => skinClean(src[i]));
 }
 
+// Stored as [{ layers }, ...] because Firestore does not allow arrays inside arrays. Shared with the server (js/server/accounts.js).
+const skinsToStore = skins => skins.map(layers => ({ layers }));
+function skinSlots(p) { // older profiles only have `skin`: it becomes slot 0
+    const skins = Array.isArray(p.skins) ? skinsClean(p.skins.map(s => s && s.layers)) : skinsClean([p.skin]);
+    return { skins, slot: skinSlotOk(p.slot) ? p.slot : 0 };
+}
+
 if (typeof module !== 'undefined' && module.exports)
-    module.exports = { SKIN_SHAPES, SKIN_MAX_LAYERS, SKIN_POS, SKIN_SIZE_MIN, SKIN_SIZE_MAX, SKIN_EXTENT, SKIN_SLOTS, SKIN_MAX_GROUPS, skinClean, skinsClean, skinSlotOk };
+    module.exports = { SKIN_SHAPES, SKIN_MAX_LAYERS, SKIN_POS, SKIN_SIZE_MIN, SKIN_SIZE_MAX, SKIN_EXTENT, SKIN_SLOTS, SKIN_MAX_GROUPS, skinClean, skinsClean, skinSlotOk, skinSlots, skinsToStore };

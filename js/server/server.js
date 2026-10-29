@@ -519,6 +519,11 @@ function startServer(port = 8080, host = '0.0.0.0') {
             res.writeHead(403).end('forbidden');
             return;
         }
+        const okTop = (parts.length === 1 && (parts[0] === 'index.html' || parts[0] === 'icon.png')) || parts[0] === 'css' || parts[0] === 'js'; // an allowlist: nothing else in the project folder is ever served
+        if (!okTop || /\.(bak|old|py|mid)$/i.test(p)) {
+            res.writeHead(404).end('not found');
+            return;
+        }
         const file = path.join(ROOT, ...parts);
         if (!file.startsWith(ROOT + path.sep)) {
             res.writeHead(403).end('forbidden');
@@ -529,7 +534,7 @@ function startServer(port = 8080, host = '0.0.0.0') {
                 res.writeHead(404).end('not found');
                 return;
             }
-            res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+            res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
             fs.createReadStream(file).pipe(res);
         });
     });

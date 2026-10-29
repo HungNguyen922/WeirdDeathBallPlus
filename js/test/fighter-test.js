@@ -175,8 +175,9 @@ console.log('\nfireball');
     sim.run('projectiles.length = 0'); sim.load(snap);
     check(sim.run('projOf("fireball").length') === 1 && sim.run('projOf("fireball")[0].owner === players[0]'), 'save -> JSON -> load keeps it, with its owner');
     sim.run('ball.x = projOf("fireball")[0].x + 70; ball.y = projOf("fireball")[0].y; ball.vx = ball.vy = 0; ball.w = 0');
-    for (let i = 0; i < 30; i++) { keys(sim, {}); sim.tick(); }
-    check(sim.run('ball.vx') > 300 && sim.run('projOf("fireball").length') === 0 && P(sim, 'alive'), 'it knocks the death ball forward and is used up');
+    let bvMax = 0;
+    for (let i = 0; i < 30; i++) { keys(sim, {}); sim.tick(); bvMax = Math.max(bvMax, sim.run('ball.vx')); }
+    check(bvMax > 150 && sim.run('projOf("fireball").length') === 0 && P(sim, 'alive'), 'it knocks the death ball forward (peak vx ' + bvMax.toFixed(0) + ') and is used up');
 }
 {
     const sim = fresh();

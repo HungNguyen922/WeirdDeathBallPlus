@@ -53,7 +53,7 @@ const IDLE_BALL_V = 60;         // u/s: a ball faster than this keeps the room a
 const KF_EVERY = 30;            // delta encoding: every this-many snapshots is a keyframe (full world). Keep it EVEN (spectators skip odd snapshots and must never miss a keyframe)
 const SNAP_BACKLOG = 48 * 1024; // a client with more than this still unsent skips snapshots (each one is the full world, so a skipped one costs nothing; a queue of stale ones makes it lag for seconds)
 const MAX_CATCHUP = 8; // never run more than this many ticks in one go (after a stall, drop the debt instead of spiralling)
-const MAX_ROOMS = 50, MAX_SPECTATORS = 8, MSG_PER_SEC = 400;
+const MAX_ROOMS = +process.env.MAX_ROOMS || 50, MAX_SPECTATORS = 8, MSG_PER_SEC = 400; // MAX_ROOMS: each room is its own vm context, so size it to your RAM
 const CHAT_MAX = 120, CHAT_BURST = 5, CHAT_WINDOW_MS = 5000; // chat: longest message, and at most CHAT_BURST messages per CHAT_WINDOW_MS per player
 const TEAM_MAX = 2; // players per team (seats 0 / 2 are Blue, 1 / 3 are Red)
 const SPECIAL_IDS = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened', 'explode', 'hopper', 'boomerang', 'portal', 'swap', 'smoke', 'pong', 'mines', 'split', 'fighter', ]; // the same ids as in render/special-menu.js and game/rules.js
@@ -66,6 +66,7 @@ events.onPoint = (team, why) => { __ev.push(['pt', __tick, team, why]); if (scor
 events.onNewRound = () => __ev.push(['nr', __tick]);
 events.onImpact = (p, x, y, ux, uy, v) => __ev.push(['im', __tick, p.id, x, y, ux, uy, v]);
 events.onBatHit = (p, b, x, y, ux, uy, k) => __ev.push(['bt', __tick, p.id, __ref(b), x, y, ux, uy, k]);
+function __ballSpeed() { return Math.hypot(ball.vx, ball.vy); } // read by Room.isActive(): no script is compiled per call
 function __setKeys(i, bits) {
     const k = allPlayers[i].keys;
     k.l = !!(bits & 1); k.r = !!(bits & 2); k.up = !!(bits & 4); k.dn = !!(bits & 8); k.z = !!(bits & 16); k.x = !!(bits & 32); k.sp = !!(bits & 64); k.sp2 = !!(bits & 128);
@@ -99,6 +100,21 @@ function playerDelta(p, base) { // JSON text: how player p differs from the keyf
     if (!parts.length && !gone.length)
         return '0';
     return '{"d":{' + parts.join(',') + '}' + (gone.length ? ',"x":' + JSON.stringify(gone) : '') + '}';
+}
+
+// Snapshots are rounded before they are stringified (see apply-perf-fixes.js): SNAP_DECIMALS decimals (default 2). The server's own simulation is never rounded, only what is sent.
+const SNAP_DEC = process.env.SNAP_DECIMALS === undefined || process.env.SNAP_DECIMALS === '' ? 2 : +process.env.SNAP_DECIMALS;
+const SNAP_Q = Number.isInteger(SNAP_DEC) && SNAP_DEC >= 0 && SNAP_DEC <= 4 ? Math.pow(10, SNAP_DEC) : 100;
+function roundInPlace(v) { // rounds every number inside v (arrays and plain objects, nested). Only call it on a fresh copy, like saveState()'s result
+    const list = Array.isArray(v);
+    for (const k in v) {
+        const x = v[k];
+        if (typeof x === 'number')
+            v[k] = Math.round(x * SNAP_Q) / SNAP_Q;
+        else if (x && typeof x === 'object')
+            roundInPlace(x);
+    }
+    return v;
 }
 
 class Room {
@@ -381,11 +397,11 @@ class Room {
             c.send(JSON.stringify({ ...base, host: c === this.host, you: c.cid }));
     }
     isActive() { // should this room send snapshots at the full rate right now?
-        const ball = this.sim.run('ball');
+        // (the ball's speed comes from __ballSpeed(), defined in ROOM_PRELUDE)
         return this.bits.some(Boolean)                                   // somebody is holding a key
             || Date.now() - this.lastInput < IDLE_AFTER_MS               // or pressed one recently
             || this.sim.ctx.__ev.length > 0                              // or an effect (goal, impact, bat hit) is waiting to be sent
-            || Math.hypot(ball.vx, ball.vy) > IDLE_BALL_V;               // or the ball is still moving
+            || this.sim.ctx.__ballSpeed() > IDLE_BALL_V;               // or the ball is still moving
     }
     advance(now) {
         if (!this.running) {
@@ -423,7 +439,11 @@ class Room {
     }
     snapshot() {
         const ctx = this.sim.ctx, state = ctx.saveState(), n = this.snapN++;
+        roundInPlace(state); // saveState() is a fresh deep copy, so rounding it in place is safe
+        if (state.pick && !state.pick.on)
+            state.pick = { on: false, at: state.pick.at, go: 0, t: 0 }; // a closed pick screen: the arrays inside it mean nothing
         const evNew = ctx.__ev.slice();
+        roundInPlace(evNew); // (the event arrays are cleared right below, so editing them in place is fine)
         ctx.__ev.length = 0;
         const evJson = JSON.stringify(evNew);
         const isKey = !this.kfBase || n % KF_EVERY === 0;     // a keyframe: the full world, and the base for the deltas that follow
@@ -500,7 +520,7 @@ function startServer(port = 8080, host = '0.0.0.0') {
         if (p === '/health') {
             const hours = (Date.now() - STATS.since) / 3.6e6;
             res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({
-                ok: true, rooms: rooms.size,
+                ok: true, rooms: rooms.size, maxRooms: MAX_ROOMS, memMB: Math.round(process.memoryUsage().rss / 1048576), runningRooms: [...rooms.values()].filter(r => r.running).length, minTps: Math.min(...[...rooms.values()].filter(r => r.running && r.tps).map(r => r.tps)) || null, avgSnapBytes: STATS.snaps ? Math.round(STATS.bytes / STATS.snaps) : 0,
                 snapshotMB: +(STATS.bytes / 1e6).toFixed(2), snapshots: STATS.snaps, hoursUp: +hours.toFixed(2), mbPerHour: +(STATS.bytes / 1e6 / Math.max(hours, 1e-6)).toFixed(1)
             }));
             return;

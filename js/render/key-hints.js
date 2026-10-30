@@ -164,6 +164,12 @@ function iconGlyph(kind, x, y, color) { // little icons: grapple hook, kettlebel
         for (const fx of [-3.6, 0, 3.6]) { cx.moveTo(fx, -2); cx.lineTo(fx, 4); } // finger dividers
         cx.moveTo(-9, 6); cx.lineTo(3, 6);                                          // thumb across the fingers
         cx.stroke();
+    } else if (kind === 'web') { // three nodes joined by lines
+        cx.lineWidth = 2;
+        cx.moveTo(-8, 6); cx.lineTo(0, -8); cx.lineTo(8, 6); cx.closePath(); cx.stroke();
+        for (const [nx, ny] of [[-8, 6], [0, -8], [8, 6]]) {
+            cx.beginPath(); cx.arc(nx, ny, 2.8, 0, 7); cx.fill();
+        }
     } else if (kind === 'locked') { // padlock
         cx.fillRect(-6, -1, 12, 9);
         cx.beginPath(); cx.arc(0, -2, 4.5, Math.PI, 0); cx.stroke();

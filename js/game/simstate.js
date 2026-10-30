@@ -67,6 +67,8 @@ function saveState() {
         portals: portals.map(owned),
         portalSeq,
         mines: mines.map(owned),
+        statics: statics.map(owned),
+        staticSeq,
         mineSeq,
     };
 }
@@ -141,6 +143,9 @@ function loadState(s) {
     mines.length = 0;
     mines.push(...relink(s.mines || []));
     mineSeq = s.mineSeq || 0;
+    statics.length = 0;
+    statics.push(...relink(s.statics || []));
+    staticSeq = s.staticSeq || 0;
     rebuildStuck();
     // Tethers last, once the decoys exist.
     allPlayers.forEach((p, i) => {

@@ -67,6 +67,13 @@ mixin(Player, {
                 this.explode();
                 return true;
             }
+        } else if (id === 'web') { // instant: drop a node where you stand (see physics/web.js)
+            if (this.cd.web <= 0 && !this.sim) {
+                placeWebNode(this);
+                this.cd.web = WEB_COOLDOWN;
+                return true;
+            }
+            return false;
         } else if (id === 'warp') { // instant: no cast, no timer (see warpPress)
             this.warpPress();
             return true;

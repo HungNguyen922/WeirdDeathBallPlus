@@ -19,15 +19,17 @@ const SPECIALS = [
     { id: 'pong', name: 'PONG', icon: 'pong' },
     { id: 'mines', name: 'MINES', icon: 'mines' },
     { id: 'split', name: 'SPLIT', icon: 'split' },
+    { id: 'web', name: 'WEB', icon: 'web' },
     { id: 'fighter', name: 'FIGHTER', icon: 'fighter', get locked() { return !twoSpecials; } },
 ];
 
 const ui = { open: -1, slot: 0, hover: null }; // open = index of the player whose menu is open (-1 = none), slot = which of their specials it edits (0 first, 1 second)
 const spCx = slot => (twoSpecials ? (slot ? 63 : 21) : 46); // centre of a special's cap, from the block's centre (the caps move when there are four)
 const spSz = () => (twoSpecials ? 36 : 40);
+const SP_ROW = 30; // height of one entry in the special dropdown (20 entries of 32 would run off the bottom of the canvas)
 const spotOf = id => hintSpots()[id] || { wall: id % 2, row: 0 };
 const spKey = (i, slot = 0) => { const s = spotOf(i); return { x: wallX(s.wall) + spCx(slot) - spSz() / 2, y: HINT_ACT_Y + HINT_DY + s.row * HINT_ROW_H - spSz() / 2, w: spSz(), h: spSz() }; };
-const spItem = (i, n, slot = 0) => { const s = spotOf(i); return { x: wallX(s.wall) + spCx(slot) - 20, y: HINT_ACT_Y + HINT_DY + s.row * HINT_ROW_H + 25 + n * 32, w: 40, h: 32 }; };
+const spItem = (i, n, slot = 0) => { const s = spotOf(i); return { x: wallX(s.wall) + spCx(slot) - 20, y: HINT_ACT_Y + HINT_DY + s.row * HINT_ROW_H + 25 + n * SP_ROW, w: 40, h: SP_ROW }; };
 const menuKey = () => ({ x: W / 2 - 60, y: H + 104, w: 120, h: 24 }); // the Menu button: a pill on the floor, centred under the online status line
 const inRect = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 function uiHit(x, y) {
@@ -73,7 +75,7 @@ function drawSpecialMenu() {
     const i = ui.open, p = allPlayers[i], col = p.color, r0 = spItem(i, 0, ui.slot), hv = ui.hover, cur = ui.slot ? p.special2 : p.special;
     cx.save();
     cx.fillStyle = '#12081f'; cx.strokeStyle = col; cx.lineWidth = 2;
-    cx.beginPath(); cx.roundRect(r0.x - 3, r0.y - 2, r0.w + 6, SPECIALS.length * 32 + 4, 8); cx.fill(); cx.stroke();
+    cx.beginPath(); cx.roundRect(r0.x - 3, r0.y - 2, r0.w + 6, SPECIALS.length * SP_ROW + 4, 8); cx.fill(); cx.stroke();
     SPECIALS.forEach((a, n) => {
         const r = spItem(i, n, ui.slot), hot = hv && hv.type === 'item' && hv.i === i && hv.n === n, sel = cur === a.id;
         if (hot || sel) {

@@ -25,6 +25,7 @@ function drawScene() {
     drawArena();
     drawQuakeFx(); // the seesaw floor's quake graphic: on the floor, behind everything that stands on it
     drawPongSurfaces(); // new: the rubber glow, over the terrain and behind everything on it
+    drawWebs(); // placed web nodes and the lines between them
     drawMines(); // planted mines, the planting ring and the blast ring: on the surfaces, behind everything that moves
     drawHud(); // the score (and the online status under it) live on the floor, drawn in arena coordinates right after the arena they sit on
     drawMenuTile(); // the Menu tile on Blue's wall, under the weight key

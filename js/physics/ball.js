@@ -11,7 +11,7 @@ class Ball {
         this.w = 0;
         this.boost = 0;
     }
-    reset() { this.x = NETX; this.y = H - RISE - 13; this.vx = 0; this.vy = 0; this.th = 0; this.w = 0; this.boost = 0; } // rests in the notch of the middle peak
+    reset() { this.x = NETX; this.y = H - RISE - 13; this.vx = 0; this.vy = 0; this.th = 0; this.w = 0; this.boost = 0; this.lastGrab = -1; } // rests in the notch of the middle peak
     // Returns the team that scored if the ball entered a goal. No bounce; the net does not affect the ball.
     step() {
         const pong = pongOn();

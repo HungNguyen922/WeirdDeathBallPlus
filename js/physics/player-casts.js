@@ -67,13 +67,8 @@ mixin(Player, {
                 this.explode();
                 return true;
             }
-        } else if (id === 'web') { // instant: drop a node where you stand (see physics/web.js)
-            if (this.cd.web <= 0 && !this.sim) {
-                placeWebNode(this);
-                this.cd.web = WEB_COOLDOWN;
-                return true;
-            }
-            return false;
+        } else if (id === 'accelerator' && this.cd.accelerator <= 0 && !this.sim) {
+            c = { type: 'accelerator', t: ACCELERATOR_CAST, t0: ACCELERATOR_CAST, x: this.x, y: this.y, hx, hy };
         } else if (id === 'warp') { // instant: no cast, no timer (see warpPress)
             this.warpPress();
             return true;
@@ -202,6 +197,10 @@ mixin(Player, {
             } else if (c.type === 'mine') {
                 if (placeMine(this, c))
                     this.cd.mines = MINE_COOLDOWN;
+            } else if (c.type === 'accelerator') {
+                const node = placeStatic('accelerator', this, c.x, c.y);
+                this.pushOutOf(node.x, node.y, ACCELERATOR_NODE_R, c);
+                this.cd.accelerator = ACCELERATOR_COOLDOWN;
             }
         }
     },

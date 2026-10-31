@@ -495,18 +495,19 @@ const FIGHTER_HITS_TEAMMATES = true;
 const FIGHTER_FIREBALL_MAX = 1;       // fireballs one player can have out (a new one replaces the oldest)
 const FIGHTER_COOLDOWN = 0;
 
-// --- Web ---------------------------------------------------------------------------------------------------------------------------------------------------------
+// --- Accelerator ---------------------------------------------------------------------------------------------------------------------------------------------------------
 // Press the special key to drop a node where you stand. Every node is joined by a line to each OLDER node of yours, so n nodes make n(n-1)/2 lines. A body whose centre crosses a
-// line loses WEB_SLOW of its velocity, once per crossing. At WEB_MAX nodes the next press replaces your oldest. See physics/statics.js (the registry) and physics/web.js.
-const WEB_MAX = 5;                    // nodes per player: the next one replaces the oldest
-const WEB_SLOW = 0.05;                // share of its velocity a body loses each time it crosses a line (0.05 = 5%)
-const WEB_COOLDOWN = 0.5;             // s between nodes (starts when a node is dropped)
-const WEB_LIFE = 0;                   // s a node lasts (0 = until the round ends or it is replaced)
-const WEB_HITS_OWN_TEAM = true;       // the lines slow the owner and their teammates too (false = enemies and the death ball only)
-const WEB_NODE_R = 6;                 // node radius as DRAWN (u; display only)
+// line gains ACCELERATOR_BOOST of its velocity if it is its owner (or the death ball / a decoy the owner grappled last). At ACCELERATOR_MAX nodes the next press replaces your oldest. See physics/statics.js (the registry) and physics/ACCELERATOR.js.
+const ACCELERATOR_MAX = 5;                    // nodes per player: the next one replaces the oldest
+const ACCELERATOR_BOOST = 0.05;               // share of its velocity a body GAINS each time it crosses a line (0.05 = +5%); stacks per crossing, the ball's own speed cap still applies
+const ACCELERATOR_CAST = 1;                   // seconds required to place a node
+const ACCELERATOR_COOLDOWN = 5;             // s between nodes (starts when a node is dropped)
+const ACCELERATOR_LIFE = 0;                   // s a node lasts (0 = until the round ends or it is replaced)
+const ACCELERATOR_BOOST_TEAMMATES = false;    // true = the owner's teammates are sped up by the lines too (the owner always is; the death ball and decoys only when the owner grappled them last)
+const ACCELERATOR_NODE_R = 6;                 // node radius as DRAWN (u; display only)
 
 // --- The ability table: reads every cooldown above, so it has to stay below them ------------------------------------------------------------------------------------
-const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN }, portal: { cd: PORTAL_COOLDOWN }, swap: { cd: SWAP_COOLDOWN }, smoke: { cd: SMOKE_COOLDOWN }, pong: { cd: PONG_COOLDOWN }, mines: { cd: MINE_COOLDOWN }, split: { cd: SPLIT_COOLDOWN}, web: { cd: WEB_COOLDOWN }, fighter: { cd: FIGHTER_COOLDOWN} }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
+const ABILITY = { dash: { cast: DASH_CAST, cd: DASH_COOLDOWN }, plinko: { cast: PLINKO_CAST, cd: PLINKO_COOLDOWN }, marionette: { cd: MARIONETTE_COOLDOWN }, decoy: { cast: DECOY_CAST, cd: DECOY_COOLDOWN }, arrow: { cd: ARROW_COOLDOWN }, bat: { cd: BAT_COOLDOWN }, barbwire: { cd: BARBWIRE_MAX_T * BARBWIRE_CD_RATIO }, warp: { cd: WARP_COOLDOWN }, awakened: { cd: AWAKENED_COOLDOWN }, explode: { cd: EXPLODE_COOLDOWN }, hopper: { cd: HOPPER_COOLDOWN }, boomerang: { cd: BOOMERANG_COOLDOWN }, portal: { cd: PORTAL_COOLDOWN }, swap: { cd: SWAP_COOLDOWN }, smoke: { cd: SMOKE_COOLDOWN }, pong: { cd: PONG_COOLDOWN }, mines: { cd: MINE_COOLDOWN }, split: { cd: SPLIT_COOLDOWN}, accelerator: { cd: ACCELERATOR_COOLDOWN }, fighter: { cd: FIGHTER_COOLDOWN} }; // (cd here is the largest possible cooldown: the HUD tint is shown as a share of it)
 
 // =====================================================================================================================================================================
 // 11  MATCH

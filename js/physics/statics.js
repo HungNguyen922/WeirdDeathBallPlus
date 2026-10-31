@@ -1,5 +1,5 @@
-// PHYSICS - statics: things a special PLACES and leaves where they are (the WEB special's nodes today). Never draws.
-// Mirrors projectiles.js: one list, `statics`, and a table of types, STATIC_TYPES, each registered by the special's own file (see physics/web.js).
+// PHYSICS - statics: things a special PLACES and leaves where they are (the ACCELERATOR special's nodes today). Never draws.
+// Mirrors projectiles.js: one list, `statics`, and a table of types, STATIC_TYPES, each registered by the special's own file (see physics/accelerator.js).
 // Load order: after constants.js and bodies.js, before game/rules.js (which calls stepStatics() and clearStatics()).
 //
 // A static is plain data: { type, id, x, y, owner, team, life, flash, ...whatever its type adds }. owner is saved as the player's id (see game/simstate.js), so saveState / rollback /

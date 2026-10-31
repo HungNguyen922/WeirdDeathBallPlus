@@ -29,7 +29,7 @@ const events = {
 // their normal keys. On the screen: left / right / up / down move the cursor over a grid PICK_COLS wide, grapple or special locks the choice in, weight takes it back.
 // The computer always takes Dash (it is the only special the AI knows how to use). When everybody is locked in, a short countdown runs and the point starts.
 const PICK_EVERY = 5, PICK_COLS = 5, PICK_GO_T = 0.9; // points between screens, icons per row, seconds of "get ready" after the last lock-in
-const PICK_LIST = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened', 'explode', 'hopper', 'boomerang', 'portal', 'swap', 'smoke', 'pong', 'mines', 'split', 'web', 'fighter' ]; // the grid, in reading order (same ids as SPECIALS in render/special-menu.js)
+const PICK_LIST = ['dash', 'plinko', 'marionette', 'decoy', 'arrow', 'bat', 'barbwire', 'warp', 'awakened', 'explode', 'hopper', 'boomerang', 'portal', 'swap', 'smoke', 'pong', 'mines', 'split', 'accelerator', 'fighter' ]; // the grid, in reading order (same ids as SPECIALS in render/special-menu.js)
 const PICK_DUAL = ['fighter']; // abilities that take both slots: they get their own row(s) at the bottom
 const pickRows = (() => { // rows of PICK_LIST indices
     const norm = [], dual = [], rows = [];
@@ -378,7 +378,7 @@ function update() {
         for (let j = i + 1; j < decoys.length; j++)
             collide(d, decoys[j], BALL_M, BALL_M, DECOY_BOUNCE_BALL);
     }
-    stepStatics(); // STATICS: placed things (WEB lines slow whatever crosses them), after everything has moved
+    stepStatics(); // STATICS: placed things (ACCELERATOR lines slow whatever crosses them), after everything has moved
     stepSwaps(); // SWAP: casts and swaps (before the portals, so a swapped body that lands in a portal goes through it this same tick)
     stepPortals(); // PORTAL: carries players, the ball and decoys through, and opens / closes portals
     stepMines(); // MINES: blasts (hold special + press weight)

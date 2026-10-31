@@ -19,7 +19,7 @@ const PICK_DESC = { // two short lines under the highlighted special
     portal: ['Hold, turn with the arrows,', 'release. Two linked portals.'],
     pong: ['Rubber floor and walls: spin', 'grips and the flick is x2.'],
     mines: ['Plant mines on surfaces (1 s).', 'Hold special + weight: blast.'],
-    web: ['Press to drop nodes. Lines link', 'every node; anything crossing a', 'line loses some speed.'],
+    accelerator: ['Press to drop nodes. Lines link', 'every node; crossing one speeds', 'you up, and the ball you held.'],
     split: ['Halve yourself, leave a copy.', 'Touch a copy to merge back.', 'Weight + key: swap bodies.'],
     fighter: ['Takes both slots. P / K buttons,', 'motion inputs like 236 + a button.'], 
 };

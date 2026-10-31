@@ -111,6 +111,7 @@ mixin(Player, {
             this.len = best.len;
             this.onBall = true;
             this.tball = best.ball;
+            best.ball.lastGrab = this.id; // who grappled it last (the ACCELERATOR special boosts the ball for that player, see physics/accelerator.js)
             this.ropeGround = false;
             this.ropeBase = null;
             this.hookAng = Math.atan2(best.p.y - best.ball.y, best.p.x - best.ball.x) - best.ball.th;

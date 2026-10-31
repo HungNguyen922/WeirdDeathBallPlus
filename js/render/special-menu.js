@@ -19,7 +19,7 @@ const SPECIALS = [
     { id: 'pong', name: 'PONG', icon: 'pong' },
     { id: 'mines', name: 'MINES', icon: 'mines' },
     { id: 'split', name: 'SPLIT', icon: 'split' },
-    { id: 'web', name: 'WEB', icon: 'web' },
+    { id: 'accelerator', name: 'ACCELERATOR', icon: 'accelerator' },
     { id: 'fighter', name: 'FIGHTER', icon: 'fighter', get locked() { return !twoSpecials; } },
 ];
 

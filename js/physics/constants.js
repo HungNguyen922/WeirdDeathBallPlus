@@ -501,7 +501,7 @@ const FIGHTER_COOLDOWN = 0;
 const ACCELERATOR_MAX = 5;                    // nodes per player: the next one replaces the oldest
 const ACCELERATOR_BOOST = 0.05;               // share of its velocity a body GAINS each time it crosses a line (0.05 = +5%); stacks per crossing, the ball's own speed cap still applies
 const ACCELERATOR_CAST = 1;                   // seconds required to place a node
-const ACCELERATOR_COOLDOWN = 5;             // s between nodes (starts when a node is dropped)
+const ACCELERATOR_COOLDOWN = 4;             // s between nodes (starts when a node is dropped)
 const ACCELERATOR_LIFE = 0;                   // s a node lasts (0 = until the round ends or it is replaced)
 const ACCELERATOR_BOOST_TEAMMATES = false;    // true = the owner's teammates are sped up by the lines too (the owner always is; the death ball and decoys only when the owner grappled them last)
 const ACCELERATOR_NODE_R = 6;                 // node radius as DRAWN (u; display only)
